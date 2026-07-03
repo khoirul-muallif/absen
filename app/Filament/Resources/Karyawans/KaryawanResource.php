@@ -18,9 +18,17 @@ class KaryawanResource extends Resource
 {
     protected static ?string $model = Karyawan::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
     protected static ?string $recordTitleAttribute = 'nama';
+
+    protected static ?string $navigationLabel = 'Karyawan';
+
+    protected static ?string $pluralLabel = 'Data Karyawan';
+
+    protected static ?string $label = 'Karyawan';
+
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {
@@ -34,17 +42,15 @@ class KaryawanResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListKaryawans::route('/'),
+            'index'  => ListKaryawans::route('/'),
             'create' => CreateKaryawan::route('/create'),
-            'edit' => EditKaryawan::route('/{record}/edit'),
+            'edit'   => EditKaryawan::route('/{record}/edit'),
         ];
     }
 }

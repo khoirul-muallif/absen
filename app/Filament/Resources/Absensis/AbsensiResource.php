@@ -18,7 +18,15 @@ class AbsensiResource extends Resource
 {
     protected static ?string $model = Absensi::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
+
+    protected static ?string $navigationLabel = 'Data Absensi';
+
+    protected static ?string $pluralLabel = 'Data Absensi';
+
+    protected static ?string $label = 'Absensi';
+
+    protected static ?int $navigationSort = 5;
 
     public static function form(Schema $schema): Schema
     {
@@ -32,17 +40,15 @@ class AbsensiResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListAbsensis::route('/'),
+            'index'  => ListAbsensis::route('/'),
             'create' => CreateAbsensi::route('/create'),
-            'edit' => EditAbsensi::route('/{record}/edit'),
+            'edit'   => EditAbsensi::route('/{record}/edit'),
         ];
     }
 }

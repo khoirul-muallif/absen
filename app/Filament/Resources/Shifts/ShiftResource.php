@@ -18,9 +18,17 @@ class ShiftResource extends Resource
 {
     protected static ?string $model = Shift::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
     protected static ?string $recordTitleAttribute = 'nama_shift';
+
+    protected static ?string $navigationLabel = 'Shift';
+
+    protected static ?string $pluralLabel = 'Data Shift';
+
+    protected static ?string $label = 'Shift';
+
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {
@@ -34,17 +42,15 @@ class ShiftResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListShifts::route('/'),
+            'index'  => ListShifts::route('/'),
             'create' => CreateShift::route('/create'),
-            'edit' => EditShift::route('/{record}/edit'),
+            'edit'   => EditShift::route('/{record}/edit'),
         ];
     }
 }

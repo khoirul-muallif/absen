@@ -18,9 +18,17 @@ class InstansiResource extends Resource
 {
     protected static ?string $model = Instansi::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
     protected static ?string $recordTitleAttribute = 'nama';
+
+    protected static ?string $navigationLabel = 'Instansi';
+
+    protected static ?string $pluralLabel = 'Data Instansi';
+
+    protected static ?string $label = 'Instansi';
+
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {
@@ -34,17 +42,15 @@ class InstansiResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListInstansis::route('/'),
+            'index'  => ListInstansis::route('/'),
             'create' => CreateInstansi::route('/create'),
-            'edit' => EditInstansi::route('/{record}/edit'),
+            'edit'   => EditInstansi::route('/{record}/edit'),
         ];
     }
 }

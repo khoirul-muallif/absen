@@ -18,7 +18,15 @@ class KaryawanShiftResource extends Resource
 {
     protected static ?string $model = KaryawanShift::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
+
+    protected static ?string $navigationLabel = 'Jadwal Shift';
+
+    protected static ?string $pluralLabel = 'Jadwal Shift Karyawan';
+
+    protected static ?string $label = 'Jadwal Shift';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {
@@ -32,17 +40,15 @@ class KaryawanShiftResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListKaryawanShifts::route('/'),
+            'index'  => ListKaryawanShifts::route('/'),
             'create' => CreateKaryawanShift::route('/create'),
-            'edit' => EditKaryawanShift::route('/{record}/edit'),
+            'edit'   => EditKaryawanShift::route('/{record}/edit'),
         ];
     }
 }

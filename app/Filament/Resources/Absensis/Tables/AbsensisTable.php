@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Absensis\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class AbsensisTable
@@ -14,52 +16,111 @@ class AbsensisTable
     {
         return $table
             ->columns([
-                TextColumn::make('karyawan.id')
-                    ->searchable(),
-                TextColumn::make('shift.id')
-                    ->searchable(),
-                TextColumn::make('qrInstansi.id')
-                    ->searchable(),
+                TextColumn::make('karyawan.nama')
+                    ->label('Karyawan')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('shift.nama_shift')
+                    ->label('Shift')
+                    ->sortable(),
+
                 TextColumn::make('tanggal')
-                    ->date()
+                    ->label('Tanggal')
+                    ->date('d M Y')
                     ->sortable(),
+
                 TextColumn::make('waktu_masuk')
-                    ->dateTime()
+                    ->label('Masuk')
+                    ->dateTime('H:i')
                     ->sortable(),
-                TextColumn::make('latitude_masuk')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('longitude_masuk')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('foto_masuk')
-                    ->searchable(),
+
                 TextColumn::make('waktu_pulang')
-                    ->dateTime()
+                    ->label('Pulang')
+                    ->dateTime('H:i')
                     ->sortable(),
-                TextColumn::make('latitude_pulang')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('longitude_pulang')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('foto_pulang')
-                    ->searchable(),
+
                 TextColumn::make('status')
-                    ->badge(),
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'tepat_waktu' => 'success',
+                        'terlambat'   => 'warning',
+                        'alpha'       => 'danger',
+                        'izin'        => 'info',
+                        'sakit'       => 'warning',
+                        'cuti'        => 'info',
+                        'dinas'       => 'info',
+                        'libur'       => 'gray',
+                        default       => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'tepat_waktu' => 'Tepat Waktu',
+                        'terlambat'   => 'Terlambat',
+                        'alpha'       => 'Alpha',
+                        'izin'        => 'Izin',
+                        'sakit'       => 'Sakit',
+                        'cuti'        => 'Cuti',
+                        'dinas'       => 'Dinas',
+                        'libur'       => 'Libur',
+                        default       => $state,
+                    }),
+
+                ImageColumn::make('foto_masuk')
+                    ->label('Foto Masuk')
+                    ->circular()
+                    ->toggleable(),
+
                 TextColumn::make('keterangan')
-                    ->searchable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
+                    ->label('Keterangan')
+                    ->limit(30)
+                    ->toggleable(),
+
+                // Kolom tersembunyi default (bisa ditampilkan via toggle)
+                TextColumn::make('latitude_masuk')
+                    ->label('Lat. Masuk')
+                    ->numeric(decimalPlaces: 7)
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
+
+                TextColumn::make('longitude_masuk')
+                    ->label('Lng. Masuk')
+                    ->numeric(decimalPlaces: 7)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('latitude_pulang')
+                    ->label('Lat. Pulang')
+                    ->numeric(decimalPlaces: 7)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('longitude_pulang')
+                    ->label('Lng. Pulang')
+                    ->numeric(decimalPlaces: 7)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('created_at')
+                    ->label('Dibuat')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('tanggal', 'desc')
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->label('Status')
+                    ->options([
+                        'tepat_waktu' => 'Tepat Waktu',
+                        'terlambat'   => 'Terlambat',
+                        'alpha'       => 'Alpha',
+                        'izin'        => 'Izin',
+                        'sakit'       => 'Sakit',
+                        'cuti'        => 'Cuti',
+                        'dinas'       => 'Dinas',
+                        'libur'       => 'Libur',
+                    ]),
+
+                SelectFilter::make('shift_id')
+                    ->label('Shift')
+                    ->relationship('shift', 'nama_shift'),
             ])
             ->recordActions([
                 EditAction::make(),

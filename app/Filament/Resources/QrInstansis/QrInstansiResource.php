@@ -18,9 +18,17 @@ class QrInstansiResource extends Resource
 {
     protected static ?string $model = QrInstansi::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQrCode;
 
     protected static ?string $recordTitleAttribute = 'kode_qr';
+
+    protected static ?string $navigationLabel = 'QR Instansi';
+
+    protected static ?string $pluralLabel = 'QR Instansi';
+
+    protected static ?string $label = 'QR Instansi';
+
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {
@@ -34,17 +42,15 @@ class QrInstansiResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => ListQrInstansis::route('/'),
+            'index'  => ListQrInstansis::route('/'),
             'create' => CreateQrInstansi::route('/create'),
-            'edit' => EditQrInstansi::route('/{record}/edit'),
+            'edit'   => EditQrInstansi::route('/{record}/edit'),
         ];
     }
 }
