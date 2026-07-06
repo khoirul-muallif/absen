@@ -12,8 +12,8 @@ use Laravel\Sanctum\HasApiTokens;
 
 class Karyawan extends Authenticatable
 {
-    // use HasApiTokens, Notifiable;
-    use  Notifiable;
+    use HasApiTokens, Notifiable;
+    // use  Notifiable;
     protected $table = 'karyawan';
 
     protected $fillable = [
