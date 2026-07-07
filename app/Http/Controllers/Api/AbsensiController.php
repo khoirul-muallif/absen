@@ -6,11 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Absensi;
 use App\Models\KaryawanShift;
 use App\Models\QrInstansi;
+use App\Notifications\AbsenTerlambat;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AbsensiController extends Controller
 {
+    /**
+     * GET /api/absensi/status
+     */
     public function status(Request $request): JsonResponse
     {
         $karyawan = $request->user();
@@ -30,6 +34,9 @@ class AbsensiController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/absensi/masuk
+     */
     public function masuk(Request $request): JsonResponse
     {
         $request->validate([
@@ -41,6 +48,7 @@ class AbsensiController extends Controller
 
         $karyawan = $request->user()->load('instansi');
 
+        // 1. Cek sudah absen masuk hari ini
         if ($karyawan->absensi()->whereDate('tanggal', today())->whereNotNull('waktu_masuk')->exists()) {
             return response()->json([
                 'success' => false,
@@ -48,9 +56,10 @@ class AbsensiController extends Controller
             ], 422);
         }
 
+        // 2. Validasi GPS
         $instansi = $karyawan->instansi;
-        $lat = (float) $request->input('latitude');
-        $lng = (float) $request->input('longitude');
+        $lat      = (float) $request->input('latitude');
+        $lng      = (float) $request->input('longitude');
 
         if (! $instansi->dalamRadius($lat, $lng)) {
             $jarak = round($instansi->hitungJarak($lat, $lng));
@@ -61,6 +70,7 @@ class AbsensiController extends Controller
             ], 422);
         }
 
+        // 3. Validasi QR
         $qr = QrInstansi::where('kode_qr', $request->kode_qr)
             ->where('instansi_id', $instansi->id)
             ->first();
@@ -72,6 +82,7 @@ class AbsensiController extends Controller
             ], 422);
         }
 
+        // 4. Ambil shift aktif
         $karyawanShift = KaryawanShift::with('shift')
             ->where('karyawan_id', $karyawan->id)
             ->where('tanggal_berlaku', '<=', today())
@@ -87,10 +98,12 @@ class AbsensiController extends Controller
             ], 422);
         }
 
+        // 5. Simpan foto & tentukan status
         $fotoPath   = $request->file('foto_masuk')->store('foto-absen/masuk', 'public');
         $waktuMasuk = now();
         $status     = $karyawanShift->shift->tentukanStatus($waktuMasuk);
 
+        // 6. Simpan absensi
         $absensi = Absensi::create([
             'karyawan_id'     => $karyawan->id,
             'shift_id'        => $karyawanShift->shift_id,
@@ -103,20 +116,28 @@ class AbsensiController extends Controller
             'status'          => $status,
         ]);
 
+        // 7. Kirim notifikasi jika terlambat
+        $menitTerlambat = $absensi->menitTerlambat();
+        if ($status === 'terlambat' && $menitTerlambat > 0) {
+            $karyawan->notify(new AbsenTerlambat($absensi->load('shift'), $menitTerlambat));
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Absen masuk berhasil.',
             'data'    => [
-                'waktu_masuk' => $waktuMasuk->format('H:i'),
-                'status'      => $status,
-                'shift'       => $karyawanShift->shift->nama_shift,
-                'terlambat'   => $absensi->menitTerlambat() > 0
-                    ? $absensi->menitTerlambat() . ' menit'
-                    : null,
+                'waktu_masuk'    => $waktuMasuk->format('H:i'),
+                'status'         => $status,
+                'shift'          => $karyawanShift->shift->nama_shift,
+                'terlambat'      => $menitTerlambat > 0 ? $menitTerlambat . ' menit' : null,
+                'ada_notifikasi' => $status === 'terlambat',
             ],
         ]);
     }
 
+    /**
+     * POST /api/absensi/pulang
+     */
     public function pulang(Request $request): JsonResponse
     {
         $request->validate([
@@ -147,8 +168,8 @@ class AbsensiController extends Controller
         }
 
         $instansi = $karyawan->instansi;
-        $lat = (float) $request->input('latitude');
-        $lng = (float) $request->input('longitude');
+        $lat      = (float) $request->input('latitude');
+        $lng      = (float) $request->input('longitude');
 
         if (! $instansi->dalamRadius($lat, $lng)) {
             $jarak = round($instansi->hitungJarak($lat, $lng));
@@ -181,10 +202,13 @@ class AbsensiController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/absensi/riwayat?bulan=7&tahun=2026
+     */
     public function riwayat(Request $request): JsonResponse
     {
-        $bulan = $request->query('bulan', now()->month);
-        $tahun = $request->query('tahun', now()->year);
+        $bulan = (int) $request->query('bulan', now()->month);
+        $tahun = (int) $request->query('tahun', now()->year);
 
         $absensi = $request->user()
             ->absensi()
@@ -194,11 +218,15 @@ class AbsensiController extends Controller
             ->orderBy('tanggal', 'desc')
             ->get()
             ->map(fn ($a) => [
+                'id'           => $a->id,
                 'tanggal'      => $a->tanggal->format('d M Y'),
                 'hari'         => $a->tanggal->locale('id')->isoFormat('dddd'),
                 'shift'        => $a->shift->nama_shift,
+                'jam_masuk'    => $a->shift->jam_masuk,
                 'waktu_masuk'  => $a->waktu_masuk?->format('H:i') ?? '-',
                 'waktu_pulang' => $a->waktu_pulang?->format('H:i') ?? '-',
+                'durasi'       => $a->durasiMenit() ? $a->durasiMenit() . ' menit' : '-',
+                'terlambat'    => $a->menitTerlambat() > 0 ? $a->menitTerlambat() . ' menit' : null,
                 'status'       => $a->status,
                 'keterangan'   => $a->keterangan,
             ]);
@@ -208,37 +236,52 @@ class AbsensiController extends Controller
             'data'    => [
                 'bulan'   => $bulan,
                 'tahun'   => $tahun,
+                'total'   => $absensi->count(),
                 'records' => $absensi,
             ],
         ]);
     }
 
+    /**
+     * GET /api/absensi/rekap
+     */
     public function rekap(Request $request): JsonResponse
     {
+        $bulan = (int) $request->query('bulan', now()->month);
+        $tahun = (int) $request->query('tahun', now()->year);
+
         $absensi = $request->user()
             ->absensi()
-            ->whereYear('tanggal', now()->year)
-            ->whereMonth('tanggal', now()->month)
+            ->whereYear('tanggal', $tahun)
+            ->whereMonth('tanggal', $bulan)
             ->get();
+
+        $totalHadir     = $absensi->whereIn('status', ['tepat_waktu', 'terlambat'])->count();
+        $totalTepatWaktu = $absensi->where('status', 'tepat_waktu')->count();
 
         return response()->json([
             'success' => true,
             'data'    => [
-                'bulan'                  => now()->locale('id')->isoFormat('MMMM YYYY'),
-                'tepat_waktu'            => $absensi->where('status', 'tepat_waktu')->count(),
+                'bulan'                  => \Carbon\Carbon::create($tahun, $bulan)->locale('id')->isoFormat('MMMM YYYY'),
+                'tepat_waktu'            => $totalTepatWaktu,
                 'terlambat'              => $absensi->where('status', 'terlambat')->count(),
                 'alpha'                  => $absensi->where('status', 'alpha')->count(),
                 'izin'                   => $absensi->where('status', 'izin')->count(),
                 'sakit'                  => $absensi->where('status', 'sakit')->count(),
                 'cuti'                   => $absensi->where('status', 'cuti')->count(),
-                'total_hadir'            => $absensi->whereIn('status', ['tepat_waktu', 'terlambat'])->count(),
-                'persentase_tepat_waktu' => $absensi->count() > 0
-                    ? round($absensi->where('status', 'tepat_waktu')->count() / $absensi->count() * 100)
+                'dinas'                  => $absensi->where('status', 'dinas')->count(),
+                'libur'                  => $absensi->where('status', 'libur')->count(),
+                'total_hadir'            => $totalHadir,
+                'persentase_tepat_waktu' => $totalHadir > 0
+                    ? round($totalTepatWaktu / $totalHadir * 100)
                     : 0,
             ],
         ]);
     }
 
+    /**
+     * GET /api/instansi/qr/{kode}
+     */
     public function validasiQr(Request $request, string $kode): JsonResponse
     {
         $karyawan = $request->user()->load('instansi');

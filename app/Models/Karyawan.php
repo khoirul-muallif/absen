@@ -13,7 +13,7 @@ use Laravel\Sanctum\HasApiTokens;
 class Karyawan extends Authenticatable
 {
     use HasApiTokens, Notifiable;
-    // use  Notifiable;
+
     protected $table = 'karyawan';
 
     protected $fillable = [
@@ -36,7 +36,7 @@ class Karyawan extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
-        'foto_wajah', // tidak dikirim ke API umum
+        'foto_wajah',
     ];
 
     protected $casts = [
@@ -44,6 +44,15 @@ class Karyawan extends Authenticatable
         'is_active'         => 'boolean',
         'password'          => 'hashed',
     ];
+
+    // ── Routing notifikasi ───────────────────────────────────────────────
+
+    public function routeNotificationForMail(): string
+    {
+        return $this->email;
+    }
+
+    // ── Relasi ───────────────────────────────────────────────────────────
 
     public function instansi(): BelongsTo
     {
@@ -57,14 +66,12 @@ class Karyawan extends Authenticatable
             ->withTimestamps();
     }
 
-    /**
-     * Shift yang sedang aktif hari ini.
-     */
     public function shiftAktif(): HasOne
     {
         return $this->hasOne(KaryawanShift::class)
             ->where('tanggal_berlaku', '<=', today())
-            ->where(fn ($q) => $q->whereNull('tanggal_berakhir')->orWhere('tanggal_berakhir', '>=', today()))
+            ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
+                ->orWhere('tanggal_berakhir', '>=', today()))
             ->latestOfMany('tanggal_berlaku');
     }
 
@@ -73,9 +80,6 @@ class Karyawan extends Authenticatable
         return $this->hasMany(Absensi::class);
     }
 
-    /**
-     * Absensi hari ini.
-     */
     public function absensiHariIni(): HasOne
     {
         return $this->hasOne(Absensi::class)

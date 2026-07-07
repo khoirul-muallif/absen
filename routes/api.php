@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AbsensiController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\NotifikasiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -10,12 +11,12 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-// ── Public (tanpa token) ────────────────────────────────────────────────
+// ── Public ──────────────────────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
 });
 
-// ── Protected (butuh token Sanctum) ────────────────────────────────────
+// ── Protected ───────────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
     // Auth
@@ -33,6 +34,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('rekap',   [AbsensiController::class, 'rekap']);
     });
 
-    // QR Instansi
+    // QR
     Route::get('instansi/qr/{kode}', [AbsensiController::class, 'validasiQr']);
+
+    // Notifikasi
+    Route::prefix('notifikasi')->group(function () {
+        Route::get('/',            [NotifikasiController::class, 'index']);
+        Route::get('jumlah',       [NotifikasiController::class, 'jumlah']);
+        Route::post('baca-semua',  [NotifikasiController::class, 'bacaSemua']);
+        Route::post('{id}/baca',   [NotifikasiController::class, 'baca']);
+        Route::delete('{id}',      [NotifikasiController::class, 'hapus']);
+    });
 });
