@@ -21,11 +21,6 @@ class JadwalForm
                     ->preload()
                     ->live()
                     ->required(),
-                Select::make('shift_id')
-                    ->relationship('shift', 'nama_shift')
-                    ->searchable()
-                    ->preload()
-                    ->required(),
                 DatePicker::make('tanggal')
                     ->required()
                     ->unique(
@@ -41,9 +36,17 @@ class JadwalForm
                     ->options([
                         'reguler' => 'Reguler',
                         'piket' => 'Piket',
+                        'libur' => 'Libur',
                     ])
                     ->default('reguler')
+                    ->live()
                     ->required(),
+                Select::make('shift_id')
+                    ->relationship('shift', 'nama_shift')
+                    ->searchable()
+                    ->preload()
+                    ->required(fn (Get $get) => $get('jenis') !== 'libur')
+                    ->visible(fn (Get $get) => $get('jenis') !== 'libur'),
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
             ]);

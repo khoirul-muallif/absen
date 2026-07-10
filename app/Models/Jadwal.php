@@ -18,7 +18,8 @@ class Jadwal extends Model
 
     const JENIS_REGULER = 'reguler';
     const JENIS_PIKET = 'piket';
-
+    const JENIS_LIBUR = 'libur';
+    
     public function karyawan(): BelongsTo
     {
         return $this->belongsTo(Karyawan::class);
