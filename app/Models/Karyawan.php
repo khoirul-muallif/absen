@@ -90,4 +90,34 @@ class Karyawan extends Authenticatable
     {
         return $this->role === 'admin';
     }
+
+    public function jadwals(): HasMany
+    {
+        return $this->hasMany(Jadwal::class);
+    }
+
+    public function cutis(): HasMany
+    {
+        return $this->hasMany(Cuti::class);
+    }
+
+    public function izins(): HasMany
+    {
+        return $this->hasMany(Izin::class);
+    }
+
+    public function lemburs(): HasMany
+    {
+        return $this->hasMany(Lembur::class);
+    }
+
+    public function dinas(): HasMany
+    {
+        return $this->hasMany(Dinas::class);
+    }
+
+    public function kuotaCutis(): HasMany
+    {
+        return $this->hasMany(KuotaCuti::class);
+    }
 }
