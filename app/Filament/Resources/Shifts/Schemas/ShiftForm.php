@@ -8,6 +8,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\CheckboxList;
+
 
 class ShiftForm
 {
@@ -43,6 +45,16 @@ class ShiftForm
                             ->maxValue(120)
                             ->suffix('menit')
                             ->helperText('Karyawan masih dianggap tepat waktu dalam batas ini'),
+
+                            Select::make('mode_toleransi')
+                            ->label('Mode Toleransi')
+                            ->options([
+                                'harian' => 'Per Hari (reset tiap hari)',
+                                'akumulasi_bulanan' => 'Akumulasi Bulanan',
+                            ])
+                            ->default('harian')
+                            ->required()
+                            ->helperText('Akumulasi bulanan: total keterlambatan dijumlah sebulan, baru dianggap pelanggaran setelah melebihi toleransi'),
                     ]),
 
                 Section::make('Jam Kerja')
@@ -58,6 +70,26 @@ class ShiftForm
                             ->label('Jam Pulang')
                             ->required()
                             ->seconds(false),
+                    ]),
+
+
+                Section::make('Pola Hari Kerja')
+                    ->icon('heroicon-o-calendar-days')
+                    ->schema([
+                        CheckboxList::make('hari_kerja')
+                            ->label('Hari kerja')
+                            ->options([
+                                1 => 'Senin',
+                                2 => 'Selasa',
+                                3 => 'Rabu',
+                                4 => 'Kamis',
+                                5 => 'Jumat',
+                                6 => 'Sabtu',
+                                0 => 'Minggu',
+                            ])
+                            ->default([1, 2, 3, 4, 5])
+                            ->columns(4)
+                            ->helperText('Kosongkan semua jika shift berlaku tiap hari (misal shift jaga 24 jam)'),
                     ]),
 
                 Section::make('Status')

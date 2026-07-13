@@ -24,6 +24,7 @@ class Absensi extends Model
         'foto_pulang',
         'status',
         'keterangan',
+        'menit_terlambat',
     ];
 
     protected $casts = [
@@ -63,20 +64,6 @@ class Absensi extends Model
         return (int) $this->waktu_masuk->diffInMinutes($this->waktu_pulang);
     }
 
-    /**
-     * Berapa menit terlambat dari jam masuk shift (0 jika tepat waktu).
-     */
-    public function menitTerlambat(): int
-    {
-        if (! $this->waktu_masuk) {
-            return 0;
-        }
-
-        $jamMasukShift = today()->setTimeFromTimeString($this->shift->jam_masuk);
-        $selisih = $jamMasukShift->diffInMinutes($this->waktu_masuk, false);
-
-        return max(0, (int) $selisih);
-    }
 
     // ── Scopes ──────────────────────────────────────────────────────────────
 
@@ -94,5 +81,23 @@ class Absensi extends Model
     public function scopeStatus($query, string $status)
     {
         return $query->where('status', $status);
+    }
+
+    /**
+     * Berapa menit terlambat dari jam masuk shift (0 jika tepat waktu).
+     * Prioritas: nilai yang sudah tersimpan di kolom menit_terlambat.
+     * Fallback: hitung ulang dari waktu_masuk (untuk data lama sebelum kolom ini ada).
+     */
+    public function menitTerlambat(): int
+    {
+        if (isset($this->attributes['menit_terlambat'])) {
+            return (int) $this->menit_terlambat;
+        }
+
+        if (! $this->waktu_masuk) {
+            return 0;
+        }
+
+        return $this->shift->hitungMenitTerlambat($this->waktu_masuk);
     }
 }

@@ -9,6 +9,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Filament\Tables\Columns\IconColumn;
 
 class AbsensisTable
 {
@@ -39,6 +40,12 @@ class AbsensisTable
                     ->label('Pulang')
                     ->dateTime('H:i')
                     ->sortable(),
+                IconColumn::make('melebihi_toleransi_bulanan')
+                    ->label('Batas Min.')
+                    ->boolean()
+                    ->trueColor('danger')
+                    ->falseColor('gray')
+                    ->toggleable(),
 
                 TextColumn::make('status')
                     ->label('Status')

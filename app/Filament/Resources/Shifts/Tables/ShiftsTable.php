@@ -46,6 +46,29 @@ class ShiftsTable
                     ->badge()
                     ->color('warning'),
 
+                TextColumn::make('mode_toleransi')
+                    ->label('Mode Toleransi')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => $state === 'akumulasi_bulanan' ? 'Akumulasi' : 'Harian')
+                    ->color(fn (string $state) => $state === 'akumulasi_bulanan' ? 'info' : 'gray')
+                    ->toggleable(),
+
+                TextColumn::make('hari_kerja')
+                    ->label('Hari Kerja')
+                    ->state(function ($record): string {
+                        $hariKerja = $record->hari_kerja;
+
+                        if (empty($hariKerja) || ! is_array($hariKerja)) {
+                            return 'Setiap hari';
+                        }
+
+                        $nama = [0 => 'Min', 1 => 'Sen', 2 => 'Sel', 3 => 'Rab', 4 => 'Kam', 5 => 'Jum', 6 => 'Sab'];
+                        sort($hariKerja);
+
+                        return collect($hariKerja)->map(fn ($hari) => $nama[$hari] ?? '?')->join(', ');
+                    })
+                    ->toggleable(),
+
                 IconColumn::make('is_active')
                     ->label('Aktif')
                     ->boolean()

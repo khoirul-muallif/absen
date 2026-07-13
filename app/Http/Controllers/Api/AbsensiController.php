@@ -98,39 +98,53 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // 5. Simpan foto & tentukan status
-        $fotoPath   = $request->file('foto_masuk')->store('foto-absen/masuk', 'public');
-        $waktuMasuk = now();
-        $status     = $karyawanShift->shift->tentukanStatus($waktuMasuk);
+        $shift = $karyawanShift->shift;
 
-        // 6. Simpan absensi
+        // Hitung akumulasi bulan berjalan (buat KPI, bukan buat status harian)
+        $totalTerlambatSebelumnya = 0;
+        if ($shift->mode_toleransi === 'akumulasi_bulanan') {
+            $totalTerlambatSebelumnya = $karyawan->absensi()
+                ->whereYear('tanggal', now()->year)
+                ->whereMonth('tanggal', now()->month)
+                ->sum('menit_terlambat');
+        }
+
+        $fotoPath              = $request->file('foto_masuk')->store('foto-absen/masuk', 'public');
+        $waktuMasuk            = now();
+        $menitTerlambatHariIni = $shift->hitungMenitTerlambat($waktuMasuk);
+        $status                = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari ini
+        $totalSetelahHariIni   = $totalTerlambatSebelumnya + $menitTerlambatHariIni;
+        $melebihiToleransi     = $shift->sudahMelebihiToleransiBulanan($totalSetelahHariIni);
+
         $absensi = Absensi::create([
-            'karyawan_id'     => $karyawan->id,
-            'shift_id'        => $karyawanShift->shift_id,
-            'qr_instansi_id'  => $qr->id,
-            'tanggal'         => today(),
-            'waktu_masuk'     => $waktuMasuk,
-            'latitude_masuk'  => $lat,
-            'longitude_masuk' => $lng,
-            'foto_masuk'      => $fotoPath,
-            'status'          => $status,
+            'karyawan_id'                 => $karyawan->id,
+            'shift_id'                    => $karyawanShift->shift_id,
+            'qr_instansi_id'               => $qr->id,
+            'tanggal'                      => today(),
+            'waktu_masuk'                  => $waktuMasuk,
+            'latitude_masuk'               => $lat,
+            'longitude_masuk'              => $lng,
+            'foto_masuk'                   => $fotoPath,
+            'status'                       => $status,
+            'menit_terlambat'              => $menitTerlambatHariIni,
+            'melebihi_toleransi_bulanan'   => $melebihiToleransi,
         ]);
 
-        // 7. Kirim notifikasi jika terlambat
-        $menitTerlambat = $absensi->menitTerlambat();
-        if ($status === 'terlambat' && $menitTerlambat > 0) {
-            $karyawan->notify(new AbsenTerlambat($absensi->load('shift'), $menitTerlambat));
+        if ($status === 'terlambat' && $menitTerlambatHariIni > 0) {
+            $karyawan->notify(new AbsenTerlambat($absensi->load('shift'), $menitTerlambatHariIni));
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Absen masuk berhasil.',
             'data'    => [
-                'waktu_masuk'    => $waktuMasuk->format('H:i'),
-                'status'         => $status,
-                'shift'          => $karyawanShift->shift->nama_shift,
-                'terlambat'      => $menitTerlambat > 0 ? $menitTerlambat . ' menit' : null,
+                'waktu_masuk' => $waktuMasuk->format('H:i'),
+                'status'      => $status,
+                'shift'       => $shift->nama_shift,
+                'terlambat'   => $menitTerlambatHariIni > 0 ? $menitTerlambatHariIni . ' menit' : null,
                 'ada_notifikasi' => $status === 'terlambat',
+                // sengaja TIDAK dikirim ke karyawan: melebihi_toleransi_bulanan.
+                // Itu murni buat admin, biar gak jadi tekanan psikologis harian ke karyawan.
             ],
         ]);
     }
