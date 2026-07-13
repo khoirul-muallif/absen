@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ShiftResource extends Resource
 {
@@ -27,6 +28,8 @@ class ShiftResource extends Resource
     protected static ?string $pluralLabel = 'Data Shift';
 
     protected static ?string $label = 'Shift';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master Data';
 
     protected static ?int $navigationSort = 3;
 
