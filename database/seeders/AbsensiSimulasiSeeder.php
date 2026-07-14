@@ -21,6 +21,7 @@ class AbsensiSimulasiSeeder extends Seeder
             'mode_toleransi' => 'akumulasi_bulanan',
             'toleransi_menit' => 30,
         ]);
+        $shift->refresh();
 
         // Simulasi 5 hari ke belakang, telat dikit-dikit
         $simulasiTelat = [
@@ -30,7 +31,6 @@ class AbsensiSimulasiSeeder extends Seeder
             2 => 10,  // 2 hari lalu, telat 10 menit
             1 => 3,   // kemarin, telat 3 menit
         ];
-        // Total akumulasi sebelum hari ini: 2+5+8+10+3 = 28 menit (masih di bawah kuota 30)
 
         $akumulasi = 0;
 
@@ -39,7 +39,8 @@ class AbsensiSimulasiSeeder extends Seeder
             $waktuMasuk = $tanggal->copy()->setTimeFromTimeString($shift->jam_masuk)->addMinutes($menitTelat);
 
             $akumulasi += $menitTelat;
-            $status = $akumulasi > $shift->toleransi_menit ? 'terlambat' : 'tepat_waktu';
+            $status = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari itu
+            $melebihi = $shift->sudahMelebihiToleransiBulanan($akumulasi);
 
             Absensi::updateOrCreate(
                 ['karyawan_id' => $karyawan->id, 'tanggal' => $tanggal->toDateString()],
@@ -48,13 +49,14 @@ class AbsensiSimulasiSeeder extends Seeder
                     'qr_instansi_id' => $qr->id,
                     'waktu_masuk' => $waktuMasuk,
                     'menit_terlambat' => $menitTelat,
+                    'melebihi_toleransi_bulanan' => $melebihi,
                     'status' => $status,
                     'latitude_masuk' => -7.0784947,
                     'longitude_masuk' => 110.4119292,
                 ]
             );
 
-            $this->command->info("Hari -{$hariLalu} ({$tanggal->toDateString()}): telat {$menitTelat} menit, akumulasi {$akumulasi}, status: {$status}");
+            $this->command->info("Hari -{$hariLalu} ({$tanggal->toDateString()}): telat {$menitTelat} menit, akumulasi {$akumulasi}, status: {$status}, melebihi KPI: " . ($melebihi ? 'ya' : 'belum'));
         }
 
         $this->command->info("Total akumulasi sebelum hari ini: {$akumulasi} menit dari kuota {$shift->toleransi_menit} menit.");

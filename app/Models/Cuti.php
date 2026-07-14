@@ -32,15 +32,34 @@ class Cuti extends Model
         return $this->belongsTo(JenisCuti::class);
     }
 
-    protected static function booted(): void
+    public function afterApprove(): void
     {
-        static::created(function (Cuti $cuti) {
-            if ($cuti->jenisCuti->potong_kuota) {
-                $cuti->karyawan->kuotaCutis()
-                    ->where('jenis_cuti_id', $cuti->jenis_cuti_id)
-                    ->where('tahun', $cuti->tanggal_mulai->year)
-                    ->increment('terpakai', $cuti->jumlah_hari);
+        if ($this->jenisCuti->potong_kuota) {
+            $this->karyawan->kuotaCutis()
+                ->where('jenis_cuti_id', $this->jenis_cuti_id)
+                ->where('tahun', $this->tanggal_mulai->year)
+                ->increment('terpakai', $this->jumlah_hari);
+        }
+
+        $this->sinkronisasiAbsensi('cuti');
+    }
+
+    protected function sinkronisasiAbsensi(string $status): void
+    {
+        $periode = \Carbon\CarbonPeriod::create($this->tanggal_mulai, $this->tanggal_selesai);
+
+        foreach ($periode as $tanggal) {
+            $absensi = \App\Models\Absensi::firstOrNew(
+                ['karyawan_id' => $this->karyawan_id, 'tanggal' => $tanggal->toDateString()]
+            );
+
+            // Jangan timpa kalau sudah ada kehadiran asli (waktu_masuk terisi)
+            if ($absensi->exists && $absensi->waktu_masuk !== null) {
+                continue;
             }
-        });
+
+            $absensi->status = $status;
+            $absensi->save();
+        }
     }
 }

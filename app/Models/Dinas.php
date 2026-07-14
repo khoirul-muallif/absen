@@ -10,7 +10,7 @@ class Dinas extends Model
 {
     use HasApprovalWorkflow;
 
-    protected $table = 'dinas'; // biar Laravel gak nebak 'dina'
+    protected $table = 'dinas';
 
     protected $fillable = [
         'karyawan_id', 'tanggal_mulai', 'tanggal_selesai', 'tujuan', 'keperluan',
@@ -26,5 +26,23 @@ class Dinas extends Model
     public function karyawan(): BelongsTo
     {
         return $this->belongsTo(Karyawan::class);
+    }
+
+   public function afterApprove(): void
+    {
+        $periode = \Carbon\CarbonPeriod::create($this->tanggal_mulai, $this->tanggal_selesai);
+
+        foreach ($periode as $tanggal) {
+            $absensi = \App\Models\Absensi::firstOrNew(
+                ['karyawan_id' => $this->karyawan_id, 'tanggal' => $tanggal->toDateString()]
+            );
+
+            if ($absensi->exists && $absensi->waktu_masuk !== null) {
+                continue;
+            }
+
+            $absensi->status = 'dinas';
+            $absensi->save();
+        }
     }
 }
