@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Absensi;
+use App\Models\Jadwal;
 use App\Models\KaryawanShift;
 use App\Models\QrInstansi;
 use App\Notifications\AbsenTerlambat;
@@ -82,7 +83,8 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // 4. Ambil shift aktif
+        // 4. Ambil shift aktif — cek KaryawanShift dulu (karyawan umum),
+        //    fallback ke Jadwal hari ini (karyawan rotasi)
         $karyawanShift = KaryawanShift::with('shift')
             ->where('karyawan_id', $karyawan->id)
             ->where('tanggal_berlaku', '<=', today())
@@ -91,14 +93,27 @@ class AbsensiController extends Controller
             ->latest('tanggal_berlaku')
             ->first();
 
-        if (! $karyawanShift) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tidak ada shift aktif untuk hari ini. Hubungi admin.',
-            ], 422);
+        if ($karyawanShift) {
+            $shift    = $karyawanShift->shift;
+            $shiftId  = $karyawanShift->shift_id;
+        } else {
+            // fallback: karyawan rotasi, shift ditentukan lewat Jadwal harian
+            $jadwalHariIni = Jadwal::with('shift')
+                ->where('karyawan_id', $karyawan->id)
+                ->whereDate('tanggal', today())
+                ->first();
+
+            if (! $jadwalHariIni || ! $jadwalHariIni->shift) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tidak ada shift aktif untuk hari ini. Hubungi admin.',
+                ], 422);
+            }
+
+            $shift   = $jadwalHariIni->shift;
+            $shiftId = $jadwalHariIni->shift_id;
         }
 
-        $shift = $karyawanShift->shift;
 
         // Hitung akumulasi bulan berjalan (buat KPI, bukan buat status harian)
         $totalTerlambatSebelumnya = 0;
@@ -118,7 +133,7 @@ class AbsensiController extends Controller
 
         $absensi = Absensi::create([
             'karyawan_id'                 => $karyawan->id,
-            'shift_id'                    => $karyawanShift->shift_id,
+            'shift_id'                    => $shiftId,
             'qr_instansi_id'               => $qr->id,
             'tanggal'                      => today(),
             'waktu_masuk'                  => $waktuMasuk,
