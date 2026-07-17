@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Karyawans\Schemas;
 
+use App\Models\Karyawan;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Schemas\Components\Section;
@@ -104,6 +105,24 @@ class KaryawanForm
                             ->label('Tanggal Bergabung')
                             ->displayFormat('d M Y')
                             ->maxDate(now()),
+                    ]),
+
+                Section::make('Tipe Penjadwalan')
+                    ->description('Menentukan mekanisme jadwal kerja karyawan ini')
+                    ->icon('heroicon-o-calendar-days')
+                    ->schema([
+                        Select::make('tipe_jadwal')
+                            ->label('Tipe Jadwal')
+                            ->options([
+                                Karyawan::TIPE_UMUM   => 'Umum (jadwal tetap via assignment shift periode)',
+                                Karyawan::TIPE_ROTASI => 'Rotasi (jadwal harian manual, ganti-ganti shift)',
+                            ])
+                            ->default(Karyawan::TIPE_UMUM)
+                            ->required()
+                            ->live()
+                            ->helperText(fn ($state) => $state === Karyawan::TIPE_ROTASI
+                                ? 'Karyawan rotasi WAJIB punya row Jadwal eksplisit tiap hari kerja di menu Jadwal — tidak pakai assignment KaryawanShift. Kalau lupa dibuatkan, RekapHarian akan menandai sebagai anomali, bukan otomatis dianggap libur.'
+                                : 'Karyawan umum dijadwalkan lewat assignment Shift periode (menu Karyawan & Shift), bukan Jadwal harian manual.'),
                     ]),
 
                 Section::make('Foto')

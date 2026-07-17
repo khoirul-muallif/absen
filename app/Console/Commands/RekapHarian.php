@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 class RekapHarian extends Command
 {
     protected $signature   = 'absensi:rekap-harian {--tanggal= : Tanggal rekap (Y-m-d), default kemarin}';
-    protected $description = 'Generate rekap harian — tandai karyawan yang tidak absen sebagai alpha, dengan cek hari libur';
+    protected $description = 'Generate rekap harian — tandai karyawan yang tidak absen sebagai alpha, dengan cek hari libur & tipe jadwal';
 
     public function handle(): int
     {
@@ -27,11 +27,12 @@ class RekapHarian extends Command
             ->get();
 
         $stat = [
-            'sudah_absen' => 0,
-            'libur_mingguan' => 0,
-            'libur_nasional' => 0,
-            'libur_personal' => 0,
-            'alpha' => 0,
+            'sudah_absen'     => 0,
+            'libur_mingguan'  => 0,
+            'libur_nasional'  => 0,
+            'libur_personal'  => 0,
+            'jadwal_hilang'   => 0,
+            'alpha'           => 0,
         ];
 
         foreach ($karyawanAktif as $karyawan) {
@@ -42,45 +43,65 @@ class RekapHarian extends Command
                 continue;
             }
 
-            // 2. Cek Jadwal eksplisit untuk tanggal ini (nutup karyawan rotasi + override manual)
+            // 2. Cek Jadwal eksplisit untuk tanggal ini
             $jadwal = Jadwal::where('karyawan_id', $karyawan->id)
                 ->where('tanggal', $tanggal->toDateString())
                 ->first();
 
-            if ($jadwal && $jadwal->jenis === 'libur') {
-                $stat['libur_personal']++;
-                continue; // Jadwal eksplisit bilang libur, gak perlu apa-apa
-            }
-
-            // 3. Tentuin apakah dijadwalkan kerja hari ini
             $shiftId = null;
             $dijadwalkanKerja = false;
 
-            if ($jadwal && in_array($jadwal->jenis, ['reguler', 'piket'])) {
+            if ($karyawan->isRotasi()) {
+                // Karyawan ROTASI: Jadwal WAJIB eksplisit tiap hari, TIDAK ADA
+                // fallback ke KaryawanShift. Kalau gak ketemu, ini anomali data
+                // (jadwal lupa dibuat admin) — bukan otomatis dianggap libur.
+                if (! $jadwal) {
+                    $stat['jadwal_hilang']++;
+                    $this->warn("  → Jadwal hilang: {$karyawan->nama} ({$tanggal->format('d M Y')}) — tipe rotasi tanpa Jadwal tercatat, cek manual.");
+                    continue;
+                }
+
+                if ($jadwal->jenis === 'libur') {
+                    $stat['libur_personal']++;
+                    continue;
+                }
+
+                // jenis reguler/piket
                 $dijadwalkanKerja = true;
                 $shiftId = $jadwal->shift_id;
             } else {
-                // Fallback: cek KaryawanShift (assignment periode) + pola hari_kerja shift-nya
-                $karyawanShift = KaryawanShift::with('shift')
-                    ->where('karyawan_id', $karyawan->id)
-                    ->where('tanggal_berlaku', '<=', $tanggal)
-                    ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
-                        ->orWhere('tanggal_berakhir', '>=', $tanggal))
-                    ->latest('tanggal_berlaku')
-                    ->first();
+                // Karyawan UMUM: Jadwal manual (override/piket tambahan) kalau
+                // ada, kalau tidak fallback ke KaryawanShift + pola hari_kerja.
+                if ($jadwal && $jadwal->jenis === 'libur') {
+                    $stat['libur_personal']++;
+                    continue;
+                }
 
-                if ($karyawanShift && $karyawanShift->shift->adalahHariKerja($tanggal)) {
+                if ($jadwal && in_array($jadwal->jenis, ['reguler', 'piket'])) {
                     $dijadwalkanKerja = true;
-                    $shiftId = $karyawanShift->shift_id;
+                    $shiftId = $jadwal->shift_id;
+                } else {
+                    $karyawanShift = KaryawanShift::with('shift')
+                        ->where('karyawan_id', $karyawan->id)
+                        ->where('tanggal_berlaku', '<=', $tanggal)
+                        ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
+                            ->orWhere('tanggal_berakhir', '>=', $tanggal))
+                        ->latest('tanggal_berlaku')
+                        ->first();
+
+                    if ($karyawanShift && $karyawanShift->shift->adalahHariKerja($tanggal)) {
+                        $dijadwalkanKerja = true;
+                        $shiftId = $karyawanShift->shift_id;
+                    }
+                }
+
+                if (! $dijadwalkanKerja) {
+                    $stat['libur_mingguan']++;
+                    continue; // Bukan hari kerjanya, wajar gak absen
                 }
             }
 
-            if (! $dijadwalkanKerja) {
-                $stat['libur_mingguan']++;
-                continue; // Bukan hari kerjanya, wajar gak absen
-            }
-
-            // 4. Cek hari libur nasional/instansi
+            // 3. Cek hari libur nasional/instansi
             $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
                 ->whereDate('tanggal', $tanggal)
                 ->exists();
@@ -97,7 +118,7 @@ class RekapHarian extends Command
                 continue;
             }
 
-            // 5. Dijadwalkan kerja, bukan hari libur, gak ada absensi = alpha
+            // 4. Dijadwalkan kerja, bukan hari libur, gak ada absensi = alpha
             $qrInstansiId = $karyawan->instansi->qrInstansi()
                 ->where('is_active', true)
                 ->first()?->id;
@@ -117,7 +138,7 @@ class RekapHarian extends Command
 
         $this->info('Selesai.');
         $this->table(
-            ['Tanggal', 'Total Karyawan', 'Sudah Absen', 'Libur Mingguan', 'Libur Nasional', 'Libur Personal', 'Alpha Baru'],
+            ['Tanggal', 'Total Karyawan', 'Sudah Absen', 'Libur Mingguan', 'Libur Nasional', 'Libur Personal', 'Jadwal Hilang', 'Alpha Baru'],
             [[
                 $tanggal->format('d M Y'),
                 $karyawanAktif->count(),
@@ -125,9 +146,15 @@ class RekapHarian extends Command
                 $stat['libur_mingguan'],
                 $stat['libur_nasional'],
                 $stat['libur_personal'],
+                $stat['jadwal_hilang'],
                 $stat['alpha'],
             ]]
         );
+
+        if ($stat['jadwal_hilang'] > 0) {
+            $this->newLine();
+            $this->warn("⚠ {$stat['jadwal_hilang']} karyawan rotasi gak punya Jadwal tercatat hari ini. Ini BUKAN alpha dan BUKAN libur — cek manual, kemungkinan jadwal lupa dibuat.");
+        }
 
         return self::SUCCESS;
     }

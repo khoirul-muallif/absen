@@ -15,6 +15,8 @@ class Karyawan extends Authenticatable
     use HasApiTokens, Notifiable;
 
     protected $table = 'karyawan';
+    const TIPE_UMUM   = 'umum';
+    const TIPE_ROTASI = 'rotasi';
 
     protected $fillable = [
         'instansi_id',
@@ -31,6 +33,7 @@ class Karyawan extends Authenticatable
         'jabatan',
         'tanggal_bergabung',
         'is_active',
+        'tipe_jadwal',
     ];
 
     protected $hidden = [
@@ -119,5 +122,21 @@ class Karyawan extends Authenticatable
     public function kuotaCutis(): HasMany
     {
         return $this->hasMany(KuotaCuti::class);
+    }
+
+    public function isRotasi(): bool
+    {
+        return $this->tipe_jadwal === self::TIPE_ROTASI;
+    }
+
+    public function isUmum(): bool
+    {
+        return $this->tipe_jadwal === self::TIPE_UMUM;
+    }
+
+    // pastikan relasi ini ada (dibutuhkan command integrity-check di bawah):
+    public function karyawanShift(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(KaryawanShift::class);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\KaryawanShifts\Schemas;
 
+use App\Models\Karyawan;
 use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Select;
@@ -20,11 +21,16 @@ class KaryawanShiftForm
                     ->schema([
                         Select::make('karyawan_id')
                             ->label('Karyawan')
-                            ->relationship('karyawan', 'nama')
+                            ->relationship(
+                                name: 'karyawan',
+                                titleAttribute: 'nama',
+                                modifyQueryUsing: fn ($query) => $query->where('tipe_jadwal', Karyawan::TIPE_UMUM),
+                            )
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->helperText('Cuma karyawan tipe "Umum" yang muncul di sini. Karyawan rotasi dijadwalkan manual per hari lewat menu Jadwal, bukan assignment periode.'),
 
                         Select::make('shift_id')
                             ->label('Shift')

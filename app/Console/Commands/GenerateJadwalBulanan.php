@@ -54,6 +54,15 @@ class GenerateJadwalBulanan extends Command
             }
 
             $karyawan = $assignment->karyawan;
+
+            // Pengaman: seharusnya gak mungkin lolos sampai sini (KaryawanShiftForm
+            // udah membatasi cuma karyawan tipe umum), tapi kalau ada yang lolos
+            // lewat tinker/seeder manual, jangan ikut digenerate — bisa bentrok
+            // sama Jadwal manual yang dibuat admin untuk karyawan rotasi ini.
+            if ($karyawan->isRotasi()) {
+                $this->warn("  → Lewati: {$karyawan->nama} tipe ROTASI tapi punya KaryawanShift #{$assignment->id}. Jalankan `php artisan karyawan:cek-tipe-jadwal` untuk detail.");
+                continue;
+            }
             $instansiId = $karyawan->instansi_id;
 
             $mulai = $assignment->tanggal_berlaku->greaterThan($awalBulan) ? $assignment->tanggal_berlaku : $awalBulan;
