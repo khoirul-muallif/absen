@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Traits\HasApprovalWorkflow;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Izin extends Model
 {
-    use HasApprovalWorkflow;
+    use HasApprovalWorkflow, HasFactory;
 
     protected $fillable = [
         'karyawan_id', 'tanggal', 'jam_keluar', 'jam_kembali', 'keperluan',

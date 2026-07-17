@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Jadwal extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'karyawan_id', 'shift_id', 'tanggal', 'jenis', 'keterangan',
     ];
@@ -19,7 +22,7 @@ class Jadwal extends Model
     const JENIS_REGULER = 'reguler';
     const JENIS_PIKET = 'piket';
     const JENIS_LIBUR = 'libur';
-    
+
     public function karyawan(): BelongsTo
     {
         return $this->belongsTo(Karyawan::class);

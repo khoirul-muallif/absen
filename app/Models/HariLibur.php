@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HariLibur extends Model
 {
+        use HasFactory;
     protected $fillable = [
         'instansi_id', 'tanggal', 'nama', 'keterangan', 'is_cuti_bersama',
     ];
