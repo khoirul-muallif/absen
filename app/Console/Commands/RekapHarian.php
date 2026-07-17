@@ -3,74 +3,129 @@
 namespace App\Console\Commands;
 
 use App\Models\Absensi;
+use App\Models\HariLibur;
+use App\Models\Jadwal;
+use App\Models\Karyawan;
 use App\Models\KaryawanShift;
 use Illuminate\Console\Command;
 
 class RekapHarian extends Command
 {
     protected $signature   = 'absensi:rekap-harian {--tanggal= : Tanggal rekap (Y-m-d), default kemarin}';
-    protected $description = 'Generate rekap harian — tandai karyawan yang tidak absen sebagai alpha';
+    protected $description = 'Generate rekap harian — tandai karyawan yang tidak absen sebagai alpha, dengan cek hari libur';
 
     public function handle(): int
     {
         $tanggal = $this->option('tanggal')
             ? \Carbon\Carbon::parse($this->option('tanggal'))
-            : today()->subDay(); // Default: kemarin
+            : today()->subDay();
 
         $this->info("Membuat rekap harian untuk tanggal: {$tanggal->format('d M Y')}");
 
-        // Ambil semua karyawan yang punya shift aktif pada tanggal tersebut
-        $karyawanShifts = KaryawanShift::with(['karyawan', 'shift'])
-            ->where('tanggal_berlaku', '<=', $tanggal)
-            ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
-                ->orWhere('tanggal_berakhir', '>=', $tanggal))
-            ->whereHas('karyawan', fn ($q) => $q->where('is_active', true))
+        $karyawanAktif = Karyawan::with('instansi')
+            ->where('is_active', true)
             ->get();
 
-        $diproses  = 0;
-        $dilewati  = 0;
-        $alphaCount = 0;
+        $stat = [
+            'sudah_absen' => 0,
+            'libur_mingguan' => 0,
+            'libur_nasional' => 0,
+            'libur_personal' => 0,
+            'alpha' => 0,
+        ];
 
-        foreach ($karyawanShifts as $ks) {
-            $karyawan = $ks->karyawan;
-
-            // Cek apakah sudah ada record absensi untuk tanggal ini
-            $absensi = $karyawan->absensi()
-                ->whereDate('tanggal', $tanggal)
-                ->first();
-
-            if ($absensi) {
-                $dilewati++;
-                continue; // Sudah ada record, skip
+        foreach ($karyawanAktif as $karyawan) {
+            // 1. Sudah ada record absensi (termasuk dari sync cuti/dinas/absen manual)?
+            $sudahAda = $karyawan->absensi()->whereDate('tanggal', $tanggal)->exists();
+            if ($sudahAda) {
+                $stat['sudah_absen']++;
+                continue;
             }
 
-            // Tidak ada record absensi = alpha
-            // Tapi cek dulu apakah hari itu adalah hari libur (bisa dikembangkan nanti)
+            // 2. Cek Jadwal eksplisit untuk tanggal ini (nutup karyawan rotasi + override manual)
+            $jadwal = Jadwal::where('karyawan_id', $karyawan->id)
+                ->where('tanggal', $tanggal->toDateString())
+                ->first();
+
+            if ($jadwal && $jadwal->jenis === 'libur') {
+                $stat['libur_personal']++;
+                continue; // Jadwal eksplisit bilang libur, gak perlu apa-apa
+            }
+
+            // 3. Tentuin apakah dijadwalkan kerja hari ini
+            $shiftId = null;
+            $dijadwalkanKerja = false;
+
+            if ($jadwal && in_array($jadwal->jenis, ['reguler', 'piket'])) {
+                $dijadwalkanKerja = true;
+                $shiftId = $jadwal->shift_id;
+            } else {
+                // Fallback: cek KaryawanShift (assignment periode) + pola hari_kerja shift-nya
+                $karyawanShift = KaryawanShift::with('shift')
+                    ->where('karyawan_id', $karyawan->id)
+                    ->where('tanggal_berlaku', '<=', $tanggal)
+                    ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
+                        ->orWhere('tanggal_berakhir', '>=', $tanggal))
+                    ->latest('tanggal_berlaku')
+                    ->first();
+
+                if ($karyawanShift && $karyawanShift->shift->adalahHariKerja($tanggal)) {
+                    $dijadwalkanKerja = true;
+                    $shiftId = $karyawanShift->shift_id;
+                }
+            }
+
+            if (! $dijadwalkanKerja) {
+                $stat['libur_mingguan']++;
+                continue; // Bukan hari kerjanya, wajar gak absen
+            }
+
+            // 4. Cek hari libur nasional/instansi
+            $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
+                ->whereDate('tanggal', $tanggal)
+                ->exists();
+
+            if ($adalahHariLibur) {
+                Absensi::create([
+                    'karyawan_id' => $karyawan->id,
+                    'shift_id' => $shiftId,
+                    'tanggal' => $tanggal,
+                    'status' => 'libur',
+                    'keterangan' => 'Hari libur nasional/cuti bersama - otomatis dari rekap harian',
+                ]);
+                $stat['libur_nasional']++;
+                continue;
+            }
+
+            // 5. Dijadwalkan kerja, bukan hari libur, gak ada absensi = alpha
+            $qrInstansiId = $karyawan->instansi->qrInstansi()
+                ->where('is_active', true)
+                ->first()?->id;
+
             Absensi::create([
-                'karyawan_id'    => $karyawan->id,
-                'shift_id'       => $ks->shift_id,
-                'qr_instansi_id' => $ks->karyawan->instansi
-                    ->qrInstansi()
-                    ->where('is_active', true)
-                    ->first()?->id ?? 1,
-                'tanggal'        => $tanggal,
-                'status'         => 'alpha',
-                'keterangan'     => 'Tidak hadir - otomatis dari rekap harian',
+                'karyawan_id' => $karyawan->id,
+                'shift_id' => $shiftId,
+                'qr_instansi_id' => $qrInstansiId,
+                'tanggal' => $tanggal,
+                'status' => 'alpha',
+                'keterangan' => 'Tidak hadir - otomatis dari rekap harian',
             ]);
 
-            $alphaCount++;
-            $diproses++;
+            $stat['alpha']++;
             $this->line("  → Alpha: {$karyawan->nama} ({$tanggal->format('d M Y')})");
         }
 
-        $this->info("Selesai. Diproses: {$diproses} (Alpha: {$alphaCount}), Dilewati: {$dilewati}");
+        $this->info('Selesai.');
         $this->table(
-            ['Tanggal', 'Total Shift Aktif', 'Sudah Absen', 'Alpha Baru'],
+            ['Tanggal', 'Total Karyawan', 'Sudah Absen', 'Libur Mingguan', 'Libur Nasional', 'Libur Personal', 'Alpha Baru'],
             [[
                 $tanggal->format('d M Y'),
-                $karyawanShifts->count(),
-                $dilewati,
-                $alphaCount,
+                $karyawanAktif->count(),
+                $stat['sudah_absen'],
+                $stat['libur_mingguan'],
+                $stat['libur_nasional'],
+                $stat['libur_personal'],
+                $stat['alpha'],
             ]]
         );
 
