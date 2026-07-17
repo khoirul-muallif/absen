@@ -19,7 +19,7 @@ class ShiftSeeder extends Seeder
             'jam_pulang' => '16:00:00',
             'toleransi_menit' => 30,
             'mode_toleransi' => 'harian',
-            'hari_kerja' => [1, 2, 3, 4, 5],
+            'hari_kerja' => [1, 2, 3, 4, 5], // Senin-Jumat
             'is_active' => true,
         ]);
 
@@ -27,8 +27,30 @@ class ShiftSeeder extends Seeder
             'instansi_id' => $instansi->id,
             'nama_shift' => 'pagi',
             'jam_masuk' => '07:00:00',
-            'jam_pulang' => '12:00:00',
-            'toleransi_menit' => 30,
+            'jam_pulang' => '15:00:00',
+            'toleransi_menit' => 15,
+            'mode_toleransi' => 'harian',
+            'hari_kerja' => [], // rotasi 24/7
+            'is_active' => true,
+        ]);
+
+        Shift::create([
+            'instansi_id' => $instansi->id,
+            'nama_shift' => 'siang',
+            'jam_masuk' => '15:00:00',
+            'jam_pulang' => '23:00:00',
+            'toleransi_menit' => 15,
+            'mode_toleransi' => 'harian',
+            'hari_kerja' => [],
+            'is_active' => true,
+        ]);
+
+        Shift::create([
+            'instansi_id' => $instansi->id,
+            'nama_shift' => 'malam',
+            'jam_masuk' => '23:00:00',
+            'jam_pulang' => '07:00:00',
+            'toleransi_menit' => 15,
             'mode_toleransi' => 'harian',
             'hari_kerja' => [],
             'is_active' => true,

@@ -14,17 +14,25 @@ class TukarJadwalInfolist
                 TextEntry::make('jadwal.karyawan.nama')
                     ->label('Pengaju'),
                 TextEntry::make('jadwal.tanggal')
-                    ->label('Tanggal jadwal pengaju')
+                    ->label('Tanggal jadwal saat ini')
                     ->date(),
                 TextEntry::make('jadwal.shift.nama_shift')
-                    ->label('Shift pengaju'),
+                    ->label('Shift'),
+                TextEntry::make('mode')
+                    ->label('Jenis Pengajuan')
+                    ->state(fn ($record) => $record->isPindahSendiri() ? 'Pindah tanggal sendiri' : 'Tukar dengan rekan'),
                 TextEntry::make('jadwalTujuan.karyawan.nama')
-                    ->label('Rekan tujuan'),
+                    ->label('Rekan tujuan')
+                    ->visible(fn ($record) => ! $record->isPindahSendiri())
+                    ->placeholder('-'),
                 TextEntry::make('jadwalTujuan.tanggal')
                     ->label('Tanggal jadwal tujuan')
-                    ->date(),
-                TextEntry::make('jadwalTujuan.shift.nama_shift')
-                    ->label('Shift tujuan'),
+                    ->date()
+                    ->visible(fn ($record) => ! $record->isPindahSendiri()),
+                TextEntry::make('tanggal_baru')
+                    ->label('Pindah ke tanggal')
+                    ->date()
+                    ->visible(fn ($record) => $record->isPindahSendiri()),
                 TextEntry::make('alasan')
                     ->columnSpanFull(),
                 TextEntry::make('status')
