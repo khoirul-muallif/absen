@@ -63,9 +63,18 @@ class Shift extends Model
     /**
      * Hitung menit terlambat mentah (belum dibandingkan toleransi).
      */
+    // public function hitungMenitTerlambat(\Carbon\Carbon $waktuMasuk): int
+    // {
+    //     $jamMasukShift = today()->setTimeFromTimeString($this->jam_masuk);
+    //     $selisih = $jamMasukShift->diffInMinutes($waktuMasuk, false);
+
+    //     return max(0, (int) $selisih);
+    // }
     public function hitungMenitTerlambat(\Carbon\Carbon $waktuMasuk): int
     {
-        $jamMasukShift = today()->setTimeFromTimeString($this->jam_masuk);
+        $jamMasukShift = $waktuMasuk->copy()->setTimeFromTimeString(
+            $this->jam_masuk->format('H:i:s')
+        );
         $selisih = $jamMasukShift->diffInMinutes($waktuMasuk, false);
 
         return max(0, (int) $selisih);
