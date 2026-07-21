@@ -31,3 +31,5 @@ _ide_helper_models.php
 .phpstorm.meta.php
 PROJECT_CONTEXT.md
 .env.testing
+todo.md
+CHANGELOG.md

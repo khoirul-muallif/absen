@@ -12,7 +12,7 @@ class Jadwal extends Model
     use HasFactory;
 
     protected $fillable = [
-        'karyawan_id', 'shift_id', 'tanggal', 'jenis', 'keterangan',
+        'karyawan_id', 'shift_id', 'tanggal', 'jenis', 'keterangan','sumber',
     ];
 
     protected $casts = [
