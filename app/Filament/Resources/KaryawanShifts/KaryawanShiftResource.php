@@ -21,11 +21,11 @@ class KaryawanShiftResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
-    protected static ?string $navigationLabel = 'Jadwal Shift';
+    protected static ?string $navigationLabel = 'Shift Karyawan Umum';
 
-    protected static ?string $pluralLabel = 'Jadwal Shift Karyawan';
+    protected static ?string $pluralLabel = 'Shift Karyawan Umum';
 
-    protected static ?string $label = 'Jadwal Shift';
+    protected static ?string $label = 'Shift Karyawan Umum';
 
     protected static string|UnitEnum|null $navigationGroup = 'Presensi';
 
