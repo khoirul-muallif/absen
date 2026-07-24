@@ -7,6 +7,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rule;
 
 class KaryawanPolaRotasiForm
 {
@@ -30,6 +31,13 @@ class KaryawanPolaRotasiForm
                             ->searchable()
                             ->preload()
                             ->columnSpanFull()
+                            ->rules([
+                                Rule::exists('karyawan', 'id')
+                                    ->where('tipe_jadwal', Karyawan::TIPE_ROTASI),
+                            ])
+                            ->validationMessages([
+                                'exists' => 'Karyawan yang dipilih harus bertipe jadwal Rotasi.',
+                            ])
                             ->helperText('Untuk karyawan tipe "Rotasi" — pakai pola siklus, bukan shift tetap. Karyawan tipe "Umum" pakai menu "Shift Karyawan Umum".'),
 
                         Select::make('pola_rotasi_id')

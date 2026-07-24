@@ -4,9 +4,10 @@ namespace App\Filament\Resources\KaryawanShifts\Schemas;
 
 use App\Models\Karyawan;
 use Filament\Forms\Components\DatePicker;
-use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rule;
 
 class KaryawanShiftForm
 {
@@ -30,6 +31,13 @@ class KaryawanShiftForm
                             ->searchable()
                             ->preload()
                             ->columnSpanFull()
+                            ->rules([
+                                Rule::exists('karyawan', 'id')
+                                    ->where('tipe_jadwal', Karyawan::TIPE_UMUM),
+                            ])
+                            ->validationMessages([
+                                'exists' => 'Karyawan yang dipilih harus bertipe jadwal Umum.',
+                            ])
                             ->helperText('Untuk karyawan tipe "Umum" — shift tetap per periode. Karyawan tipe "Rotasi" pakai menu "Shift Karyawan Rotasi".'),
 
                         Select::make('shift_id')

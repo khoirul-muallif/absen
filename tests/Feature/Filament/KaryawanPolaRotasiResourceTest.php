@@ -82,3 +82,20 @@ it('menolak karyawan_id kosong', function () {
         ->call('create')
         ->assertHasFormErrors(['karyawan_id' => 'required']);
 });
+
+test('menolak karyawan_id yang bertipe umum walau ID valid (guard server-side)', function () {
+    $karyawanUmum = Karyawan::factory()->umum()->create();
+    $pola = PolaRotasi::factory()->create();
+
+    livewire(CreateKaryawanPolaRotasi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawanUmum->id,
+            'pola_rotasi_id' => $pola->id,
+            'tanggal_mulai' => '2026-08-01',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['karyawan_id']);
+
+    expect(KaryawanPolaRotasi::where('karyawan_id', $karyawanUmum->id)->exists())->toBeFalse();
+});
+
