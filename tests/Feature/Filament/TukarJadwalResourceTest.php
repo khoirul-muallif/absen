@@ -63,7 +63,7 @@ it('bisa membuat pengajuan mode tukar dengan data valid', function () {
         ->and($record->karyawan_tujuan_id)->toBe($tujuan->id)
         ->and($record->tanggal_asal->toDateString())->toBe($jadwalAsal->tanggal->toDateString())
         ->and($record->tanggal_tujuan->toDateString())->toBe($jadwalTujuan->tanggal->toDateString())
-        ->and($record->status)->toBe('pending');
+        ->and($record->status)->toBe('menunggu_rekan');
 });
 
 it('menolak jadwal tujuan yang sama dengan jadwal asal', function () {
@@ -106,7 +106,7 @@ it('menolak pengajuan kalau jadwal sudah dipakai pengajuan pending lain', functi
     // Pengajuan pending pertama yang sudah memakai jadwalAsal
     TukarJadwal::factory()->create([
         'jadwal_id' => $jadwalAsal->id,
-        'status' => 'pending',
+        'status' => 'menunggu_admin',
     ]);
 
     livewire(CreateTukarJadwal::class)
@@ -273,4 +273,78 @@ it('menolak alasan kosong', function () {
         ])
         ->call('create')
         ->assertHasFormErrors(['alasan' => 'required']);
+});
+
+it('menolak tukar kalau pengaju sedang cuti/dinas approved di tanggal asalnya sendiri', function () {
+    $shift = Shift::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'status' => 'approved',
+        'tanggal_mulai' => $jadwalAsal->tanggal,
+        'tanggal_selesai' => $jadwalAsal->tanggal,
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'tukar',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalAsal->id,
+            'karyawan_tujuan_filter' => $tujuan->id,
+            'jadwal_tujuan_id' => $jadwalTujuan->id,
+            'alasan' => 'Test bentrok cuti pengaju',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['jadwal_tujuan_id']);
+});
+
+it('menolak tukar kalau karyawan tujuan sedang dinas approved di tanggal tujuannya sendiri', function () {
+    $shift = Shift::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    \App\Models\Dinas::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'status' => 'approved',
+        'tanggal_mulai' => $jadwalTujuan->tanggal,
+        'tanggal_selesai' => $jadwalTujuan->tanggal,
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'tukar',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalAsal->id,
+            'karyawan_tujuan_filter' => $tujuan->id,
+            'jadwal_tujuan_id' => $jadwalTujuan->id,
+            'alasan' => 'Test bentrok dinas tujuan',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['jadwal_tujuan_id']);
 });

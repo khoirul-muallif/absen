@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\IzinController;
 use App\Http\Controllers\Api\LemburController;
 use App\Http\Controllers\Api\CutiController;
 use App\Http\Controllers\Api\DinasController;
+use App\Http\Controllers\Api\TukarJadwalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -77,5 +78,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',        [DinasController::class, 'riwayat']);
         Route::post('/',       [DinasController::class, 'ajukan']);
         Route::delete('{id}',  [DinasController::class, 'batalkan']);
+    });
+
+    // Tukar Jadwal
+    Route::prefix('tukar-jadwal')->group(function () {
+        Route::get('/', [TukarJadwalController::class, 'riwayat']);
+        Route::get('menunggu-respon-saya', [TukarJadwalController::class, 'menungguResponSaya']);
+        Route::post('/', [TukarJadwalController::class, 'ajukan']);
+        Route::post('{id}/respon-rekan', [TukarJadwalController::class, 'responRekan']);
+        Route::delete('{id}', [TukarJadwalController::class, 'batalkan']);
     });
 });

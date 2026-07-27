@@ -31,7 +31,6 @@ class TukarJadwalForm
                     ->dehydrated(false)
                     ->required()
                     ->columnSpanFull()
-                    // FIX #1: sinkronkan mode dengan data asli saat edit
                     ->afterStateHydrated(function ($component, $record) {
                         if ($record) {
                             $component->state($record->isPindahSendiri() ? 'pindah' : 'tukar');
@@ -46,7 +45,6 @@ class TukarJadwalForm
                     ->live()
                     ->dehydrated(false)
                     ->required()
-                    // sinkronkan filter pengaju saat edit
                     ->afterStateHydrated(function ($component, $record) {
                         if ($record) {
                             $component->state($record->karyawan_pengaju_id);
@@ -65,7 +63,7 @@ class TukarJadwalForm
                         return function (string $attribute, $value, \Closure $fail) use ($record) {
                             if (! $value) return;
 
-                            $konflik = TukarJadwal::where('status', 'pending')
+                            $konflik = TukarJadwal::whereIn('status', ['menunggu_rekan', 'menunggu_admin'])
                                 ->where(fn ($q) => $q->where('jadwal_id', $value)->orWhere('jadwal_tujuan_id', $value))
                                 ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
                                 ->exists();
@@ -77,8 +75,6 @@ class TukarJadwalForm
                     }),
                 Select::make('karyawan_tujuan_filter')
                     ->label('Karyawan rekan tujuan')
-                    // FIX #2: jangan pakai ->relationship() yang minjam relasi pengaju.
-                    // Pakai options manual + hydrate manual dari jadwalTujuan->karyawan.
                     ->options(fn () => Karyawan::pluck('nama', 'id'))
                     ->searchable()
                     ->preload()
@@ -109,7 +105,7 @@ class TukarJadwalForm
                             if (! $jadwalIdAsal || ! $value) return;
 
                             // Cek 1: rebutan pending dengan pengajuan lain
-                            $konflikPending = TukarJadwal::where('status', 'pending')
+                            $konflikPending = TukarJadwal::whereIn('status', ['menunggu_rekan', 'menunggu_admin'])
                                 ->where(fn ($q) => $q->where('jadwal_id', $value)->orWhere('jadwal_tujuan_id', $value))
                                 ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
                                 ->exists();
@@ -136,6 +132,18 @@ class TukarJadwalForm
 
                             if ($konflikAsal || $konflikTujuan) {
                                 $fail('Tidak bisa ditukar: salah satu karyawan sudah punya jadwal sendiri di tanggal pasangannya.');
+                                return;
+                            }
+
+                            // Cek 3: salah satu pihak sedang cuti/dinas approved di
+                            // tanggal yang terlibat (baik tanggal asalnya sendiri
+                            // maupun tanggal barunya hasil tukar)
+                            if (TukarJadwal::karyawanCutiDinasApproved($jadwalAsal->karyawan_id, $jadwalAsal->tanggal)
+                                || TukarJadwal::karyawanCutiDinasApproved($jadwalAsal->karyawan_id, $jadwalTujuan->tanggal)
+                                || TukarJadwal::karyawanCutiDinasApproved($jadwalTujuan->karyawan_id, $jadwalTujuan->tanggal)
+                                || TukarJadwal::karyawanCutiDinasApproved($jadwalTujuan->karyawan_id, $jadwalAsal->tanggal)
+                            ) {
+                                $fail('Tidak bisa ditukar: salah satu karyawan sedang cuti/dinas (disetujui) di tanggal yang terlibat.');
                             }
                         };
                     }),
@@ -169,18 +177,7 @@ class TukarJadwalForm
                                 return;
                             }
 
-                            $bentrok = Cuti::where('karyawan_id', $jadwal->karyawan_id)
-                                ->where('status', 'approved')
-                                ->whereDate('tanggal_mulai', '<=', $tanggalBaru)
-                                ->whereDate('tanggal_selesai', '>=', $tanggalBaru)
-                                ->exists()
-                                || Dinas::where('karyawan_id', $jadwal->karyawan_id)
-                                ->where('status', 'approved')
-                                ->whereDate('tanggal_mulai', '<=', $tanggalBaru)
-                                ->whereDate('tanggal_selesai', '>=', $tanggalBaru)
-                                ->exists();
-
-                            if ($bentrok) {
+                            if (TukarJadwal::karyawanCutiDinasApproved($jadwal->karyawan_id, $tanggalBaru)) {
                                 $fail('Karyawan sedang cuti/dinas (disetujui) pada tanggal tersebut.');
                             }
                         };

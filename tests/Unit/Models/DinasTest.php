@@ -29,12 +29,13 @@ it('approve mensinkronkan absensi untuk setiap tanggal dalam rentang dinas', fun
     expect($absensi->every(fn ($a) => $a->status === 'dinas'))->toBeTrue();
 });
 
-it('tidak menimpa absensi yang sudah punya waktu_masuk asli', function () {
+it('menimpa absensi yang sudah punya waktu_masuk asli', function () {
     Absensi::factory()->create([
         'karyawan_id' => $this->karyawan->id,
         'tanggal' => '2026-08-11',
         'waktu_masuk' => '2026-08-11 07:30:00',
         'status' => 'tepat_waktu',
+        'menit_terlambat' => 0,
     ]);
 
     $dinas = Dinas::factory()->create([
@@ -48,7 +49,9 @@ it('tidak menimpa absensi yang sudah punya waktu_masuk asli', function () {
     $absensiHari2 = Absensi::where('karyawan_id', $this->karyawan->id)
         ->whereDate('tanggal', '2026-08-11')->first();
 
-    expect($absensiHari2->status)->toBe('tepat_waktu');
+    expect($absensiHari2->status)->toBe('dinas')
+        ->and($absensiHari2->waktu_masuk)->toBeNull()
+        ->and($absensiHari2->menit_terlambat)->toBe(0);
 });
 
 it('status dinas tidak menyentuh kolom kuota apapun', function () {

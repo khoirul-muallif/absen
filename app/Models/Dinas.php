@@ -38,11 +38,18 @@ class Dinas extends Model
                 ['karyawan_id' => $this->karyawan_id, 'tanggal' => $tanggal->toDateString()]
             );
 
-            if ($absensi->exists && $absensi->waktu_masuk !== null) {
-                continue;
-            }
-
             $absensi->status = 'dinas';
+            $absensi->waktu_masuk = null;
+            $absensi->waktu_pulang = null;
+            $absensi->menit_terlambat = 0;
+            $absensi->melebihi_toleransi_bulanan = false;
+            $absensi->foto_masuk = null;
+            $absensi->latitude_masuk = null;
+            $absensi->longitude_masuk = null;
+            $absensi->foto_pulang = null;
+            $absensi->latitude_pulang = null;
+            $absensi->longitude_pulang = null;
+            $absensi->qr_instansi_id = null;
             $absensi->save();
         }
     }

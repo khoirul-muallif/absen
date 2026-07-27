@@ -14,7 +14,7 @@ class TukarJadwalFactory extends Factory
             // jadwal_tujuan_id & tanggal_baru sengaja tidak diisi default —
             // tentukan lewat state() sesuai mode yang mau ditest
             'alasan'    => $this->faker->sentence(),
-            'status'    => 'pending',
+            'status'    => 'menunggu_admin',
         ];
     }
 

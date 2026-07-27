@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\HasApprovalWorkflow;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,21 +16,22 @@ class TukarJadwal extends Model
     protected $fillable = [
         'jadwal_id', 'karyawan_pengaju_id', 'tanggal_asal', 'shift_asal_id',
         'jadwal_tujuan_id', 'karyawan_tujuan_id', 'tanggal_tujuan', 'shift_tujuan_id',
-        'tanggal_baru', 'alasan',
-        'status', 'approved_by', 'approved_at', 'catatan_approval',
+        'tanggal_baru', 'alasan', 'status',
+        'direspon_oleh_rekan_id', 'direspon_rekan_at', 'catatan_penolakan_rekan',
+        'approved_by', 'approved_at', 'catatan_approval',
     ];
 
     protected $casts = [
-        'tanggal_asal'   => 'date',
-        'tanggal_tujuan' => 'date',
-        'tanggal_baru'   => 'date',
-        'approved_at'    => 'datetime',
+        'tanggal_asal'      => 'date',
+        'tanggal_tujuan'    => 'date',
+        'tanggal_baru'      => 'date',
+        'direspon_rekan_at' => 'datetime',
+        'approved_at'       => 'datetime',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (TukarJadwal $tukarJadwal) {
-            // Snapshot sisi pengaju
             $jadwal = Jadwal::find($tukarJadwal->jadwal_id);
             if ($jadwal) {
                 $tukarJadwal->karyawan_pengaju_id = $jadwal->karyawan_id;
@@ -37,7 +39,6 @@ class TukarJadwal extends Model
                 $tukarJadwal->shift_asal_id       = $jadwal->shift_id;
             }
 
-            // Snapshot sisi tujuan (cuma kalau mode tukar)
             if ($tukarJadwal->jadwal_tujuan_id) {
                 $jadwalTujuan = Jadwal::find($tukarJadwal->jadwal_tujuan_id);
                 if ($jadwalTujuan) {
@@ -45,6 +46,10 @@ class TukarJadwal extends Model
                     $tukarJadwal->tanggal_tujuan     = $jadwalTujuan->tanggal;
                     $tukarJadwal->shift_tujuan_id    = $jadwalTujuan->shift_id;
                 }
+            }
+
+            if (! $tukarJadwal->status) {
+                $tukarJadwal->status = $tukarJadwal->jadwal_tujuan_id ? 'menunggu_rekan' : 'menunggu_admin';
             }
         });
     }
@@ -84,17 +89,65 @@ class TukarJadwal extends Model
         return is_null($this->jadwal_tujuan_id);
     }
 
+    public function scopeMenungguRekan(Builder $query): Builder
+    {
+        return $query->where('status', 'menunggu_rekan');
+    }
+
+    // Override dari HasApprovalWorkflow — trait pakai 'pending', TukarJadwal pakai 'menunggu_admin'
+    public function scopePending(Builder $query): Builder
+    {
+        return $query->where('status', 'menunggu_admin');
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'menunggu_admin';
+    }
+
+    public function butuhResponRekan(): bool
+    {
+        return $this->status === 'menunggu_rekan';
+    }
+
+    /**
+     * Dipanggil oleh karyawan tujuan untuk merespon pengajuan tukar
+     * yang mengarah ke jadwalnya.
+     */
+    public function responRekan(Karyawan $rekan, bool $setuju, ?string $catatan = null): bool
+    {
+        if ($this->status !== 'menunggu_rekan') {
+            throw new \Exception('Pengajuan ini bukan lagi tahap menunggu respon rekan.');
+        }
+
+        if ($rekan->id !== $this->karyawan_tujuan_id) {
+            throw new \Exception('Anda bukan pihak yang dituju pada pengajuan ini.');
+        }
+
+        return $this->update([
+            'status' => $setuju ? 'menunggu_admin' : 'ditolak_rekan',
+            'direspon_oleh_rekan_id' => $rekan->id,
+            'direspon_rekan_at' => now(),
+            'catatan_penolakan_rekan' => $setuju ? null : $catatan,
+        ]);
+    }
+
     /**
      * Approve sekaligus menerapkan perubahan jadwal.
      *
      * FIX race condition: sebelum eksekusi swap/pindah, validasi ulang bahwa
      * kepemilikan jadwal yang direferensikan masih SAMA dengan snapshot saat
-     * pengajuan dibuat. Kalau sudah berubah (misal jadwal tujuan sudah
-     * ditukar duluan lewat pengajuan lain), tolak dengan pesan jelas —
-     * daripada diam-diam nuker jadwal orang yang salah.
+     * pengajuan dibuat.
      */
     public function approveAndSwap(User $approver, ?string $catatan = null): bool
     {
+        if ($this->status !== 'menunggu_admin') {
+            throw new \Exception(
+                'Gagal: pengajuan ini belum berstatus menunggu_admin (kemungkinan masih '
+                . 'menunggu respon rekan, atau sudah selesai diproses sebelumnya).'
+            );
+        }
+
         return DB::transaction(function () use ($approver, $catatan) {
             $jadwalA = Jadwal::lockForUpdate()->findOrFail($this->jadwal_id);
 
@@ -136,5 +189,19 @@ class TukarJadwal extends Model
 
             return $this->approve($approver, $catatan);
         });
+    }
+
+    public static function karyawanCutiDinasApproved(int $karyawanId, \Carbon\Carbon $tanggal): bool
+    {
+        return Cuti::where('karyawan_id', $karyawanId)
+            ->where('status', 'approved')
+            ->whereDate('tanggal_mulai', '<=', $tanggal)
+            ->whereDate('tanggal_selesai', '>=', $tanggal)
+            ->exists()
+            || Dinas::where('karyawan_id', $karyawanId)
+            ->where('status', 'approved')
+            ->whereDate('tanggal_mulai', '<=', $tanggal)
+            ->whereDate('tanggal_selesai', '>=', $tanggal)
+            ->exists();
     }
 }

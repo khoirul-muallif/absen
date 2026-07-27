@@ -35,18 +35,18 @@ it('approve mensinkronkan absensi untuk setiap tanggal dalam rentang cuti', func
     expect($absensi->every(fn ($a) => $a->status === 'cuti'))->toBeTrue();
 });
 
-it('tidak menimpa absensi yang sudah punya waktu_masuk asli', function () {
+it('menimpa absensi yang sudah punya waktu_masuk asli', function () {
     $shift = Shift::factory()->for($this->instansi)->create();
     $jenisCuti = JenisCuti::factory()->create();
 
-    // Karyawan sudah absen fisik di hari kedua sebelum cuti diajukan
-    // (mis. sempat masuk sebentar lalu ternyata sakit, atau data historis)
+    // Karyawan sempat absen fisik sebelum cuti-nya di-approve admin
     Absensi::factory()->create([
         'karyawan_id' => $this->karyawan->id,
         'shift_id' => $shift->id,
         'tanggal' => '2026-08-02',
         'waktu_masuk' => '2026-08-02 07:30:00',
         'status' => 'tepat_waktu',
+        'menit_terlambat' => 0,
     ]);
 
     $cuti = Cuti::factory()->create([
@@ -66,7 +66,9 @@ it('tidak menimpa absensi yang sudah punya waktu_masuk asli', function () {
     $absensiHari3 = Absensi::where('karyawan_id', $this->karyawan->id)
         ->whereDate('tanggal', '2026-08-03')->first();
 
-    expect($absensiHari2->status)->toBe('tepat_waktu') // tidak ditimpa
+    expect($absensiHari2->status)->toBe('cuti')
+        ->and($absensiHari2->waktu_masuk)->toBeNull()
+        ->and($absensiHari2->menit_terlambat)->toBe(0)
         ->and($absensiHari1->status)->toBe('cuti')
         ->and($absensiHari3->status)->toBe('cuti');
 });

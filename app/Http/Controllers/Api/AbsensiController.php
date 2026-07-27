@@ -49,15 +49,26 @@ class AbsensiController extends Controller
 
         $karyawan = $request->user()->load('instansi');
 
-        // 1. Cek sudah absen masuk hari ini
-        if ($karyawan->absensi()->whereDate('tanggal', today())->whereNotNull('waktu_masuk')->exists()) {
+        // 1. Cek apakah hari ini sudah tercatat dinas/cuti (approved)
+        $absensiHariIni = $karyawan->absensi()->whereDate('tanggal', today())->first();
+
+        if ($absensiHariIni && in_array($absensiHariIni->status, ['dinas', 'cuti'])) {
+            $label = $absensiHariIni->status === 'dinas' ? 'dinas' : 'cuti';
+            return response()->json([
+                'success' => false,
+                'message' => "Anda tercatat {$label} hari ini.",
+            ], 422);
+        }
+
+        // 2. Cek sudah absen masuk hari ini
+        if ($absensiHariIni && $absensiHariIni->waktu_masuk !== null) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda sudah melakukan absen masuk hari ini.',
             ], 422);
         }
 
-        // 2. Validasi GPS
+        // 3. Validasi GPS
         $instansi = $karyawan->instansi;
         $lat      = (float) $request->input('latitude');
         $lng      = (float) $request->input('longitude');
@@ -71,7 +82,7 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // 3. Validasi QR
+        // 4. Validasi QR
         $qr = QrInstansi::where('kode_qr', $request->kode_qr)
             ->where('instansi_id', $instansi->id)
             ->first();
@@ -83,7 +94,7 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // 4. Ambil shift aktif — cek KaryawanShift dulu (karyawan umum),
+        // 5. Ambil shift aktif — cek KaryawanShift dulu (karyawan umum),
         //    fallback ke Jadwal hari ini (karyawan rotasi)
         $karyawanShift = KaryawanShift::with('shift')
             ->where('karyawan_id', $karyawan->id)
@@ -97,7 +108,6 @@ class AbsensiController extends Controller
             $shift    = $karyawanShift->shift;
             $shiftId  = $karyawanShift->shift_id;
         } else {
-            // fallback: karyawan rotasi, shift ditentukan lewat Jadwal harian
             $jadwalHariIni = Jadwal::with('shift')
                 ->where('karyawan_id', $karyawan->id)
                 ->whereDate('tanggal', today())
@@ -114,7 +124,6 @@ class AbsensiController extends Controller
             $shiftId = $jadwalHariIni->shift_id;
         }
 
-
         // Hitung akumulasi bulan berjalan (buat KPI, bukan buat status harian)
         $totalTerlambatSebelumnya = 0;
         if ($shift->mode_toleransi === 'akumulasi_bulanan') {
@@ -127,22 +136,22 @@ class AbsensiController extends Controller
         $fotoPath              = $request->file('foto_masuk')->store('foto-absen/masuk', 'public');
         $waktuMasuk            = now();
         $menitTerlambatHariIni = $shift->hitungMenitTerlambat($waktuMasuk);
-        $status                = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari ini
+        $status                = $shift->tentukanStatus($waktuMasuk);
         $totalSetelahHariIni   = $totalTerlambatSebelumnya + $menitTerlambatHariIni;
         $melebihiToleransi     = $shift->sudahMelebihiToleransiBulanan($totalSetelahHariIni);
 
         $absensi = Absensi::create([
             'karyawan_id'                 => $karyawan->id,
             'shift_id'                    => $shiftId,
-            'qr_instansi_id'               => $qr->id,
-            'tanggal'                      => today(),
-            'waktu_masuk'                  => $waktuMasuk,
-            'latitude_masuk'               => $lat,
-            'longitude_masuk'              => $lng,
-            'foto_masuk'                   => $fotoPath,
-            'status'                       => $status,
-            'menit_terlambat'              => $menitTerlambatHariIni,
-            'melebihi_toleransi_bulanan'   => $melebihiToleransi,
+            'qr_instansi_id'              => $qr->id,
+            'tanggal'                     => today(),
+            'waktu_masuk'                 => $waktuMasuk,
+            'latitude_masuk'              => $lat,
+            'longitude_masuk'             => $lng,
+            'foto_masuk'                  => $fotoPath,
+            'status'                      => $status,
+            'menit_terlambat'             => $menitTerlambatHariIni,
+            'melebihi_toleransi_bulanan'  => $melebihiToleransi,
         ]);
 
         if ($status === 'terlambat' && $menitTerlambatHariIni > 0) {
@@ -153,13 +162,11 @@ class AbsensiController extends Controller
             'success' => true,
             'message' => 'Absen masuk berhasil.',
             'data'    => [
-                'waktu_masuk' => $waktuMasuk->format('H:i'),
-                'status'      => $status,
-                'shift'       => $shift->nama_shift,
-                'terlambat'   => $menitTerlambatHariIni > 0 ? $menitTerlambatHariIni . ' menit' : null,
+                'waktu_masuk'    => $waktuMasuk->format('H:i'),
+                'status'         => $status,
+                'shift'          => $shift->nama_shift,
+                'terlambat'      => $menitTerlambatHariIni > 0 ? $menitTerlambatHariIni . ' menit' : null,
                 'ada_notifikasi' => $status === 'terlambat',
-                // sengaja TIDAK dikirim ke karyawan: melebihi_toleransi_bulanan.
-                // Itu murni buat admin, biar gak jadi tekanan psikologis harian ke karyawan.
             ],
         ]);
     }

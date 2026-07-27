@@ -63,7 +63,7 @@ it('menolak approve jika kepemilikan jadwal pengaju sudah berubah sejak pengajua
 
     expect(fn () => $tukar->approveAndSwap($this->admin))->toThrow(\Exception::class);
 
-    expect($tukar->fresh()->status)->toBe('pending');
+    expect($tukar->fresh()->status)->toBe('menunggu_admin');
 });
 
 it('menolak approve jika kepemilikan jadwal tujuan sudah berubah sejak pengajuan (race condition mode tukar)', function () {
@@ -83,7 +83,7 @@ it('menolak approve jika kepemilikan jadwal tujuan sudah berubah sejak pengajuan
 
     expect(fn () => $tukar->approveAndSwap($this->admin))->toThrow(\Exception::class);
 
-    expect($tukar->fresh()->status)->toBe('pending')
+    expect($tukar->fresh()->status)->toBe('menunggu_admin')
         ->and($jadwalA->fresh()->karyawan_id)->toBe($karyawanA->id);
 });
 

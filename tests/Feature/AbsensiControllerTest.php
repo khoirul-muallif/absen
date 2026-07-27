@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Absensi;
 use App\Models\Instansi;
 use App\Models\Jadwal;
 use App\Models\Karyawan;
@@ -336,4 +337,54 @@ it('pulang: ditolak kalau sudah absen pulang', function () {
         'foto_pulang' => UploadedFile::fake()->image('pulang.jpg'),
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Anda sudah melakukan absen pulang hari ini.');
+});
+
+it('absen masuk ditolak kalau hari ini sudah berstatus dinas', function () {
+    Storage::fake('public');
+
+    $instansi = buatInstansiDenganTitik();
+    $karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $instansi->id]);
+    $qr = QrInstansi::factory()->create(['instansi_id' => $instansi->id]);
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => today(),
+        'status' => 'dinas',
+        'waktu_masuk' => null,
+    ]);
+
+    loginSebagai($karyawan);
+
+    $this->postJson('/api/absensi/masuk', [
+        'latitude' => $instansi->latitude,
+        'longitude' => $instansi->longitude,
+        'kode_qr' => $qr->kode_qr,
+        'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Anda tercatat dinas hari ini.');
+});
+
+it('absen masuk ditolak kalau hari ini sudah berstatus cuti', function () {
+    Storage::fake('public');
+
+    $instansi = buatInstansiDenganTitik();
+    $karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $instansi->id]);
+    $qr = QrInstansi::factory()->create(['instansi_id' => $instansi->id]);
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => today(),
+        'status' => 'cuti',
+        'waktu_masuk' => null,
+    ]);
+
+    loginSebagai($karyawan);
+
+    $this->postJson('/api/absensi/masuk', [
+        'latitude' => $instansi->latitude,
+        'longitude' => $instansi->longitude,
+        'kode_qr' => $qr->kode_qr,
+        'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Anda tercatat cuti hari ini.');
 });
