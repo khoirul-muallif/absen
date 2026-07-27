@@ -99,7 +99,8 @@ class KaryawanForm
                                 'karyawan' => 'Karyawan',
                             ])
                             ->default('karyawan')
-                            ->required(),
+                            ->required()
+                            ->helperText('Saat ini murni label tampilan — belum mengatur akses/permission apa pun (termasuk approval, yang selalu lewat akun admin Filament terpisah). Disiapkan untuk kemungkinan kebutuhan hak akses berbeda di masa depan.'),
 
                         DatePicker::make('tanggal_bergabung')
                             ->label('Tanggal Bergabung')

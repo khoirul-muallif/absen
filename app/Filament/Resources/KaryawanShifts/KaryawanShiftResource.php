@@ -27,9 +27,9 @@ class KaryawanShiftResource extends Resource
 
     protected static ?string $label = 'Shift Karyawan Umum';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Presensi';
+    protected static string|UnitEnum|null $navigationGroup = 'Manajemen Shift';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

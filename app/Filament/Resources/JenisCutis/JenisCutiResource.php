@@ -23,9 +23,9 @@ class JenisCutiResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'nama';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Master Data';
+    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan & Cuti';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 6;
 
     public static function form(Schema $schema): Schema
     {

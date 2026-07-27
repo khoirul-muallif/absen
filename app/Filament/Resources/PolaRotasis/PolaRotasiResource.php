@@ -27,9 +27,9 @@ class PolaRotasiResource extends Resource
 
     protected static ?string $label = 'Pola Rotasi';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Master Data';
+    protected static string|UnitEnum|null $navigationGroup = 'Manajemen Rotasi';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {

@@ -25,7 +25,7 @@ class DinasResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'tujuan';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan';
+    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan & Cuti';
 
     protected static ?int $navigationSort = 4;
 
