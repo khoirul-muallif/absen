@@ -29,7 +29,7 @@ class Dinas extends Model
         return $this->belongsTo(Karyawan::class);
     }
 
-   public function afterApprove(): void
+    public function afterApprove(): void
     {
         $this->sinkronisasiJadwalDanAbsensi('dinas');
     }

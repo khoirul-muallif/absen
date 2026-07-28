@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\KuotaCutiTidakCukupException;
 use App\Http\Controllers\Controller;
 use App\Models\Cuti;
 use App\Models\JenisCuti;
@@ -83,19 +84,27 @@ class CutiController extends Controller
         $tanggalSelesai = Carbon::parse($request->tanggal_selesai);
         $jumlahHari     = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
 
-        // Cek sisa kuota kalau jenis ini memotong kuota
+        // Cek sisa kuota kalau jenis ini memotong kuota — perhitungkan juga
+        // pengajuan lain yang masih pending (belum di-approve, belum menyentuh
+        // KuotaCuti.terpakai) supaya tidak overcommit sebelum sempat di-approve.
         if ($jenisCuti->potong_kuota) {
             $kuota = $karyawan->kuotaCutis()
                 ->where('jenis_cuti_id', $jenisCuti->id)
                 ->where('tahun', $tanggalMulai->year)
                 ->first();
 
-            $sisaKuota = $kuota ? $kuota->sisa : $jenisCuti->default_kuota;
+            $hariPendingLain = $karyawan->cutis()
+                ->where('jenis_cuti_id', $jenisCuti->id)
+                ->where('status', 'pending')
+                ->whereYear('tanggal_mulai', $tanggalMulai->year)
+                ->sum('jumlah_hari');
+
+            $sisaKuota = ($kuota ? $kuota->sisa : $jenisCuti->default_kuota) - $hariPendingLain;
 
             if ($jumlahHari > $sisaKuota) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Sisa kuota {$jenisCuti->nama} Anda tahun {$tanggalMulai->year} tinggal {$sisaKuota} hari, tidak cukup untuk {$jumlahHari} hari yang diajukan.",
+                    'message' => "Sisa kuota {$jenisCuti->nama} Anda tahun {$tanggalMulai->year} tinggal {$sisaKuota} hari (memperhitungkan pengajuan pending lain), tidak cukup untuk {$jumlahHari} hari yang diajukan.",
                     'data'    => ['sisa_kuota' => $sisaKuota],
                 ], 422);
             }

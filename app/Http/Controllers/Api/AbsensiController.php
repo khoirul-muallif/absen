@@ -8,8 +8,10 @@ use App\Models\Jadwal;
 use App\Models\KaryawanShift;
 use App\Models\QrInstansi;
 use App\Notifications\AbsenTerlambat;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class AbsensiController extends Controller
 {
@@ -140,19 +142,38 @@ class AbsensiController extends Controller
         $totalSetelahHariIni   = $totalTerlambatSebelumnya + $menitTerlambatHariIni;
         $melebihiToleransi     = $shift->sudahMelebihiToleransiBulanan($totalSetelahHariIni);
 
-        $absensi = Absensi::create([
-            'karyawan_id'                 => $karyawan->id,
-            'shift_id'                    => $shiftId,
-            'qr_instansi_id'              => $qr->id,
-            'tanggal'                     => today(),
-            'waktu_masuk'                 => $waktuMasuk,
-            'latitude_masuk'              => $lat,
-            'longitude_masuk'             => $lng,
-            'foto_masuk'                  => $fotoPath,
-            'status'                      => $status,
-            'menit_terlambat'             => $menitTerlambatHariIni,
-            'melebihi_toleransi_bulanan'  => $melebihiToleransi,
-        ]);
+        // Insert dibungkus try-catch: kalau ada request lain yang berhasil duluan
+        // untuk karyawan_id+tanggal yang sama (race condition, mis. double-tap),
+        // unique constraint DB (absensi_karyawan_id_tanggal_unique) akan menolak
+        // insert kedua dengan QueryException, bukan malah lolos jadi 2 row.
+        try {
+            $absensi = Absensi::create([
+                'karyawan_id'                 => $karyawan->id,
+                'shift_id'                    => $shiftId,
+                'qr_instansi_id'              => $qr->id,
+                'tanggal'                     => today(),
+                'waktu_masuk'                 => $waktuMasuk,
+                'latitude_masuk'              => $lat,
+                'longitude_masuk'             => $lng,
+                'foto_masuk'                  => $fotoPath,
+                'status'                      => $status,
+                'menit_terlambat'             => $menitTerlambatHariIni,
+                'melebihi_toleransi_bulanan'  => $melebihiToleransi,
+            ]);
+        } catch (QueryException $e) {
+            // Kode 1062 = MySQL "Duplicate entry" (unique constraint violation).
+            // Error lain (koneksi putus, dll) tetap dilempar ulang, tidak ditelan.
+            if (($e->errorInfo[1] ?? null) === 1062) {
+                Storage::disk('public')->delete($fotoPath);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda sudah melakukan absen masuk hari ini.',
+                ], 422);
+            }
+
+            throw $e;
+        }
 
         if ($status === 'terlambat' && $menitTerlambatHariIni > 0) {
             $karyawan->notify(new AbsenTerlambat($absensi->load('shift'), $menitTerlambatHariIni));

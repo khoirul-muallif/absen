@@ -3,9 +3,9 @@
 namespace App\Traits;
 
 use App\Models\User;
-use App\Models\Jadwal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property string $status
@@ -40,18 +40,20 @@ trait HasApprovalWorkflow
 
     public function approve(User $approver, ?string $catatan = null): bool
     {
-        $result = $this->update([
-            'status' => 'approved',
-            'approved_by' => $approver->id,
-            'approved_at' => now(),
-            'catatan_approval' => $catatan,
-        ]);
+        return DB::transaction(function () use ($approver, $catatan) {
+            $result = $this->update([
+                'status' => 'approved',
+                'approved_by' => $approver->id,
+                'approved_at' => now(),
+                'catatan_approval' => $catatan,
+            ]);
 
-        if ($result && method_exists($this, 'afterApprove')) {
-            $this->afterApprove();
-        }
+            if ($result && method_exists($this, 'afterApprove')) {
+                $this->afterApprove();
+            }
 
-        return $result;
+            return $result;
+        });
     }
 
     public function reject(User $approver, ?string $catatan = null): bool
@@ -62,16 +64,6 @@ trait HasApprovalWorkflow
             'approved_at' => now(),
             'catatan_approval' => $catatan,
         ]);
-    }
-
-    public function isPending(): bool
-    {
-        return $this->status === 'pending';
-    }
-
-    public function isApproved(): bool
-    {
-        return $this->status === 'approved';
     }
 
     /**
@@ -85,7 +77,7 @@ trait HasApprovalWorkflow
         $periode = \Carbon\CarbonPeriod::create($this->tanggal_mulai, $this->tanggal_selesai);
 
         foreach ($periode as $tanggal) {
-            Jadwal::updateOrCreate(
+            \App\Models\Jadwal::updateOrCreate(
                 ['karyawan_id' => $this->karyawan_id, 'tanggal' => $tanggal->toDateString()],
                 ['shift_id' => null, 'jenis' => $status, 'sumber' => 'generate']
             );
@@ -108,5 +100,15 @@ trait HasApprovalWorkflow
             $absensi->qr_instansi_id = null;
             $absensi->save();
         }
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === 'approved';
     }
 }

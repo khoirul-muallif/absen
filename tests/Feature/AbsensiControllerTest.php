@@ -388,3 +388,52 @@ it('absen masuk ditolak kalau hari ini sudah berstatus cuti', function () {
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Anda tercatat cuti hari ini.');
 });
+
+it('masuk: race condition — insert kedua ditolak 422 bukan 500, foto orphan terhapus', function () {
+    Storage::fake('public');
+
+    $instansi = buatInstansiDenganTitik();
+    $shift = Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $instansi->id]);
+    KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal_berlaku' => today()->subDay(),
+    ]);
+    $qr = QrInstansi::factory()->create(['instansi_id' => $instansi->id]);
+
+    loginSebagai($karyawan);
+
+    // Simulasikan race condition: sisipkan row Absensi "dari request lain"
+    // tepat sebelum insert asli terjadi — melewati pengecekan awal di controller
+    // (yang tadi masih melihat belum ada row sama sekali), sehingga insert asli
+    // kena unique constraint DB, bukan pengecekan aplikasi.
+    Absensi::creating(function () use ($karyawan, $shift) {
+        if (! Absensi::where('karyawan_id', $karyawan->id)->whereDate('tanggal', today())->exists()) {
+            \Illuminate\Support\Facades\DB::table('absensi')->insert([
+                'karyawan_id' => $karyawan->id,
+                'shift_id' => $shift->id,
+                'tanggal' => today(),
+                'waktu_masuk' => now(),
+                'status' => 'tepat_waktu',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    });
+
+    $response = $this->postJson('/api/absensi/masuk', [
+        'latitude' => $instansi->latitude,
+        'longitude' => $instansi->longitude,
+        'kode_qr' => $qr->kode_qr,
+        'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Anda sudah melakukan absen masuk hari ini.');
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)->whereDate('tanggal', today())->count())->toBe(1);
+
+    // Pastikan tidak ada foto tersisa di storage (foto orphan sudah dihapus)
+    Storage::disk('public')->assertDirectoryEmpty('foto-absen/masuk');
+});

@@ -172,4 +172,70 @@ test('404 kalau membatalkan cuti milik karyawan lain', function () {
     $response->assertStatus(404);
 });
 
+it('sisa kuota memperhitungkan pengajuan pending lain yang belum di-approve', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 0,
+    ]);
 
+    // Pengajuan pertama: 3 hari, masih pending (belum di-approve)
+    Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    // Pengajuan kedua: 3 hari lagi - total jadi 6, padahal kuota cuma 5
+    $response = $this->actingAs($this->karyawan, 'sanctum')->postJson('/api/cuti', [
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-10',
+        'tanggal_selesai' => '2026-08-12',
+        'alasan' => 'Keperluan keluarga',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('success', false);
+
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(1); // yang kedua ditolak, tidak masuk DB
+});
+
+it('menolak pengajuan kalau total dengan pending lain melebihi sisa kuota', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 0,
+    ]);
+
+    // Pengajuan pertama: 3 hari, masih pending
+    Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    // Pengajuan kedua: 3 hari lagi — total 6 > kuota 5
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-10',
+        'tanggal_selesai' => '2026-08-12',
+        'alasan'          => 'Keperluan keluarga',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('success', false);
+
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(1);
+});

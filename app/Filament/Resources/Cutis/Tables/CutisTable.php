@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Cutis\Tables;
 
+use App\Exceptions\KuotaCutiTidakCukupException;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -79,7 +81,22 @@ class CutisTable
                     ->color('success')
                     ->visible(fn ($record) => $record->isPending())
                     ->requiresConfirmation()
-                    ->action(fn ($record) => $record->approve(auth()->user())),
+                    ->action(function ($record) {
+                        try {
+                            $record->approve(auth()->user());
+
+                            Notification::make()
+                                ->title('Cuti disetujui')
+                                ->success()
+                                ->send();
+                        } catch (KuotaCutiTidakCukupException $e) {
+                            Notification::make()
+                                ->title('Gagal menyetujui cuti')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Action::make('reject')
                     ->label('Tolak')
                     ->icon('heroicon-o-x-mark')

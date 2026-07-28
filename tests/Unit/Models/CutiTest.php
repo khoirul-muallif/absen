@@ -244,3 +244,70 @@ it('membuat jadwal baru kalau belum ada jadwal sama sekali untuk tanggal cuti', 
 
     expect(Jadwal::where('karyawan_id', $this->karyawan->id)->count())->toBe(1);
 });
+
+it('approve gagal dengan exception kalau kuota tidak cukup, status tetap pending', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 3,
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3, // 3 + 3 (terpakai) = 6 > 5 (kuota)
+        'status' => 'pending',
+    ]);
+
+    expect(fn () => $cuti->approve($this->admin))
+        ->toThrow(\App\Exceptions\KuotaCutiTidakCukupException::class);
+
+    $cuti->refresh();
+    $kuota = KuotaCuti::where('karyawan_id', $this->karyawan->id)
+        ->where('jenis_cuti_id', $jenisCuti->id)
+        ->where('tahun', 2026)
+        ->first();
+
+    expect($cuti->status)->toBe('pending')
+        ->and($cuti->approved_by)->toBeNull()
+        ->and($kuota->terpakai)->toBe(3); // tidak berubah, tetap 3
+
+    // Jadwal/Absensi juga tidak boleh ikut ke-sync karena seluruh transaction rollback
+    expect(Jadwal::where('karyawan_id', $this->karyawan->id)->count())->toBe(0);
+    expect(Absensi::where('karyawan_id', $this->karyawan->id)->count())->toBe(0);
+});
+
+it('approve berhasil kalau kuota pas-pasan cukup (edge case tepat di batas)', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 2,
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3, // 3 + 2 = 5, pas sama dengan kuota
+        'status' => 'pending',
+    ]);
+
+    $cuti->approve($this->admin);
+
+    $kuota = KuotaCuti::where('karyawan_id', $this->karyawan->id)
+        ->where('jenis_cuti_id', $jenisCuti->id)
+        ->where('tahun', 2026)
+        ->first();
+
+    expect($cuti->fresh()->status)->toBe('approved')
+        ->and($kuota->terpakai)->toBe(5);
+});
