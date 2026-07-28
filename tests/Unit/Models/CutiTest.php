@@ -8,6 +8,7 @@ use App\Models\Karyawan;
 use App\Models\KuotaCuti;
 use App\Models\Shift;
 use App\Models\User;
+use App\Models\Jadwal;
 
 beforeEach(function () {
     $this->admin = User::factory()->create();
@@ -172,4 +173,74 @@ it('tidak error kalau belum ada row KuotaCuti untuk karyawan/jenis/tahun tersebu
 
     expect(fn () => $cuti->approve($this->admin))->not->toThrow(\Throwable::class);
     expect(KuotaCuti::count())->toBe(0);
+});
+
+it('approve mensinkronkan jadwal jadi jenis cuti untuk setiap tanggal dalam rentang', function () {
+    $jenisCuti = JenisCuti::factory()->create();
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+    ]);
+
+    $cuti->approve($this->admin);
+
+    $jadwal = Jadwal::where('karyawan_id', $this->karyawan->id)
+        ->whereBetween('tanggal', ['2026-08-01', '2026-08-03'])
+        ->get();
+
+    expect($jadwal)->toHaveCount(3);
+    expect($jadwal->every(fn ($j) => $j->jenis === 'cuti' && $j->shift_id === null && $j->sumber === 'generate'))
+        ->toBeTrue();
+});
+
+it('menimpa jadwal manual yang sudah ada sebelum cuti disetujui', function () {
+    $shift = Shift::factory()->for($this->instansi)->create();
+    $jenisCuti = JenisCuti::factory()->create();
+
+    // Admin sudah input jadwal manual duluan sebelum tau karyawan mau cuti
+    Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-02',
+        'jenis' => 'piket',
+        'sumber' => 'manual',
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+    ]);
+
+    $cuti->approve($this->admin);
+
+    $jadwalHari2 = Jadwal::where('karyawan_id', $this->karyawan->id)
+        ->whereDate('tanggal', '2026-08-02')->first();
+
+    expect($jadwalHari2->jenis)->toBe('cuti')
+        ->and($jadwalHari2->shift_id)->toBeNull()
+        ->and($jadwalHari2->sumber)->toBe('generate');
+});
+
+it('membuat jadwal baru kalau belum ada jadwal sama sekali untuk tanggal cuti', function () {
+    $jenisCuti = JenisCuti::factory()->create();
+
+    expect(Jadwal::where('karyawan_id', $this->karyawan->id)->count())->toBe(0);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-01',
+        'jumlah_hari' => 1,
+    ]);
+
+    $cuti->approve($this->admin);
+
+    expect(Jadwal::where('karyawan_id', $this->karyawan->id)->count())->toBe(1);
 });

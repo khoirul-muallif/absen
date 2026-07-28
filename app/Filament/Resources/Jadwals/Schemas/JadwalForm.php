@@ -94,9 +94,15 @@ class JadwalForm
                         'reguler' => 'Reguler',
                         'piket' => 'Piket',
                         'libur' => 'Libur',
+                        'cuti' => 'Cuti',
+                        'dinas' => 'Dinas',
                     ])
                     ->default('reguler')
                     ->live()
+                    ->disabled(fn (Get $get, ?string $state) => in_array($state, ['cuti', 'dinas']))
+                    ->helperText(fn (Get $get, ?string $state) => in_array($state, ['cuti', 'dinas'])
+                        ? '⚠️ Jadwal ini dibuat otomatis dari pengajuan Cuti/Dinas yang disetujui. Ubah lewat modul Cuti/Dinas, bukan di sini.'
+                        : null)
                     ->required(),
                 Select::make('shift_id')
                     ->relationship('shift', 'nama_shift')

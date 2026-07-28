@@ -31,26 +31,6 @@ class Dinas extends Model
 
    public function afterApprove(): void
     {
-        $periode = \Carbon\CarbonPeriod::create($this->tanggal_mulai, $this->tanggal_selesai);
-
-        foreach ($periode as $tanggal) {
-            $absensi = \App\Models\Absensi::firstOrNew(
-                ['karyawan_id' => $this->karyawan_id, 'tanggal' => $tanggal->toDateString()]
-            );
-
-            $absensi->status = 'dinas';
-            $absensi->waktu_masuk = null;
-            $absensi->waktu_pulang = null;
-            $absensi->menit_terlambat = 0;
-            $absensi->melebihi_toleransi_bulanan = false;
-            $absensi->foto_masuk = null;
-            $absensi->latitude_masuk = null;
-            $absensi->longitude_masuk = null;
-            $absensi->foto_pulang = null;
-            $absensi->latitude_pulang = null;
-            $absensi->longitude_pulang = null;
-            $absensi->qr_instansi_id = null;
-            $absensi->save();
-        }
+        $this->sinkronisasiJadwalDanAbsensi('dinas');
     }
 }

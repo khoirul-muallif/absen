@@ -22,6 +22,8 @@ class Jadwal extends Model
     const JENIS_REGULER = 'reguler';
     const JENIS_PIKET = 'piket';
     const JENIS_LIBUR = 'libur';
+    const JENIS_CUTI = 'cuti';
+    const JENIS_DINAS = 'dinas';
 
     public function karyawan(): BelongsTo
     {

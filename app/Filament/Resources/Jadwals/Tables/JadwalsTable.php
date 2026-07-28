@@ -31,7 +31,12 @@ class JadwalsTable
                     ->sortable(),
                 TextColumn::make('jenis')
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'piket' ? 'warning' : 'gray'),
+                    ->color(fn (string $state): string => match ($state) {
+                        'piket' => 'warning',
+                        'cuti' => 'info',
+                        'dinas' => 'success',
+                        default => 'gray',
+                    }),
                 TextColumn::make('keterangan')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -46,6 +51,9 @@ class JadwalsTable
                     ->options([
                         'reguler' => 'Reguler',
                         'piket' => 'Piket',
+                        'libur' => 'Libur',
+                        'cuti' => 'Cuti',
+                        'dinas' => 'Dinas',
                     ]),
                 SelectFilter::make('shift_id')
                     ->label('Shift')

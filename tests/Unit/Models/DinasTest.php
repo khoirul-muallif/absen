@@ -5,6 +5,8 @@ use App\Models\Dinas;
 use App\Models\Instansi;
 use App\Models\Karyawan;
 use App\Models\User;
+use App\Models\Jadwal;
+use App\Models\Shift;
 
 beforeEach(function () {
     $this->admin = User::factory()->create();
@@ -65,4 +67,48 @@ it('status dinas tidak menyentuh kolom kuota apapun', function () {
     ]);
 
     expect(fn () => $dinas->approve($this->admin))->not->toThrow(\Throwable::class);
+});
+
+it('approve mensinkronkan jadwal jadi jenis dinas untuk setiap tanggal dalam rentang', function () {
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-10',
+        'tanggal_selesai' => '2026-08-12',
+    ]);
+
+    $dinas->approve($this->admin);
+
+    $jadwal = Jadwal::where('karyawan_id', $this->karyawan->id)
+        ->whereBetween('tanggal', ['2026-08-10', '2026-08-12'])
+        ->get();
+
+    expect($jadwal)->toHaveCount(3);
+    expect($jadwal->every(fn ($j) => $j->jenis === 'dinas' && $j->shift_id === null))
+        ->toBeTrue();
+});
+
+it('menimpa jadwal manual yang sudah ada sebelum dinas disetujui', function () {
+    $shift = Shift::factory()->for($this->instansi)->create();
+
+    Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-11',
+        'jenis' => 'reguler',
+        'sumber' => 'manual',
+    ]);
+
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-10',
+        'tanggal_selesai' => '2026-08-12',
+    ]);
+
+    $dinas->approve($this->admin);
+
+    $jadwalHari2 = Jadwal::where('karyawan_id', $this->karyawan->id)
+        ->whereDate('tanggal', '2026-08-11')->first();
+
+    expect($jadwalHari2->jenis)->toBe('dinas')
+        ->and($jadwalHari2->shift_id)->toBeNull();
 });
