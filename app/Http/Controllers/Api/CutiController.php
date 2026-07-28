@@ -57,7 +57,7 @@ class CutiController extends Controller
     {
         $request->validate([
             'jenis_cuti_id'   => 'required|exists:jenis_cutis,id',
-            'tanggal_mulai'   => 'required|date',
+            'tanggal_mulai'   => 'required|date|after_or_equal:today',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
             'alasan'          => 'required|string|max:1000',
             'lampiran'        => 'nullable|file|max:2048',
@@ -82,7 +82,33 @@ class CutiController extends Controller
 
         $tanggalMulai   = Carbon::parse($request->tanggal_mulai);
         $tanggalSelesai = Carbon::parse($request->tanggal_selesai);
-        $jumlahHari     = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
+
+        if ($tanggalMulai->year !== $tanggalSelesai->year) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan cuti tidak boleh melintasi pergantian tahun. Ajukan terpisah untuk masing-masing tahun (mis. sisa hari di Desember, lalu pengajuan baru di Januari).',
+            ], 422);
+        }
+
+        $jumlahHari = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
+
+        $bentrok = $karyawan->cutis()
+            ->where('status', 'approved')
+            ->where('tanggal_mulai', '<=', $tanggalSelesai)
+            ->where('tanggal_selesai', '>=', $tanggalMulai)
+            ->exists()
+            || $karyawan->dinas()
+            ->where('status', 'approved')
+            ->where('tanggal_mulai', '<=', $tanggalSelesai)
+            ->where('tanggal_selesai', '>=', $tanggalMulai)
+            ->exists();
+
+        if ($bentrok) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda sudah tercatat cuti/dinas (disetujui) yang bentrok dengan rentang tanggal ini.',
+            ], 422);
+        }
 
         // Cek sisa kuota kalau jenis ini memotong kuota — perhitungkan juga
         // pengajuan lain yang masih pending (belum di-approve, belum menyentuh

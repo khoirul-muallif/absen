@@ -239,3 +239,67 @@ it('menolak pengajuan kalau total dengan pending lain melebihi sisa kuota', func
 
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(1);
 });
+
+test('menolak pengajuan cuti untuk tanggal_mulai yang sudah lewat', function () {
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $this->jenisCuti->id,
+        'tanggal_mulai'   => today()->subDay()->toDateString(),
+        'tanggal_selesai' => today()->addDay()->toDateString(),
+        'alasan'          => 'Tes tanggal lewat',
+    ]);
+
+    $response->assertStatus(422);
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
+});
+
+test('menolak pengajuan cuti yang melintasi pergantian tahun', function () {
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $this->jenisCuti->id,
+        'tanggal_mulai'   => '2026-12-30',
+        'tanggal_selesai' => '2027-01-02',
+        'alasan'          => 'Tes lintas tahun',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonFragment(['message' => 'Pengajuan cuti tidak boleh melintasi pergantian tahun. Ajukan terpisah untuk masing-masing tahun (mis. sisa hari di Desember, lalu pengajuan baru di Januari).']);
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
+});
+
+test('menolak pengajuan cuti yang bentrok dengan cuti approved lain', function () {
+    Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $this->jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-05',
+        'status' => 'approved',
+    ]);
+
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $this->jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-03',
+        'tanggal_selesai' => '2026-08-07',
+        'alasan'          => 'Tes bentrok cuti',
+    ]);
+
+    $response->assertStatus(422);
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
+});
+
+test('menolak pengajuan cuti yang bentrok dengan dinas approved lain', function () {
+    \App\Models\Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-05',
+        'status' => 'approved',
+    ]);
+
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $this->jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-03',
+        'tanggal_selesai' => '2026-08-07',
+        'alasan'          => 'Tes bentrok dinas',
+    ]);
+
+    $response->assertStatus(422);
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
+});

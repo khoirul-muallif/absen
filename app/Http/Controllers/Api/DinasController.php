@@ -17,7 +17,7 @@ class DinasController extends Controller
     public function ajukan(Request $request): JsonResponse
     {
         $request->validate([
-            'tanggal_mulai'   => 'required|date',
+            'tanggal_mulai'   => 'required|date|after_or_equal:today',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
             'tujuan'          => 'required|string|max:255',
             'keperluan'       => 'required|string|max:1000',
@@ -27,6 +27,31 @@ class DinasController extends Controller
 
         $tanggalMulai   = Carbon::parse($request->tanggal_mulai);
         $tanggalSelesai = Carbon::parse($request->tanggal_selesai);
+
+        if ($tanggalMulai->year !== $tanggalSelesai->year) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan dinas tidak boleh melintasi pergantian tahun. Ajukan terpisah untuk masing-masing tahun.',
+            ], 422);
+        }
+
+        $bentrok = $karyawan->cutis()
+            ->where('status', 'approved')
+            ->where('tanggal_mulai', '<=', $tanggalSelesai)
+            ->where('tanggal_selesai', '>=', $tanggalMulai)
+            ->exists()
+            || $karyawan->dinas()
+            ->where('status', 'approved')
+            ->where('tanggal_mulai', '<=', $tanggalSelesai)
+            ->where('tanggal_selesai', '>=', $tanggalMulai)
+            ->exists();
+
+        if ($bentrok) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda sudah tercatat cuti/dinas (disetujui) yang bentrok dengan rentang tanggal ini.',
+            ], 422);
+        }
 
         $dinas = Dinas::create([
             'karyawan_id'     => $karyawan->id,
