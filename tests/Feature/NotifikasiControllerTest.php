@@ -35,7 +35,7 @@ it('index: menampilkan notifikasi milik karyawan beserta total belum baca', func
         ->assertOk()
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.total_belum_baca', 1)
-        ->assertJsonCount(2, 'data.notifikasi.data');
+        ->assertJsonCount(2, 'data.records');
 });
 
 it('index: filter belum_baca=true hanya menampilkan yang belum dibaca', function () {
@@ -47,7 +47,7 @@ it('index: filter belum_baca=true hanya menampilkan yang belum dibaca', function
 
     $this->getJson('/api/notifikasi?belum_baca=true')
         ->assertOk()
-        ->assertJsonCount(1, 'data.notifikasi.data');
+        ->assertJsonCount(1, 'data.records');
 });
 
 it('index: tidak menampilkan notifikasi milik karyawan lain', function () {
@@ -60,7 +60,7 @@ it('index: tidak menampilkan notifikasi milik karyawan lain', function () {
     $this->getJson('/api/notifikasi')
         ->assertOk()
         ->assertJsonPath('data.total_belum_baca', 0)
-        ->assertJsonCount(0, 'data.notifikasi.data');
+        ->assertJsonCount(0, 'data.records');
 });
 
 // ── baca() ───────────────────────────────────────────────────────────────

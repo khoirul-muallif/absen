@@ -14,19 +14,16 @@ class NotifikasiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $karyawan      = $request->user();
-        $perPage       = $request->query('per_page', 20);
+        $karyawan       = $request->user();
+        $limit          = $request->query('per_page', 20);
         $hanyaBelumBaca = $request->boolean('belum_baca', false);
 
-        $query = $karyawan->notifications();
-
-        if ($hanyaBelumBaca) {
-            $query = $karyawan->unreadNotifications();
-        }
+        $query = $hanyaBelumBaca ? $karyawan->unreadNotifications() : $karyawan->notifications();
 
         $notifikasi = $query->latest()
-            ->paginate($perPage)
-            ->through(fn ($n) => [
+            ->limit($limit)
+            ->get()
+            ->map(fn ($n) => [
                 'id'         => $n->id,
                 'judul'      => $n->data['judul'] ?? '-',
                 'pesan'      => $n->data['pesan'] ?? '-',
@@ -41,7 +38,8 @@ class NotifikasiController extends Controller
             'success' => true,
             'data'    => [
                 'total_belum_baca' => $karyawan->unreadNotifications()->count(),
-                'notifikasi'       => $notifikasi,
+                'total'            => $notifikasi->count(),
+                'records'          => $notifikasi,
             ],
         ]);
     }
