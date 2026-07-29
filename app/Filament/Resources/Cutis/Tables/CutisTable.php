@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Cutis\Tables;
 
 use App\Exceptions\KuotaCutiTidakCukupException;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -37,6 +38,10 @@ class CutisTable
                 TextColumn::make('jumlah_hari')
                     ->numeric()
                     ->sortable(),
+                TextColumn::make('alasan')
+                    ->limit(30)
+                    ->tooltip(fn ($record) => $record->alasan)
+                    ->wrap(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -72,43 +77,74 @@ class CutisTable
                     ->relationship('jenisCuti', 'nama'),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make()
-                    ->visible(fn ($record) => $record->isPending()),
-                Action::make('approve')
-                    ->label('Setujui')
-                    ->icon('heroicon-o-check')
-                    ->color('success')
-                    ->visible(fn ($record) => $record->isPending())
-                    ->requiresConfirmation()
-                    ->action(function ($record) {
-                        try {
-                            $record->approve(auth()->user());
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make()
+                        ->visible(fn ($record) => $record->isPending()),
+                    Action::make('approve')
+                        ->label('Setujui')
+                        ->icon('heroicon-o-check')
+                        ->color(function ($record) {
+                            if (! $record->jenisCuti?->potong_kuota) {
+                                return 'success';
+                            }
 
-                            Notification::make()
-                                ->title('Cuti disetujui')
-                                ->success()
-                                ->send();
-                        } catch (KuotaCutiTidakCukupException $e) {
-                            Notification::make()
-                                ->title('Gagal menyetujui cuti')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                Action::make('reject')
-                    ->label('Tolak')
-                    ->icon('heroicon-o-x-mark')
-                    ->color('danger')
-                    ->visible(fn ($record) => $record->isPending())
-                    ->requiresConfirmation()
-                    ->schema([
-                        Textarea::make('catatan_approval')
-                            ->label('Alasan penolakan')
-                            ->required(),
-                    ])
-                    ->action(fn ($record, array $data) => $record->reject(auth()->user(), $data['catatan_approval'])),
+                            $kuota = \App\Models\KuotaCuti::where('karyawan_id', $record->karyawan_id)
+                                ->where('jenis_cuti_id', $record->jenis_cuti_id)
+                                ->where('tahun', $record->tanggal_mulai->year)
+                                ->first();
+
+                            $sisa = $kuota ? ($kuota->kuota - $kuota->terpakai) : 0;
+
+                            return $sisa >= $record->jumlah_hari ? 'success' : 'danger';
+                        })
+                        ->tooltip(function ($record) {
+                            if (! $record->jenisCuti?->potong_kuota) {
+                                return null;
+                            }
+
+                            $kuota = \App\Models\KuotaCuti::where('karyawan_id', $record->karyawan_id)
+                                ->where('jenis_cuti_id', $record->jenis_cuti_id)
+                                ->where('tahun', $record->tanggal_mulai->year)
+                                ->first();
+
+                            $sisa = $kuota ? ($kuota->kuota - $kuota->terpakai) : 0;
+
+                            return $sisa < $record->jumlah_hari
+                                ? "⚠ Sisa kuota ({$sisa}) kurang dari jumlah hari yang diajukan ({$record->jumlah_hari})"
+                                : null;
+                        })
+                        ->visible(fn ($record) => $record->isPending())
+                        ->requiresConfirmation()
+                        ->action(function ($record) {
+                            try {
+                                $record->approve(auth()->user());
+
+                                Notification::make()
+                                    ->title('Cuti disetujui')
+                                    ->success()
+                                    ->send();
+                            } catch (KuotaCutiTidakCukupException $e) {
+                                Notification::make()
+                                    ->title('Gagal menyetujui cuti')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                    Action::make('reject')
+                        ->label('Tolak')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('danger')
+                        ->visible(fn ($record) => $record->isPending())
+                        ->requiresConfirmation()
+                        ->schema([
+                            Textarea::make('catatan_approval')
+                                ->label('Alasan penolakan')
+                                ->required(),
+                        ])
+                        ->action(fn ($record, array $data) => $record->reject(auth()->user(), $data['catatan_approval'])),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
