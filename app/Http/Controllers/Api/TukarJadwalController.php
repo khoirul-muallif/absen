@@ -163,19 +163,22 @@ class TukarJadwalController extends Controller
     public function riwayat(Request $request): JsonResponse
     {
         $karyawan = $request->user();
-
         $status = $request->query('status');
 
-        $pengajuan = TukarJadwal::with(['jadwal.shift', 'jadwalTujuan.shift', 'karyawanTujuan', 'karyawanPengaju'])
+        $pengajuan = TukarJadwal::with(['shiftAsal', 'shiftTujuan', 'karyawanTujuan', 'karyawanPengaju'])
             ->where(fn ($q) => $q->where('karyawan_pengaju_id', $karyawan->id)
                 ->orWhere('karyawan_tujuan_id', $karyawan->id))
             ->when($status, fn ($q) => $q->where('status', $status))
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(fn ($t) => self::formatTukarJadwal($t));
 
         return response()->json([
             'success' => true,
-            'data' => $pengajuan,
+            'data' => [
+                'total' => $pengajuan->count(),
+                'records' => $pengajuan,
+            ],
         ]);
     }
 
@@ -187,15 +190,19 @@ class TukarJadwalController extends Controller
     {
         $karyawan = $request->user();
 
-        $pengajuan = TukarJadwal::with(['jadwal.shift', 'jadwal.karyawan', 'jadwalTujuan.shift'])
+        $pengajuan = TukarJadwal::with(['shiftAsal', 'shiftTujuan', 'karyawanPengaju'])
             ->where('karyawan_tujuan_id', $karyawan->id)
             ->where('status', 'menunggu_rekan')
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(fn ($t) => self::formatTukarJadwal($t));
 
         return response()->json([
             'success' => true,
-            'data' => $pengajuan,
+            'data' => [
+                'total' => $pengajuan->count(),
+                'records' => $pengajuan,
+            ],
         ]);
     }
 
@@ -252,5 +259,29 @@ class TukarJadwalController extends Controller
             'success' => true,
             'message' => 'Pengajuan berhasil dibatalkan.',
         ]);
+    }
+
+    private static function formatTukarJadwal(TukarJadwal $t): array
+    {
+        return [
+            'id' => $t->id,
+            'mode' => $t->isPindahSendiri() ? 'pindah' : 'tukar',
+            'status' => $t->status,
+            'alasan' => $t->alasan,
+            'jadwal_asal' => [
+                'tanggal' => $t->tanggal_asal->format('d M Y'),
+                'shift' => $t->shiftAsal?->nama_shift,
+                'karyawan' => $t->karyawanPengaju->nama,
+            ],
+            'jadwal_tujuan' => ! $t->isPindahSendiri() ? [
+                'tanggal' => $t->tanggal_tujuan->format('d M Y'),
+                'shift' => $t->shiftTujuan?->nama_shift,
+                'karyawan' => $t->karyawanTujuan?->nama,
+            ] : null,
+            'tanggal_baru' => $t->tanggal_baru?->format('d M Y'),
+            'catatan_penolakan_rekan' => $t->catatan_penolakan_rekan,
+            'catatan_approval' => $t->catatan_approval,
+            'diajukan_at' => $t->created_at->format('d M Y H:i'),
+        ];
     }
 }
