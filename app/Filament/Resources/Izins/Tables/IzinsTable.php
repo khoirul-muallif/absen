@@ -72,8 +72,7 @@ class IzinsTable
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make(),
-                    EditAction::make()
-                        ->visible(fn ($record) => $record->isPending()),
+                    EditAction::make(),
                     Action::make('approve')
                         ->label('Setujui')
                         ->icon('heroicon-o-check')
@@ -81,20 +80,12 @@ class IzinsTable
                         ->visible(fn ($record) => $record->isPending())
                         ->requiresConfirmation()
                         ->action(function ($record) {
-                            try {
-                                $record->approve(auth()->user());
+                            $record->approve(auth()->user());
 
-                                Notification::make()
-                                    ->title('Izin disetujui')
-                                    ->success()
-                                    ->send();
-                            } catch (\Throwable $e) {
-                                Notification::make()
-                                    ->title('Gagal menyetujui izin')
-                                    ->body($e->getMessage())
-                                    ->danger()
-                                    ->send();
-                            }
+                            Notification::make()
+                                ->title('Izin disetujui')
+                                ->success()
+                                ->send();
                         }),
                     Action::make('reject')
                         ->label('Tolak')

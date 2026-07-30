@@ -3,11 +3,13 @@
 namespace App\Filament\Resources\Dinas\Tables;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -30,6 +32,10 @@ class DinasTable
                     ->sortable(),
                 TextColumn::make('tujuan')
                     ->searchable(),
+                TextColumn::make('keperluan')
+                    ->limit(30)
+                    ->tooltip(fn ($record) => $record->keperluan)
+                    ->wrap(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -62,28 +68,44 @@ class DinasTable
                     ]),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make()
-                    ->visible(fn ($record) => $record->isPending()),
-                Action::make('approve')
-                    ->label('Setujui')
-                    ->icon('heroicon-o-check')
-                    ->color('success')
-                    ->visible(fn ($record) => $record->isPending())
-                    ->requiresConfirmation()
-                    ->action(fn ($record) => $record->approve(auth()->user())),
-                Action::make('reject')
-                    ->label('Tolak')
-                    ->icon('heroicon-o-x-mark')
-                    ->color('danger')
-                    ->visible(fn ($record) => $record->isPending())
-                    ->requiresConfirmation()
-                    ->schema([
-                        Textarea::make('catatan_approval')
-                            ->label('Alasan penolakan')
-                            ->required(),
-                    ])
-                    ->action(fn ($record, array $data) => $record->reject(auth()->user(), $data['catatan_approval'])),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make()
+                        ->visible(fn ($record) => $record->isPending()),
+                    Action::make('approve')
+                        ->label('Setujui')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->visible(fn ($record) => $record->isPending())
+                        ->requiresConfirmation()
+                        ->action(function ($record) {
+                            $record->approve(auth()->user());
+
+                            Notification::make()
+                                ->title('Dinas disetujui')
+                                ->success()
+                                ->send();
+                        }),
+                    Action::make('reject')
+                        ->label('Tolak')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('danger')
+                        ->visible(fn ($record) => $record->isPending())
+                        ->requiresConfirmation()
+                        ->schema([
+                            Textarea::make('catatan_approval')
+                                ->label('Alasan penolakan')
+                                ->required(),
+                        ])
+                        ->action(function ($record, array $data) {
+                            $record->reject(auth()->user(), $data['catatan_approval']);
+
+                            Notification::make()
+                                ->title('Dinas ditolak')
+                                ->success()
+                                ->send();
+                        }),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -16,13 +16,12 @@ class ViewCuti extends ViewRecord
     {
         return [
             Action::make('kembali')
-            ->label('Kembali ke daftar')
-            ->icon('heroicon-o-arrow-left')
-            ->color('gray')
-            ->url(fn () => \App\Filament\Resources\Cutis\CutiResource::getUrl('index')),
-
-            EditAction::make(),
-
+                ->label('Kembali ke daftar')
+                ->icon('heroicon-o-arrow-left')
+                ->color('gray')
+                ->url(fn () => \App\Filament\Resources\Cutis\CutiResource::getUrl('index')),
+            EditAction::make()
+                ->visible(fn ($record) => $record->isPending()),
         ];
     }
 }

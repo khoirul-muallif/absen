@@ -11,23 +11,26 @@ class TukarJadwalInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('jadwal.karyawan.nama')
+                TextEntry::make('karyawanPengaju.nama')
                     ->label('Pengaju'),
-                TextEntry::make('jadwal.tanggal')
-                    ->label('Tanggal jadwal saat ini')
+                TextEntry::make('tanggal_asal')
+                    ->label('Tanggal jadwal semula')
                     ->date(),
-                TextEntry::make('jadwal.shift.nama_shift')
-                    ->label('Shift'),
+                TextEntry::make('shiftAsal.nama_shift')
+                    ->label('Shift semula'),
                 TextEntry::make('mode')
                     ->label('Jenis Pengajuan')
                     ->state(fn ($record) => $record->isPindahSendiri() ? 'Pindah tanggal sendiri' : 'Tukar dengan rekan'),
-                TextEntry::make('jadwalTujuan.karyawan.nama')
+                TextEntry::make('karyawanTujuan.nama')
                     ->label('Rekan tujuan')
                     ->visible(fn ($record) => ! $record->isPindahSendiri())
                     ->placeholder('-'),
-                TextEntry::make('jadwalTujuan.tanggal')
+                TextEntry::make('tanggal_tujuan')
                     ->label('Tanggal jadwal tujuan')
                     ->date()
+                    ->visible(fn ($record) => ! $record->isPindahSendiri()),
+                TextEntry::make('shiftTujuan.nama_shift')
+                    ->label('Shift tujuan')
                     ->visible(fn ($record) => ! $record->isPindahSendiri()),
                 TextEntry::make('tanggal_baru')
                     ->label('Pindah ke tanggal')
@@ -38,7 +41,9 @@ class TukarJadwalInfolist
                 TextEntry::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'pending' => 'warning',
+                        'menunggu_rekan' => 'warning',
+                        'menunggu_admin' => 'info',
+                        'ditolak_rekan' => 'danger',
                         'approved' => 'success',
                         'rejected' => 'danger',
                         default => 'gray',

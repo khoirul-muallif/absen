@@ -7,6 +7,9 @@ use App\Models\Dinas;
 use App\Models\Instansi;
 use App\Models\JenisCuti;
 use App\Models\Karyawan;
+use App\Models\Absensi;
+use App\Models\Jadwal;
+use App\Models\User;
 
 use function Pest\Livewire\livewire;
 
@@ -90,4 +93,87 @@ it('menolak dinas yang bentrok dengan cuti approved milik karyawan yang sama', f
         ->assertHasFormErrors(['tanggal_selesai']);
 
     expect(Dinas::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
+});
+
+it('approve dinas berhasil tanpa exception', function () {
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'status' => 'pending',
+    ]);
+
+    $dinas->approve(User::first());
+
+    expect($dinas->fresh())
+        ->status->toBe('approved')
+        ->approved_by->toBe(User::first()->id);
+});
+
+it('approve dinas men-sync status Absensi untuk setiap tanggal dalam rentang', function () {
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'status' => 'pending',
+    ]);
+
+    $dinas->approve(User::first());
+
+    foreach (['2026-08-01', '2026-08-02', '2026-08-03'] as $tanggal) {
+        expect(Absensi::where('karyawan_id', $this->karyawan->id)
+            ->where('tanggal', $tanggal)
+            ->first()?->status)->toBe('dinas');
+    }
+});
+
+it('approve dinas men-sync Jadwal untuk setiap tanggal dalam rentang', function () {
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-02',
+        'status' => 'pending',
+    ]);
+
+    $dinas->approve(User::first());
+
+    foreach (['2026-08-01', '2026-08-02'] as $tanggal) {
+        expect(Jadwal::where('karyawan_id', $this->karyawan->id)
+            ->where('tanggal', $tanggal)
+            ->first()?->jenis)->toBe('dinas');
+    }
+});
+
+it('reject dinas berhasil, tidak menyentuh Absensi/Jadwal', function () {
+    $dinas = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-02',
+        'status' => 'pending',
+    ]);
+
+    $dinas->reject(User::first(), 'Tidak sesuai kebutuhan');
+
+    expect($dinas->fresh())->status->toBe('rejected');
+    expect(Absensi::where('karyawan_id', $this->karyawan->id)->count())->toBe(0);
+});
+
+it('EditAction visible untuk dinas pending, hidden untuk approved', function () {
+    $pending = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'status' => 'pending',
+    ]);
+
+    livewire(ListDinas::class)
+        ->assertTableActionVisible('edit', $pending);
+});
+
+it('EditAction hidden untuk dinas approved', function () {
+    $approved = Dinas::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'status' => 'approved',
+    ]);
+
+    livewire(ListDinas::class)
+        ->assertTableActionHidden('edit', $approved);
 });

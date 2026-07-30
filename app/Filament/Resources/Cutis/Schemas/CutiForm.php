@@ -129,10 +129,13 @@ class CutiForm
                                                     ->where('tahun', $tanggalMulai->year)
                                                     ->first();
 
-                                                $sisa = $kuota ? ($kuota->kuota - $kuota->terpakai) : 0;
-
-                                                if ($jumlahHari > $sisa) {
-                                                    $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
+                                                // Konsisten dengan kebijakan fase 22: kuota yang belum ada
+                                                // row-nya sama sekali TIDAK jadi dasar penolakan.
+                                                if ($kuota) {
+                                                    $sisa = $kuota->kuota - $kuota->terpakai;
+                                                    if ($jumlahHari > $sisa) {
+                                                        $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
+                                                    }
                                                 }
                                             }
                                         }
