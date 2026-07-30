@@ -14,6 +14,7 @@ class JenisCutiForm
             ->components([
                 TextInput::make('nama')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->placeholder('Contoh: Cuti Tahunan, Cuti Sakit, Cuti Melahirkan'),
                 TextInput::make('default_kuota')
                     ->label('Default kuota (hari)')
