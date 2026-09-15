@@ -9,6 +9,7 @@
 use App\Filament\Resources\HariLiburs\Pages\CreateHariLibur;
 use App\Filament\Resources\HariLiburs\Pages\EditHariLibur;
 use App\Filament\Resources\HariLiburs\Pages\ListHariLiburs;
+use App\Filament\Resources\HariLiburs\Pages\ViewHariLibur;
 use App\Models\HariLibur;
 use App\Models\Instansi;
 
@@ -164,4 +165,76 @@ it('cuti bersama saat ini TIDAK dibedakan dari libur nasional oleh generator', f
 
     expect($semuaLibur)->toHaveCount(2)
         ->and($semuaLibur)->toContain($cutiBersama->id, $liburNasional->id);
+});
+
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/HariLiburResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import:
+//   use App\Filament\Resources\HariLiburs\Pages\ViewHariLibur;
+// ============================================================================
+
+// ── Halaman View (batch B) ───────────────────────────────────────────────
+
+it('halaman View hari libur bisa dibuka', function () {
+    $hariLibur = HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-17',
+    ]);
+
+    livewire(ViewHariLibur::class, ['record' => $hariLibur->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('ViewAction muncul di tabel', function () {
+    $hariLibur = HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-18',
+    ]);
+
+    livewire(ListHariLiburs::class)
+        ->assertTableActionVisible('view', $hariLibur);
+});
+
+// ── Filter (batch C) ─────────────────────────────────────────────────────
+
+it('filter instansi membatasi baris ke instansi yang dipilih', function () {
+    $instansiLain = Instansi::factory()->create();
+
+    $milikIni = HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-17',
+    ]);
+
+    $milikLain = HariLibur::factory()->create([
+        'instansi_id' => $instansiLain->id,
+        'tanggal' => '2026-08-17',
+    ]);
+
+    livewire(ListHariLiburs::class)
+        ->filterTable('instansi_id', $this->instansi->id)
+        ->assertCanSeeTableRecords([$milikIni])
+        ->assertCanNotSeeTableRecords([$milikLain]);
+});
+
+it('filter rentang tanggal membatasi baris yang tampil', function () {
+    $diDalam = HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-17',
+    ]);
+
+    $diLuar = HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-12-25',
+    ]);
+
+    livewire(ListHariLiburs::class)
+        ->filterTable('rentang_tanggal', [
+            'dari' => '2026-08-01',
+            'sampai' => '2026-08-31',
+        ])
+        ->assertCanSeeTableRecords([$diDalam])
+        ->assertCanNotSeeTableRecords([$diLuar]);
 });
