@@ -27,6 +27,17 @@ class AbsensiForm
                     ->icon('heroicon-o-identification')
                     ->columns(2)
                     ->schema([
+                        Placeholder::make('peringatan_sinkronisasi')
+                            ->label('⚠️ Baris ini dibuat otomatis')
+                            ->visible(fn (?Absensi $record): bool => self::dariSinkronisasi($record))
+                            ->content(fn (?Absensi $record): string => 'Data ini hasil sinkronisasi dari pengajuan '
+                                .($record?->status === 'cuti' ? 'Cuti' : 'Dinas')
+                                .' yang sudah disetujui. Status & waktu absen dikunci: mengubahnya di sini akan '
+                                .'bertentangan dengan pengajuan yang masih approved, dan tertimpa lagi kalau '
+                                .'sinkronisasi dijalankan ulang. Kalau datanya keliru, perbaiki lewat modul '
+                                .($record?->status === 'cuti' ? 'Cuti' : 'Dinas').'. Kolom Keterangan tetap bisa diisi.')
+                            ->columnSpanFull(),
+
                         Select::make('karyawan_id')
                             ->label('Karyawan')
                             ->relationship('karyawan', 'nama')
@@ -105,6 +116,8 @@ class AbsensiForm
                             ])
                             ->default('alpha')
                             ->required()
+                            ->disabled(fn (?Absensi $record): bool => self::dariSinkronisasi($record))
+                            ->dehydrated()
                             ->helperText('Otomatis dihitung ulang jika Waktu Masuk & Shift diisi — baik saat membuat baru maupun saat mengedit. Pilih manual hanya untuk status non-kehadiran (izin/sakit/cuti/dinas/libur/alpha).'),
 
                         Textarea::make('keterangan')
@@ -124,6 +137,8 @@ class AbsensiForm
                             ->displayFormat('d M Y H:i')
                             ->seconds(false)
                             ->live()
+                            ->disabled(fn (?Absensi $record): bool => self::dariSinkronisasi($record))
+                            ->dehydrated()
                             ->helperText('Tanggalnya harus sama dengan field Tanggal di atas.')
                             // Sebelumnya tanggal & waktu_masuk sama sekali tidak
                             // terikat — admin bisa menyimpan tanggal 10 Sep
@@ -225,6 +240,8 @@ class AbsensiForm
                             ->displayFormat('d M Y H:i')
                             ->seconds(false)
                             ->after('waktu_masuk')
+                            ->disabled(fn (?Absensi $record): bool => self::dariSinkronisasi($record))
+                            ->dehydrated()
                             ->helperText('Boleh jatuh di tanggal berikutnya untuk shift malam.'),
 
                         FileUpload::make('foto_pulang')
@@ -247,5 +264,26 @@ class AbsensiForm
                             ->placeholder('110.4167'),
                     ]),
             ]);
+    }
+
+    /**
+     * Apakah baris ini lahir dari sinkronisasi Cuti/Dinas approved, bukan dari
+     * entri manual atau absen fisik karyawan?
+     *
+     * Baris berstatus cuti/dinas dibuat oleh
+     * HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi(). Mengubah status atau
+     * waktu absennya lewat form ini akan (a) bertentangan dengan record Cuti/
+     * Dinas yang masih approved, dan (b) tertimpa lagi begitu sinkronisasi
+     * dijalankan ulang — mis. lewat absensi:backfill-cuti-dinas. Jadi field
+     * yang menentukan dikunci, mengikuti pola JadwalForm fase 21.
+     *
+     * Status lain yang juga ditulis sistem (alpha & libur dari RekapHarian)
+     * SENGAJA tidak ikut dikunci: tidak ada record pengajuan di baliknya, dan
+     * mengoreksinya secara manual (mis. alpha -> izin) itu pekerjaan admin
+     * yang wajar.
+     */
+    protected static function dariSinkronisasi(?Absensi $record): bool
+    {
+        return $record !== null && in_array($record->status, ['cuti', 'dinas'], true);
     }
 }

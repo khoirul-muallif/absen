@@ -2,14 +2,16 @@
 
 namespace App\Filament\Resources\Absensis\Tables;
 
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Filament\Tables\Columns\IconColumn;
 
 class AbsensisTable
 {
@@ -24,6 +26,7 @@ class AbsensisTable
 
                 TextColumn::make('shift.nama_shift')
                     ->label('Shift')
+                    ->placeholder('-')
                     ->sortable(),
 
                 TextColumn::make('tanggal')
@@ -34,17 +37,21 @@ class AbsensisTable
                 TextColumn::make('waktu_masuk')
                     ->label('Masuk')
                     ->dateTime('H:i')
+                    ->placeholder('-')
                     ->sortable(),
 
                 TextColumn::make('waktu_pulang')
                     ->label('Pulang')
                     ->dateTime('H:i')
+                    ->placeholder('-')
                     ->sortable(),
+
                 IconColumn::make('melebihi_toleransi_bulanan')
-                    ->label('Batas Min.')
+                    ->label('Lewat toleransi bulanan')
                     ->boolean()
                     ->trueColor('danger')
                     ->falseColor('gray')
+                    ->tooltip('Akumulasi keterlambatan sebulan sudah melewati toleransi shift (penanda KPI).')
                     ->toggleable(),
 
                 TextColumn::make('status')
@@ -130,7 +137,10 @@ class AbsensisTable
                     ->relationship('shift', 'nama_shift'),
             ])
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

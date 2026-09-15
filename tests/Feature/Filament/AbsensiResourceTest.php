@@ -3,10 +3,15 @@
 use App\Filament\Resources\Absensis\Pages\CreateAbsensi;
 use App\Filament\Resources\Absensis\Pages\EditAbsensi;
 use App\Filament\Resources\Absensis\Pages\ListAbsensis;
+use App\Filament\Resources\Absensis\Pages\ViewAbsensi;
 use App\Models\Absensi;
+use App\Models\Cuti;
+use App\Models\JenisCuti;
 use App\Models\Karyawan;
 use App\Models\QrInstansi;
 use App\Models\Shift;
+use App\Models\User;
+
 
 use function Pest\Livewire\livewire;
 
@@ -321,4 +326,143 @@ it('akumulasi bulanan: absensi kedua di bulan yang sama menjumlahkan menit_terla
     expect(Absensi::where('karyawan_id', $karyawan->id)->where('tanggal', today()->toDateString())->first())
         ->menit_terlambat->toBe(15)
         ->melebihi_toleransi_bulanan->toBeTruthy();
+});
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/AbsensiResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import berikut di atas kalau belum ada:
+//   use App\Filament\Resources\Absensis\Pages\ViewAbsensi;
+//   use App\Models\Cuti;
+//   use App\Models\JenisCuti;
+//   use App\Models\User;
+// ============================================================================
+
+// ── Halaman View ─────────────────────────────────────────────────────────
+//
+// Sebelumnya getPages() cuma index/create/edit — untuk melihat foto masuk/
+// pulang & koordinat GPS, admin harus masuk ke mode edit. Semua modul
+// approval sudah punya halaman View read-only sejak fase 25.
+
+it('halaman View absensi bisa dibuka', function () {
+    $absensi = Absensi::factory()->create();
+
+    livewire(ViewAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('ViewAction muncul di tabel', function () {
+    $absensi = Absensi::factory()->create();
+
+    livewire(ListAbsensis::class)
+        ->assertTableActionVisible('view', $absensi);
+});
+
+// ── Guard baris hasil sinkronisasi Cuti/Dinas ────────────────────────────
+//
+// Baris berstatus cuti/dinas dibuat oleh
+// HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi(), bukan entri manual.
+// Mengubah status/waktu absennya bertentangan dengan pengajuan yang masih
+// approved, dan tertimpa lagi saat sinkronisasi dijalankan ulang.
+
+it('field status & waktu absen dikunci untuk baris hasil sinkronisasi cuti', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    $absensi = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-08-01',
+        'status' => 'cuti',
+        'waktu_masuk' => null,
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertFormFieldDisabled('status')
+        ->assertFormFieldDisabled('waktu_masuk')
+        ->assertFormFieldDisabled('waktu_pulang');
+});
+
+it('field status & waktu absen dikunci untuk baris hasil sinkronisasi dinas', function () {
+    $absensi = Absensi::factory()->create([
+        'tanggal' => '2026-08-01',
+        'status' => 'dinas',
+        'waktu_masuk' => null,
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertFormFieldDisabled('status');
+});
+
+// Status lain yang juga ditulis sistem (alpha & libur dari RekapHarian)
+// SENGAJA tidak ikut dikunci — tidak ada record pengajuan di baliknya, dan
+// mengoreksinya manual itu pekerjaan admin yang wajar.
+
+it('baris alpha dari RekapHarian TETAP bisa diedit', function () {
+    $absensi = Absensi::factory()->create([
+        'tanggal' => '2026-08-01',
+        'status' => 'alpha',
+        'waktu_masuk' => null,
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertFormFieldEnabled('status')
+        ->assertFormFieldEnabled('waktu_masuk');
+});
+
+it('baris libur TETAP bisa diedit', function () {
+    $absensi = Absensi::factory()->create([
+        'tanggal' => '2026-08-01',
+        'status' => 'libur',
+        'waktu_masuk' => null,
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertFormFieldEnabled('status');
+});
+
+it('keterangan tetap bisa diisi pada baris hasil sinkronisasi, status tidak berubah', function () {
+    $absensi = Absensi::factory()->create([
+        'tanggal' => '2026-08-01',
+        'status' => 'cuti',
+        'waktu_masuk' => null,
+        'keterangan' => null,
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->fillForm(['keterangan' => 'Dikonfirmasi ke bagian SDM'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($absensi->fresh())
+        ->keterangan->toBe('Dikonfirmasi ke bagian SDM')
+        ->status->toBe('cuti')      // tidak ikut berubah
+        ->waktu_masuk->toBeNull();
+});
+
+// REGRESSION GUARD: baris hasil approve Cuti yang sebenarnya (bukan factory),
+// memastikan status yang ditulis afterApprove() memang memicu guard-nya.
+
+it('baris Absensi hasil approve Cuti sungguhan ikut terkunci', function () {
+    $karyawan = Karyawan::factory()->create();
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => false]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-01',
+        'jumlah_hari' => 1,
+        'status' => 'pending',
+    ]);
+
+    $cuti->approve(User::first());
+
+    $absensi = Absensi::where('karyawan_id', $karyawan->id)
+        ->where('tanggal', '2026-08-01')
+        ->firstOrFail();
+
+    expect($absensi->status)->toBe('cuti');
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->assertFormFieldDisabled('status');
 });
