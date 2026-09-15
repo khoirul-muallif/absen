@@ -19,11 +19,32 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
 
       Presensi:
       - [ ] Hari Libur (HariLiburResource)
-      - [ ] Data Absensi (AbsensiResource) — perlu perhatian ekstra:
-            ada enum status 'sakit' yang belum jelas peruntukannya
-            (lihat SCHEMA.md Known Gap), cek juga apakah UX form manual
-            create Absensi (bukan lewat API) sudah jelas bedanya dengan
-            data yang auto-tersinkron dari Cuti/Dinas approved.
+
+
+      - [ ] Data Absensi (AbsensiResource) — batch A SELESAI (fase 27:
+            unique constraint, keterkaitan tanggal/waktu_masuk, hook
+            recalc di Edit, required kondisional shift/QR). Sisa:
+            - [ ] Batch B: guard baris hasil sinkronisasi Cuti/Dinas.
+                  Baris berstatus cuti/dinas lahir dari afterApprove(),
+                  tapi admin bisa mengubah status atau mengisi
+                  waktu_masuk-nya tanpa peringatan apa pun — lalu
+                  tertimpa diam-diam saat backfill, atau bertentangan
+                  dengan record Cuti yang masih approved. Ikuti pola
+                  JadwalForm fase 21 (field di-disabled kalau nilainya
+                  hasil sync).
+            - [ ] Batch B: ViewAbsensi + Infolist + ViewAction. Sekarang
+                  getPages() cuma index/create/edit dan recordActions
+                  cuma EditAction — untuk melihat foto masuk/pulang &
+                  koordinat GPS admin harus masuk mode edit. Semua modul
+                  approval sudah punya halaman View read-only; modul yang
+                  paling sering dibuka justru belum.
+            - [ ] Batch C: filter rentang tanggal & filter karyawan di
+                  tabel (JadwalsTable sudah punya sejak fase 11, tabel
+                  ini jauh lebih sering dibuka). Label kolom
+                  melebihi_toleransi_bulanan masih "Batas Min." yang
+                  tidak terbaca sebagai "melewati toleransi bulanan".
+            - [ ] Keputusan enum 'sakit' (lihat item terpisah di bawah).
+
       - [ ] Jadwal (JadwalResource) — cek kejelasan field `sumber`
             (generate/manual) di UI, apakah admin ngerti konsekuensi
             edit manual pada baris yang sumbernya 'generate'.
@@ -218,6 +239,43 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
         karyawan umum. Jadi rotasi yang benar-benar lupa absen pun tidak
         diingatkan.
       - Kedua command masih tanpa test sama sekali.
+      - Cast jam_masuk/jam_pulang SUDAH diperbaiki di fase 27. Tiga bug
+        lain (guard libur/cuti, shift malam, rotasi tidak pernah dapat
+        notifikasi) masih terbuka.
+
+- [ ] **Keputusan enum `absensi.status = 'sakit'`** — sekarang muncul di
+      dropdown form & filter tabel seolah fitur yang hidup, padahal tidak
+      ada modul/controller yang pernah menghasilkannya (Known Gap sejak
+      SCHEMA.md). Perlu diputuskan salah satu:
+      (a) entri manual admin yang sah -> perlu keterangan di form soal
+          kapan dipakai & bedanya dari Cuti jenis sakit,
+      (b) digabung ke alur Cuti sebagai jenis cuti sakit -> hapus dari
+          dropdown, biarkan enum-nya di DB,
+      (c) dead value -> sembunyikan dari UI.
+      Butuh masukan soal proses di RS-nya, bukan keputusan teknis.
+
+- [ ] **Format jam di respons Izin & Lembur belum seragam** — `jam_keluar`/
+      `jam_kembali` (Izin) dan `jam_mulai`/`jam_selesai` (Lembur) dikirim
+      apa adanya dari DB sebagai `"08:00:00"`, sementara seluruh respons
+      lain memakai `H:i`. Bukan bug (kolomnya tidak di-cast, jadi tipenya
+      memang string), cuma tidak seragam. Hati-hati: menambahkan
+      `->format()` di sana SALAH karena nilainya bukan Carbon — perlu
+      substr/Carbon::parse, atau tambahkan cast di model lalu ikuti pola
+      jamMasukString(). Sekalian cek dampaknya ke frontend yang sudah ada.
+
+- [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
+      production dari sebelum fase 27** — kolom
+      `melebihi_toleransi_bulanan` tidak pernah tersimpan sejak fase 9
+      (lihat CHANGELOG fase 27), jadi SEMUA baris lama salah di kolom itu.
+      Command tersebut me-replay akumulasi bulanan dan menulis ulang kedua
+      kolom. Tidak relevan sekarang (belum ada production), tapi jangan
+      sampai terlewat saat deploy pertama.
+
+- [ ] **`absensi:audit-menit-terlambat` belum punya test otomatis** —
+      kemampuan deteksi & jalur `--fix`-nya sudah dibuktikan manual sekali
+      (fase 26 lanjutan), tapi tidak meninggalkan jejak di suite. Yang
+      paling rawan dan sama sekali tidak terjaga: replay akumulasi bulanan
+      lintas chunk (state dibawa lewat reference antar-chunk).
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,

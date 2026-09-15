@@ -5,6 +5,151 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 27: audit jebakan cast `datetime:H:i` + integritas data Absensi
+
+Tiga commit: `73e0c8f`, `4d75947`, `03c182d`. Berawal dari satu baris yang
+mau dirapikan, melebar jadi audit satu kelas bug yang ternyata tersebar di
+5 titik dan satu kolom yang tidak pernah tersimpan selama 13 fase.
+
+### Jebakan cast `datetime:H:i` — 5 titik, semua dari akar yang sama
+
+`Shift::$casts` men-cast `jam_masuk`/`jam_pulang` sebagai `'datetime:H:i'`,
+jadi nilainya **SELALU objek Carbon** — format `H:i` cuma memengaruhi
+serialisasi lewat model, bukan tipe propertinya. Dari tempat pemanggilan
+tidak ada petunjuk apa pun soal ini, dan itu yang bikin polanya terus
+kambuh.
+
+Dua manifestasi berbeda:
+
+1. **Diserahkan ke `setTimeFromTimeString()`** → Carbon
+   `__toString()`-kan jadi `"Y-m-d H:i:s"` (tanggal HARI INI + jam shift),
+   lalu `modify()` di dalamnya ikut **menimpa tanggalnya**, bukan cuma
+   jamnya.
+2. **Ditaruh langsung ke array respons JSON** → `json_encode` memanggil
+   `Carbon::jsonSerialize()` dan menghasilkan ISO8601 yang dikonversi ke
+   UTC.
+
+Titik yang ditemukan & diperbaiki:
+- `Shift::hitungMenitTerlambat()` — sudah diperbaiki di **fase 14**, tapi
+  waktu itu pemakaian pola yang sama di tempat lain tidak ikut disisir.
+- `AbsensiSimulasiSeeder` — akibat langsungnya: SEMUA row Absensi hasil
+  seeder punya `DATE(waktu_masuk) != tanggal`. Sudah diperbaiki;
+  `migrate:fresh --seed` sekarang menghasilkan data benar dan query
+  pemeriksa mengembalikan 0.
+- `PengingatBelumAbsen` & `PengingatBelumAbsenPulang` — hasilnya kebetulan
+  masih benar karena anchor-nya sudah `today()`, jadi penimpaan tanggal
+  menghasilkan tanggal yang sama. Pola "benar karena kebetulan", persis
+  yang bikin bug fase 14 lolos 41 test. Tetap diperbaiki.
+- **Teks notifikasi** di kedua command — ini terlihat pengguna:
+  `"Masuk: {$shift->jam_masuk}"` berbunyi
+  `Masuk: 2026-07-21 07:30:00`, bukan `07:30`.
+- `AbsensiController::riwayat()` & `AuthController::me()` — mobile app
+  menerima `"2026-09-15T01:00:00.000000Z"` di field bernama `jam_masuk`.
+  Bukan cuma formatnya salah: tanggalnya hari ini dan jamnya bergeser ke
+  UTC, jadi isinya tidak menunjukkan jam shift sama sekali. `/me` paling
+  sering terkena — dipanggil tiap kali aplikasi dibuka.
+
+`Shift::jamMasukString()` / `jamPulangString()` ditambahkan supaya pemanggil
+tidak perlu ingat kenapa `->format('H:i:s')` wajib. Komentar kode usang di
+`Shift.php` yang masih menyimpan pola lama dihapus — contoh buruk yang
+tersimpan rapi dan siap di-copy-paste.
+
+Dicek dan **aman**: `Izin`/`Lembur` tidak meng-cast kolom jamnya sama
+sekali, jadi keluar sebagai string `"08:00:00"` apa adanya. Bukan bug, cuma
+`H:i:s` sementara respons lain memakai `H:i` — ketidakseragaman minor,
+masuk todo. Menambahkan `->format()` di sana justru salah karena tipenya
+string, bukan Carbon.
+
+Test baru: 4 di `ShiftTest` — dua menguji format, dua benar-benar
+menjalankan `setTimeFromTimeString()` terhadap 2026-03-15 dan memastikan
+tanggalnya tidak bergeser. Yang kedua itu yang mengunci jebakannya.
+
+### BUG: `melebihi_toleransi_bulanan` tidak pernah tersimpan (sejak fase 9)
+
+Kolom ini dihitung di `AbsensiController::masuk()` sejak fase 9 dan di hook
+`CreateAbsensi`, tapi **tidak pernah ada di `$fillable` model Absensi**.
+Mass assignment membuang kunci yang tidak terdaftar tanpa error apa pun,
+jadi kolomnya selalu tinggal di default DB (`false`) — di SELURUH data,
+lewat jalur API maupun admin panel. Semua perhitungan akumulasi bulanan
+untuk KPI berjalan benar lalu hasilnya menguap.
+
+Kenapa bertahan 13 fase:
+- Tidak ada satu pun dari 15 test di `AbsensiControllerTest` yang memeriksa
+  kolom itu.
+- Test Filament yang seharusnya memeriksanya justru berakhir dengan
+  `expect($shift->sudahMelebihiToleransiBulanan(20 + 15))->toBeTrue()` —
+  memanggil model dengan angka yang dihitung sendiri di test, tidak pernah
+  melihat isi database.
+
+Pola yang sama dengan kolom `sumber` di Jadwal (fase 15).
+
+Ditambahkan juga cast `'boolean'` supaya pembanding tidak perlu ingat
+melakukan casting terhadap `0`/`1` dari MySQL (`AuditMenitTerlambat` sudah
+terlihat menulis `(bool)` justru karena itu).
+
+**Konsekuensi untuk data lama:** karena kolomnya selalu `false`, seluruh
+baris Absensi existing salah di kolom ini.
+`absensi:audit-menit-terlambat --fix` bisa memperbaikinya (dia me-replay
+akumulasi bulanan dan menulis ulang kedua kolom). Tidak relevan sekarang
+(belum ada production), tapi WAJIB dijalankan kalau nanti ada data nyata
+dari sebelum fase 27.
+
+Test baru: 3 di `AbsensiControllerTest` (2 regression guard kolom KPI, 1
+format jam di riwayat), 1 assert tambahan di `AuthControllerTest` untuk
+`/me`.
+
+### Review UX Data Absensi — batch A (integritas data form)
+
+Absensi satu-satunya modul di mana admin bisa menyunting data yang ditulis
+sistem (API absen, RekapHarian, sinkronisasi Cuti/Dinas), jadi risikonya
+bukan "form kurang jelas" tapi "form bisa merusak data yang bukan miliknya".
+
+- **Unique (karyawan_id, tanggal)** sudah ada di DB sejak fase 1 tapi tidak
+  divalidasi di form — submit duplikat baru gagal sebagai QueryException
+  1062 mentah. Peluang kejadiannya tinggi: entri susulan untuk tanggal yang
+  sudah punya baris alpha dari RekapHarian justru skenario paling wajar.
+  Pola yang sama dengan bug KuotaCuti fase 25.
+- **`tanggal` ↔ `waktu_masuk`** sebelumnya sama sekali tidak terikat — admin
+  bisa menyimpan kombinasi yang persis sama dengan data cacat yang baru
+  dibersihkan di fase 26 lanjutan. **KEPUTUSAN:** aturan kecocokan tanggal
+  SENGAJA tidak diterapkan ke `waktu_pulang` — shift malam pulang di dini
+  hari keesokan harinya.
+- **`EditAbsensi` tidak punya hook sama sekali.** Mengubah `waktu_masuk`
+  menyimpan waktu barunya tapi meninggalkan `menit_terlambat`, `status`,
+  dan `melebihi_toleransi_bulanan` pada nilai lama — padahal helper text di
+  form menjanjikan "otomatis dihitung ulang". Logikanya diekstrak ke trait
+  `MenghitungKeterlambatan` (dipakai Create & Edit) dengan parameter
+  `$kecualiAbsensiId` supaya record yang sedang diedit tidak terjumlah dua
+  kali ke akumulasi bulanan.
+- Query akumulasi diperbaiki: bulannya diambil dari `tanggal`, bukan dari
+  `waktu_masuk`. Versi lama mencampur keduanya
+  (`whereYear('tanggal', $waktuMasuk->year)`).
+- **`shift_id` & `qr_instansi_id` tidak lagi required tanpa syarat** —
+  keduanya nullable di DB, dan `sinkronisasiJadwalDanAbsensi()` justru
+  mengosongkan `qr_instansi_id`. Memaksa admin memilih QR untuk baris
+  cuti/libur cuma bikin data berbohong. `shift_id` wajib hanya kalau
+  `waktu_masuk` diisi.
+
+Test: `AbsensiResourceTest` 5 → 14 test. Dua test lama diubah (yang menguji
+required shift/QR tanpa syarat sudah tidak berlaku; yang menguji akumulasi
+sebelumnya tidak pernah melihat isi database).
+
+Batch B (guard baris hasil sinkronisasi Cuti/Dinas, ViewAbsensi + Infolist)
+dan batch C (filter tabel, label) belum dikerjakan.
+
+### Catatan proses
+
+Sempat ada kegagalan 39-dari-40 test yang bikin bingung: isi
+`AbsensiResourceTest.php` tidak sengaja tersimpan ke
+`AbsensiResource.php`. Filament memindai semua Resource saat boot, jadi
+kode test ikut dieksekusi di setiap test dan kegagalannya menyebar ke
+seluruh suite. Pesan Pest `TestAlreadyExist ... in the filename
+vendor\composer\ClassLoader.php` menyesatkan — nama file yang disebut
+mengacu ke autoloader, bukan ke sumber masalah. Yang informatif justru
+baris `at ...` di bawahnya.
+
+Full suite: 299 test passing (866 assertions) — naik dari 287.
+
 ## fase 26 lanjutan: fix absensi:backfill-cuti-dinas + dokumentasi command one-off
 
 Ditemukan saat merapikan `docs/runbook.md` — bukan dari audit terjadwal.
