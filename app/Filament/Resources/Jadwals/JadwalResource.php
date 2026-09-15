@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Jadwals;
 use App\Filament\Resources\Jadwals\Pages\CreateJadwal;
 use App\Filament\Resources\Jadwals\Pages\EditJadwal;
 use App\Filament\Resources\Jadwals\Pages\ListJadwals;
+use App\Filament\Resources\Jadwals\Pages\ViewJadwal;
 use App\Filament\Resources\Jadwals\Schemas\JadwalForm;
+use App\Filament\Resources\Jadwals\Schemas\JadwalInfolist;
 use App\Filament\Resources\Jadwals\Tables\JadwalsTable;
 use App\Models\Jadwal;
 use BackedEnum;
@@ -30,6 +32,11 @@ class JadwalResource extends Resource
         return JadwalForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return JadwalInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return JadwalsTable::configure($table);
@@ -47,6 +54,7 @@ class JadwalResource extends Resource
         return [
             'index' => ListJadwals::route('/'),
             'create' => CreateJadwal::route('/create'),
+            'view' => ViewJadwal::route('/{record}'),
             'edit' => EditJadwal::route('/{record}/edit'),
         ];
     }

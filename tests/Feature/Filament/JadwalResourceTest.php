@@ -3,6 +3,7 @@
 use App\Filament\Resources\Jadwals\Pages\CreateJadwal;
 use App\Filament\Resources\Jadwals\Pages\EditJadwal;
 use App\Filament\Resources\Jadwals\Pages\ListJadwals;
+use App\Filament\Resources\Jadwals\Pages\ViewJadwal;
 use App\Models\Cuti;
 use App\Models\Dinas;
 use App\Models\Instansi;
@@ -296,4 +297,81 @@ it('jenis cuti tidak bisa dipilih saat membuat jadwal baru', function () {
 
     expect(Jadwal::where('karyawan_id', $this->karyawan->id)
         ->whereDate('tanggal', '2026-09-20')->exists())->toBeFalse();
+});
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/JadwalResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import berikut kalau belum ada:
+//   use App\Filament\Resources\Jadwals\Pages\ViewJadwal;
+// ============================================================================
+
+// ── Halaman View (batch B) ───────────────────────────────────────────────
+
+it('halaman View jadwal bisa dibuka', function () {
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-01',
+        'jenis' => 'reguler',
+        'sumber' => 'manual',
+    ]);
+
+    livewire(ViewJadwal::class, ['record' => $jadwal->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('ViewAction muncul di tabel', function () {
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'tanggal' => '2026-10-02',
+    ]);
+
+    livewire(ListJadwals::class)
+        ->assertTableActionVisible('view', $jadwal);
+});
+
+// ── Filter karyawan (batch C) ────────────────────────────────────────────
+
+it('filter karyawan membatasi baris ke karyawan yang dipilih', function () {
+    $karyawanLain = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $milikIni = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-05',
+    ]);
+
+    $milikLain = Jadwal::factory()->create([
+        'karyawan_id' => $karyawanLain->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-05',
+    ]);
+
+    livewire(ListJadwals::class)
+        ->filterTable('karyawan_id', $this->karyawan->id)
+        ->assertCanSeeTableRecords([$milikIni])
+        ->assertCanNotSeeTableRecords([$milikLain]);
+});
+
+it('filter sumber memisahkan baris manual dari generate', function () {
+    $manual = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-10',
+        'sumber' => 'manual',
+    ]);
+
+    $generate = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-11',
+        'sumber' => 'generate',
+    ]);
+
+    livewire(ListJadwals::class)
+        ->filterTable('sumber', 'manual')
+        ->assertCanSeeTableRecords([$manual])
+        ->assertCanNotSeeTableRecords([$generate]);
 });

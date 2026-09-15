@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Jadwals\Tables;
 
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -74,6 +76,11 @@ class JadwalsTable
             ])
             ->defaultSort('tanggal', 'asc')
             ->filters([
+                SelectFilter::make('karyawan_id')
+                    ->label('Karyawan')
+                    ->relationship('karyawan', 'nama')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('jenis')
                     ->options([
                         'reguler' => 'Reguler',
@@ -113,7 +120,10 @@ class JadwalsTable
                     }),
             ])
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
