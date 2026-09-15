@@ -16,35 +16,9 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
 - [ ] **Review UX Filament — 10 Resource lain (belum disentuh)**,
       dikelompokkan per navigationGroup. Ini sekarang satu-satunya item
       Prioritas yang tersisa.
-
+      
       Presensi:
       - [ ] Hari Libur (HariLiburResource)
-
-
-      - [ ] Data Absensi (AbsensiResource) — batch A SELESAI (fase 27:
-            unique constraint, keterkaitan tanggal/waktu_masuk, hook
-            recalc di Edit, required kondisional shift/QR). Sisa:
-            - [ ] Batch B: guard baris hasil sinkronisasi Cuti/Dinas.
-                  Baris berstatus cuti/dinas lahir dari afterApprove(),
-                  tapi admin bisa mengubah status atau mengisi
-                  waktu_masuk-nya tanpa peringatan apa pun — lalu
-                  tertimpa diam-diam saat backfill, atau bertentangan
-                  dengan record Cuti yang masih approved. Ikuti pola
-                  JadwalForm fase 21 (field di-disabled kalau nilainya
-                  hasil sync).
-            - [ ] Batch B: ViewAbsensi + Infolist + ViewAction. Sekarang
-                  getPages() cuma index/create/edit dan recordActions
-                  cuma EditAction — untuk melihat foto masuk/pulang &
-                  koordinat GPS admin harus masuk mode edit. Semua modul
-                  approval sudah punya halaman View read-only; modul yang
-                  paling sering dibuka justru belum.
-            - [ ] Batch C: filter rentang tanggal & filter karyawan di
-                  tabel (JadwalsTable sudah punya sejak fase 11, tabel
-                  ini jauh lebih sering dibuka). Label kolom
-                  melebihi_toleransi_bulanan masih "Batas Min." yang
-                  tidak terbaca sebagai "melewati toleransi bulanan".
-            - [ ] Keputusan enum 'sakit' (lihat item terpisah di bawah).
-
       - [ ] Jadwal (JadwalResource) — cek kejelasan field `sumber`
             (generate/manual) di UI, apakah admin ngerti konsekuensi
             edit manual pada baris yang sumbernya 'generate'.
@@ -253,6 +227,17 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
           dropdown, biarkan enum-nya di DB,
       (c) dead value -> sembunyikan dari UI.
       Butuh masukan soal proses di RS-nya, bukan keputusan teknis.
+      Pertanyaan yang menentukan: di rekap bulanan
+      (GET /api/absensi/rekap), apakah "sakit" perlu tampil sebagai baris
+      sendiri, atau cukup masuk hitungan cuti? Endpoint itu SUDAH
+      menghitung 'sakit' terpisah dari 'cuti' sekarang — jadi kalau
+      jawabannya "cukup masuk cuti", enum ini memang dead value dan
+      barisnya di rekap juga perlu dihapus.
+      Catatan: JenisCuti bisa dibuat dengan nama "Cuti Sakit" lengkap
+      dengan perlu_lampiran untuk surat dokter. Kalau alur itu yang
+      dipakai, Absensi.status akan terisi 'cuti' lewat sinkronisasi,
+      bukan 'sakit' — jadi enum 'sakit' cuma relevan kalau RS ingin
+      keduanya dibedakan di laporan.
 
 - [ ] **Format jam di respons Izin & Lembur belum seragam** — `jam_keluar`/
       `jam_kembali` (Izin) dan `jam_mulai`/`jam_selesai` (Lembur) dikirim

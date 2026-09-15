@@ -5,6 +5,86 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+
+## fase 27 lanjutan: Review UX Data Absensi — batch B & C (selesai)
+
+Commit `430a031` dan `7eac0c5`. Melanjutkan batch A (integritas data form)
+di entri fase 27.
+
+### Batch B — guard baris hasil sinkronisasi
+
+Baris Absensi berstatus `cuti`/`dinas` lahir dari
+`HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi()`, bukan dari entri
+manual maupun absen fisik. Sebelumnya admin bisa membuka baris itu dan
+mengubah status atau mengisi `waktu_masuk` **tanpa peringatan apa pun** —
+lalu perubahannya bertentangan dengan record Cuti/Dinas yang masih
+approved, dan tertimpa diam-diam begitu sinkronisasi dijalankan ulang
+(mis. lewat `absensi:backfill-cuti-dinas`). Ini gap yang sudah tercatat di
+todo sejak awal review Data Absensi.
+
+- `status`, `waktu_masuk`, `waktu_pulang` dikunci untuk baris tersebut,
+  plus Placeholder peringatan yang menjelaskan alasannya dan mengarahkan
+  perbaikan ke modul Cuti/Dinas. Mengikuti pola `JadwalForm` fase 21
+  (field di-`disabled()` kalau nilainya hasil sync).
+- **KEPUTUSAN:** guard dibatasi ke status `cuti`/`dinas` SAJA. Status lain
+  yang juga ditulis sistem (`alpha` & `libur` dari `RekapHarian`) sengaja
+  TIDAK ikut dikunci — tidak ada record pengajuan di baliknya, dan
+  mengoreksinya manual (mis. alpha → izin) itu pekerjaan admin yang wajar.
+  Ada dua test yang mengunci pembedaan ini supaya tidak digeneralisasi
+  nanti.
+- `keterangan` juga sengaja dibiarkan terbuka: admin sering perlu mencatat
+  konfirmasi tanpa mengubah data. Ada test yang memastikan mengisi
+  keterangan pada baris tersinkronisasi tidak menggeser `status` maupun
+  `waktu_masuk`.
+- Satu test memakai `Cuti::approve()` sungguhan (bukan factory) untuk
+  memastikan status yang benar-benar ditulis `afterApprove()` memang
+  memicu guard-nya.
+
+### Batch B — halaman View + Infolist
+
+`getPages()` sebelumnya cuma index/create/edit dan `recordActions` cuma
+`EditAction`. Akibatnya untuk sekadar melihat foto masuk/pulang dan
+koordinat GPS, admin harus masuk ke **mode edit**. Semua modul approval
+sudah punya halaman View read-only sejak fase 25; modul yang paling sering
+dibuka justru belum.
+
+- `ViewAbsensi` + `AbsensiInfolist` ditambahkan, `ViewAction` masuk ke
+  `ActionGroup` bersama `EditAction`.
+- Infolist menampilkan **asal data** secara eksplisit ("hasil sinkronisasi
+  otomatis dari pengajuan Cuti/Dinas yang disetujui" vs "entri manual /
+  hasil absen karyawan") — informasi yang sebelumnya tidak muncul di mana
+  pun.
+- Penanda KPI `melebihi_toleransi_bulanan` ditampilkan dengan helper text
+  yang menjelaskan artinya, bukan cuma ikon.
+
+### Batch C — filter tabel & label
+
+- Filter **karyawan** dan **rentang tanggal** (dari–sampai) ditambahkan.
+  Sebelumnya tabel cuma bisa disaring per status & per shift, padahal ini
+  tabel yang paling sering dibuka untuk operasional harian. `JadwalsTable`
+  sudah punya filter rentang tanggal sejak fase 11. Filter karyawan
+  ditaruh paling atas karena itu yang paling sering dipakai — admin
+  biasanya mencari orang tertentu, bukan status tertentu.
+- **KEPUTUSAN:** sengaja TIDAK ada filter default (mis. bulan berjalan).
+  Itu terasa membantu tapi menyesatkan — admin membuka halaman, tidak
+  melihat data bulan lalu, lalu menyangka datanya tidak ada. Kalau nanti
+  tabelnya berat karena data menumpuk, solusinya pagination atau default
+  sort, bukan menyembunyikan baris diam-diam.
+- Label kolom `melebihi_toleransi_bulanan` diperbaiki dari **"Batas Min."**
+  (tidak terbaca sebagai apa pun) jadi "Lewat toleransi bulanan" + tooltip.
+- Kolom `shift`, `waktu_masuk`, `waktu_pulang` diberi `placeholder('-')`
+  karena ketiganya sekarang bisa null (akibat required kondisional di
+  batch A dan sinkronisasi yang mengosongkan waktu absen).
+
+### Status
+
+Review UX **Data Absensi selesai**. `AbsensiResourceTest`: 5 → 22 test.
+Sisa satu item yang bukan kerja teknis: keputusan enum
+`absensi.status = 'sakit'` (Known Gap sejak SCHEMA.md) — butuh masukan soal
+proses di RS, lihat todo.md.
+
+Full suite: 310 test passing (934 assertions) — naik dari 299.
+
 ## fase 27: audit jebakan cast `datetime:H:i` + integritas data Absensi
 
 Tiga commit: `73e0c8f`, `4d75947`, `03c182d`. Berawal dari satu baris yang
