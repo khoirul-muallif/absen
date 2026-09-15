@@ -32,8 +32,16 @@ class PengingatBelumAbsenPulang extends Command
             $shift    = $absensi->shift;
 
             // Cek apakah sudah melewati jam pulang + 15 menit
+            // jamPulangString() (bukan $shift->jam_pulang langsung) — lihat
+            // catatan di Shift::jamMasukString() soal cast 'datetime:H:i'.
+            //
+            // CATATAN: untuk shift malam (jam_pulang < jam_mulai, pulang di
+            // dini hari keesokan harinya) perhitungan ini masih salah —
+            // batasnya jatuh di jam pulang HARI INI yang sudah lewat, jadi
+            // notifikasi terkirim tepat setelah karyawan absen masuk. Lintas
+            // tengah malam belum ditangani sama sekali; lihat todo.md.
             $batasNotifikasi = today()
-                ->setTimeFromTimeString($shift->jam_pulang)
+                ->setTimeFromTimeString($shift->jamPulangString())
                 ->addMinutes(15);
 
             if (now()->lt($batasNotifikasi)) {
@@ -55,7 +63,7 @@ class PengingatBelumAbsenPulang extends Command
             $karyawan->notify(new BelumAbsen(
                 jenisAbsen: 'pulang',
                 namaShift:  $shift->nama_shift,
-                jamShift:   "Pulang: {$shift->jam_pulang}",
+                jamShift:   "Pulang: {$shift->jam_pulang->format('H:i')}",
             ));
 
             $terkirim++;

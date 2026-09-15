@@ -5,6 +5,102 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 26 lanjutan: fix absensi:backfill-cuti-dinas + dokumentasi command one-off
+
+Ditemukan saat merapikan `docs/runbook.md` — bukan dari audit terjadwal.
+
+### BUG DITEMUKAN & DIPERBAIKI: backfill menghitung ganda kuota cuti
+
+`BackfillAbsensiDariCutiDinas` memanggil `afterApprove()` dalam loop untuk
+SEMUA Cuti/Dinas approved. Waktu ditulis (fase 10) itu aman — `afterApprove()`
+cuma menyinkronkan Absensi, jadi idempoten. Sejak **fase 22** tidak lagi:
+method itu juga menaikkan `KuotaCuti.terpakai`.
+
+Efeknya kalau command dijalankan sekali:
+- Seluruh `KuotaCuti.terpakai` terhitung **ganda**, tanpa error apa pun.
+- Kalau di tengah loop ada yang melewati kuota,
+  `KuotaCutiTidakCukupException` dilempar keluar dari `each()` dan command
+  mati di tengah. Record itu sendiri ter-rollback (transaksi di
+  `HasApprovalWorkflow::approve()` bersifat per-record), tapi yang sudah
+  terlanjur di-increment sebelumnya tetap tinggal — state separuh jalan.
+- Sejak fase 21 `afterApprove()` juga menimpa Jadwal bersumber `manual`.
+  Untuk backfill itu memang tujuannya, tapi sebelumnya tidak pernah
+  diberitahukan ke operator.
+
+Nama dan `$description` command-nya sendiri sudah benar ("sinkronkan ulang
+Absensi"). Pemotongan kuota ikut terbawa karena `afterApprove()` menumpuk
+dua tanggung jawab, bukan karena diinginkan.
+
+**Fix:** command sekarang memanggil `resyncJadwalDanAbsensi()`, bukan
+`afterApprove()`.
+
+- `Cuti::resyncJadwalDanAbsensi()` & `Dinas::resyncJadwalDanAbsensi()` baru
+  — pintu masuk publik ke `HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi()`
+  yang `protected`.
+- **KEPUTUSAN:** sengaja method per-model, BUKAN mengubah trait-nya jadi
+  `public`. Dengan begitu string `'cuti'`/`'dinas'` tetap ditentukan model
+  itu sendiri, dan pemanggil tidak punya cara mengirim `'dinas'` ke record
+  Cuti (yang akan merusak data tanpa error).
+- Dinas sebetulnya tidak menyentuh kuota sama sekali, jadi method-nya
+  identik dengan `afterApprove()`-nya sekarang. Tetap dibuat terpisah supaya
+  jalur re-sync tidak ikut terbawa diam-diam kalau nanti Dinas dapat efek
+  samping baru — persis yang terjadi pada Cuti di fase 22.
+- Ditambah `confirm()` sebelum jalan (penimpaan Jadwal manual sekarang
+  disebut di layar) + opsi `--force` untuk test/CI.
+
+Test baru: `BackfillAbsensiDariCutiDinasTest.php` (6 test) — sync Absensi &
+Jadwal untuk Cuti dan Dinas, **regression guard bahwa `KuotaCuti.terpakai`
+tidak berubah sama sekali**, idempoten saat dijalankan dua kali, pending/
+rejected tidak disentuh, dan Jadwal `manual` memang ditimpa (perilaku yang
+disengaja, dikunci eksplisit).
+
+Full suite: 283 test passing (818 assertions) — naik dari 277.
+
+### runbook.md
+
+- Blok peringatan `afterApprove()` beserta dua snippet tinker massal
+  (`Cuti::where('status','approved')->each(fn ($c) => $c->afterApprove())`)
+  **dihapus seluruhnya** — sudah tidak relevan setelah fix di atas, dan
+  membiarkannya justru mengundang copy-paste. Jalur re-sync satu record
+  sekarang `$cuti->resyncJadwalDanAbsensi()`.
+- `absensi:audit-menit-terlambat` didokumentasikan — sebelumnya tidak
+  disebut di dokumen manapun (CHANGELOG/QUICK_CONTEXT/runbook), padahal
+  command-nya sudah ada sejak 21 Juli 2026.
+- Ditambah bagian Diagnostik (`karyawan:cek-tipe-jadwal`,
+  `absensi:rekap-harian`, `schedule:list`), perintah test
+  (`php artisan test` / pest --filter), opsi lengkap
+  `jadwal:generate-rotasi`, dan duplikat
+  `make:filament-resource Instansi` di bagian arsip dihapus.
+
+### absensi:audit-menit-terlambat — dicek, tidak diubah
+
+Command-nya direview dan ternyata sudah benar: akumulator bulanan dibawa
+lintas chunk lewat reference, dan `chunk()` biasa (bukan `chunkById`) aman
+di sini karena kolom yang di-update bukan kolom pengurutan. Default
+dry-run, `--fix` harus eksplisit.
+
+Dijalankan pertama kali: **5 baris dicek, 0 salah.** Angka ini JANGAN
+dibaca sebagai "Known Gap fase 14 sudah beres" — command memfilter
+`waktu_masuk NOT NULL` + `shift_id NOT NULL`, jadi mayoritas data dummy
+(alpha/libur/cuti/dinas) tidak ikut terhitung, dan 5 baris itu kemungkinan
+besar dibuat setelah fix fase 14. Belum ada data production sama sekali.
+
+Karena "0 salah" dari populasi yang semuanya benar tidak membedakan
+"audit bersih" dari "audit tidak mendeteksi apa-apa", kemampuan deteksinya
+diuji manual: satu row sengaja dirusak (`menit_terlambat = 999`), audit
+benar melaporkannya (Lama 999 / Benar 2), lalu `--fix` mengoreksinya
+kembali. Jalur deteksi & jalur perbaikan dua-duanya terbukti jalan.
+Command ini masih belum punya test otomatis.
+
+Temuan sampingan (ditindaklanjuti di entri berikutnya): kelima row Absensi
+yang punya waktu_masuk ternyata SEMUANYA punya DATE(waktu_masuk) != tanggal
+— tanggal 16–20 Juli, tapi waktu_masuk semuanya 21 Juli (tanggal seeder
+dijalankan) dengan cuma jamnya yang berbeda. Penyebabnya bukan anchor yang
+salah di seeder (anchor-nya sudah benar ke $tanggal), melainkan jebakan cast
+datetime:H:i yang sama dengan bug fase 14 — lihat entri di atas. Data ini
+artefak dari kode lama; migrate:fresh --seed menghasilkan data yang benar.
+Artinya "0 salah" dari audit di atas berasal dari populasi yang seluruhnya
+cacat, jadi praktis tidak membuktikan kesehatan data.
 
 ## fase 26: sentralisasi query kuota cuti, sinyal approve 4 keadaan, audit ViewLembur
 

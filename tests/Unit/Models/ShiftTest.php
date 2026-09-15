@@ -162,3 +162,49 @@ it('hari_kerja eksplisit membatasi hari tertentu saja', function () {
     // 2026-07-18 = Sabtu (dayOfWeek 6)
     expect($shift->adalahHariKerja(Carbon::parse('2026-07-18')))->toBeFalse();
 });
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Unit/Models/ShiftTest.php
+//
+// Tempel di akhir file. Sesuaikan FQCN kalau Shift sudah ke-import di sana.
+// ============================================================================
+
+// --- Accessor jam string (guard jebakan cast 'datetime:H:i') ---
+//
+// jam_masuk/jam_pulang SELALU objek Carbon walau cast-nya 'datetime:H:i'.
+// Menyerahkannya langsung ke setTimeFromTimeString() bikin tanggalnya ikut
+// tertimpa jadi HARI INI — root cause bug fase 14, dan sudah kambuh di
+// AbsensiSimulasiSeeder, PengingatBelumAbsen, dan PengingatBelumAbsenPulang.
+
+it('jamMasukString mengembalikan H:i:s, bukan datetime lengkap', function () {
+    $shift = \App\Models\Shift::factory()->create(['jam_masuk' => '07:30']);
+
+    expect($shift->jamMasukString())->toBe('07:30:00');
+});
+
+it('jamPulangString mengembalikan H:i:s, bukan datetime lengkap', function () {
+    $shift = \App\Models\Shift::factory()->create(['jam_pulang' => '15:00']);
+
+    expect($shift->jamPulangString())->toBe('15:00:00');
+});
+
+it('jamMasukString aman dipakai di setTimeFromTimeString tanpa menimpa tanggal', function () {
+    $shift = \App\Models\Shift::factory()->create(['jam_masuk' => '07:30']);
+
+    $tanggal = \Carbon\Carbon::parse('2026-03-15');
+    $hasil = $tanggal->copy()->setTimeFromTimeString($shift->jamMasukString());
+
+    // REGRESSION GUARD: tanpa ->format('H:i:s'), tanggalnya berubah jadi
+    // hari ini dan assertion di bawah gagal.
+    expect($hasil->toDateTimeString())->toBe('2026-03-15 07:30:00');
+});
+
+it('jamPulangString aman dipakai di setTimeFromTimeString tanpa menimpa tanggal', function () {
+    $shift = \App\Models\Shift::factory()->create(['jam_pulang' => '15:00']);
+
+    $tanggal = \Carbon\Carbon::parse('2026-03-15');
+    $hasil = $tanggal->copy()->setTimeFromTimeString($shift->jamPulangString());
+
+    expect($hasil->toDateTimeString())->toBe('2026-03-15 15:00:00');
+});

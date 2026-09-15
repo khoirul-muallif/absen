@@ -36,8 +36,9 @@ class AbsensiSimulasiSeeder extends Seeder
 
         foreach ($simulasiTelat as $hariLalu => $menitTelat) {
             $tanggal = today()->subDays($hariLalu);
-            $waktuMasuk = $tanggal->copy()->setTimeFromTimeString($shift->jam_masuk)->addMinutes($menitTelat);
-
+            $waktuMasuk = $tanggal->copy()
+                ->setTimeFromTimeString($shift->jam_masuk->format('H:i:s'))
+                ->addMinutes($menitTelat);
             $akumulasi += $menitTelat;
             $status = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari itu
             $melebihi = $shift->sudahMelebihiToleransiBulanan($akumulasi);

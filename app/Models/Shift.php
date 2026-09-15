@@ -60,16 +60,6 @@ class Shift extends Model
         return in_array($tanggal->dayOfWeek, $this->hari_kerja);
     }
 
-    /**
-     * Hitung menit terlambat mentah (belum dibandingkan toleransi).
-     */
-    // public function hitungMenitTerlambat(\Carbon\Carbon $waktuMasuk): int
-    // {
-    //     $jamMasukShift = today()->setTimeFromTimeString($this->jam_masuk);
-    //     $selisih = $jamMasukShift->diffInMinutes($waktuMasuk, false);
-
-    //     return max(0, (int) $selisih);
-    // }
     public function hitungMenitTerlambat(\Carbon\Carbon $waktuMasuk): int
     {
         $jamMasukShift = $waktuMasuk->copy()->setTimeFromTimeString(
@@ -100,5 +90,34 @@ class Shift extends Model
         }
 
         return $totalTerlambatBulanIniTermasukHariIni > $this->toleransi_menit;
+    }
+
+    /**
+     * Jam masuk shift sebagai string "H:i:s".
+     *
+     * WAJIB dipakai kalau nilainya mau diserahkan ke setTimeFromTimeString()
+     * atau ditempel ke teks. `jam_masuk` di-cast 'datetime:H:i', jadi
+     * $this->jam_masuk SELALU objek Carbon — format H:i itu cuma memengaruhi
+     * serialisasi, bukan tipe propertinya.
+     *
+     * Kalau objek Carbon itu diserahkan langsung ke setTimeFromTimeString(),
+     * Carbon meng-__toString()-kannya jadi "Y-m-d H:i:s" (tanggal HARI INI +
+     * jam shift). setTimeFromTimeString() memanggil modify() di dalamnya, dan
+     * modify() dengan string bertanggal lengkap akan MENIMPA TANGGALNYA juga,
+     * bukan cuma jamnya. Ini root cause bug fase 14 dan sudah kambuh di 3
+     * tempat lain sesudahnya.
+     */
+    public function jamMasukString(): string
+    {
+        return $this->jam_masuk->format('H:i:s');
+    }
+
+    /**
+     * Jam pulang shift sebagai string "H:i:s". Lihat catatan di
+     * jamMasukString() — jebakan cast-nya sama persis.
+     */
+    public function jamPulangString(): string
+    {
+        return $this->jam_pulang->format('H:i:s');
     }
 }

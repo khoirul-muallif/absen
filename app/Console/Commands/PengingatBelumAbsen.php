@@ -31,8 +31,10 @@ class PengingatBelumAbsen extends Command
             $shift    = $ks->shift;
 
             // Cek apakah sudah melewati jam masuk + toleransi
+            // jamMasukString() (bukan $shift->jam_masuk langsung) — lihat
+            // catatan di Shift::jamMasukString() soal cast 'datetime:H:i'.
             $batasNotifikasi = today()
-                ->setTimeFromTimeString($shift->jam_masuk)
+                ->setTimeFromTimeString($shift->jamMasukString())
                 ->addMinutes($shift->toleransi_menit + 15); // 15 menit grace period
 
             if (now()->lt($batasNotifikasi)) {
@@ -66,7 +68,7 @@ class PengingatBelumAbsen extends Command
             $karyawan->notify(new BelumAbsen(
                 jenisAbsen: 'masuk',
                 namaShift:  $shift->nama_shift,
-                jamShift:   "Masuk: {$shift->jam_masuk} — Pulang: {$shift->jam_pulang}",
+                jamShift:   "Masuk: {$shift->jam_masuk->format('H:i')} — Pulang: {$shift->jam_pulang->format('H:i')}",
             ));
 
             $terkirim++;

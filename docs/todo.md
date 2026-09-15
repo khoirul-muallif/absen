@@ -194,6 +194,30 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
+    
+- [ ] Fix AbsensiSimulasiSeeder: waktu_masuk di-anchor ke tanggal
+      baris, bukan now() — sekarang semua row simulasi punya
+      DATE(waktu_masuk) != tanggal (lihat CHANGELOG fase 26 lanjutan).
+      Sekalian tambah assertion/test kecil yang mengunci
+      DATE(waktu_masuk) == tanggal supaya tidak kambuh.
+
+- [ ] PengingatBelumAbsen/PengingatBelumAbsenPulang: 3 bug aktif, belum
+      diperbaiki (ditemukan fase 26 lanjutan, yang diperbaiki baru cast-nya):
+      - Tidak ada guard libur sama sekali: tidak cek shift->hari_kerja,
+        HariLibur, maupun Cuti/Dinas approved. Karyawan yang sedang cuti
+        approved TETAP dikirimi "Anda belum absen masuk" — barisnya ada tapi
+        waktu_masuk null. Sama untuk Sabtu/Minggu & libur nasional.
+        RekapHarian sudah benar cek hari_kerja, command ini tidak.
+      - Shift malam rusak di PengingatBelumAbsenPulang: batas notifikasi
+        dihitung dari jam pulang HARI INI yang sudah lewat, jadi notifikasi
+        "belum absen pulang" terkirim ~15 menit setelah karyawan absen MASUK.
+        Lintas tengah malam belum ditangani sama sekali.
+      - KOREKSI dugaan lama: karyawan rotasi bukan salah dikirimi
+        notifikasi saat libur — mereka TIDAK PERNAH dikirimi sama sekali.
+        Command query dari KaryawanShift, yang sejak fase 13 cuma dimiliki
+        karyawan umum. Jadi rotasi yang benar-benar lupa absen pun tidak
+        diingatkan.
+      - Kedua command masih tanpa test sama sekali.
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
