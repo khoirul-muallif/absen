@@ -10,18 +10,13 @@ buat curiga, kemungkinan besar test yang ada baru cover happy path.
 
 Sudah selesai (navigationGroup, audit lintas modul, race condition, tanggal
 edge case, konsistensi respons API, 5 modul approval + Jenis/Kuota Cuti,
-sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
-20-26. 277 test passing (789 assertions).
+sentralisasi query kuota, jebakan cast datetime, Data Absensi, Jadwal) —
+detail di CHANGELOG fase 20-28.
 
-- [ ] **Review UX Filament — 10 Resource lain (belum disentuh)**,
-      dikelompokkan per navigationGroup. Ini sekarang satu-satunya item
-      Prioritas yang tersisa.
-      
+- [ ] **Review UX Filament — 8 Resource yang belum disentuh**
+
       Presensi:
       - [ ] Hari Libur (HariLiburResource)
-      - [ ] Jadwal (JadwalResource) — cek kejelasan field `sumber`
-            (generate/manual) di UI, apakah admin ngerti konsekuensi
-            edit manual pada baris yang sumbernya 'generate'.
 
       Master Data:
       - [ ] Karyawan (KaryawanResource) — cek kejelasan section
@@ -44,8 +39,16 @@ sentralisasi query kuota + audit ViewLembur) — detail di CHANGELOG fase
             tipe_jadwal (fase 18) sudah tervisualisasi jelas di dropdown,
             bukan cuma tervalidasi di server-side.
 
-      Urutan yang disarankan: Data Absensi & Jadwal dulu (paling sering
-      diakses harian utk operasional), baru Master Data.
+      Pola yang sudah terbentuk dari Data Absensi & Jadwal, dipakai lagi
+      untuk sisanya: (A) integritas data — validasi yang cuma ada di DB
+      tapi tidak di form, field yang required padahal nullable, guard
+      untuk baris yang ditulis sistem; (B) halaman View + Infolist kalau
+      belum ada; (C) badge/label/filter.
+
+      Urutan yang disarankan: Hari Libur dulu (paling kecil, dan dipakai
+      oleh 2 generator + RekapHarian), lalu Shift & Shift Karyawan
+      Umum/Rotasi + Pola Rotasi sebagai satu kelompok (saling terkait),
+      baru Karyawan/Instansi/QR Instansi.
 
 ## Nanti / belum prioritas
 - [ ] **Simulasi karyawan rotasi yang punya langkah LIBUR di polanya

@@ -6,6 +6,108 @@
 
 ---
 
+## fase 28: Review UX Jadwal (JadwalResource) — selesai
+
+Commit `ba90b26` (batch A) dan `4b4cbb6` (batch B & C). Item todo aslinya cuma
+"cek kejelasan field `sumber` di UI", tapi ternyata masalahnya lebih dalam
+dari soal kejelasan.
+
+### BUG: `sumber` tidak terlihat DAN tidak pernah bernilai benar
+
+Kolom `sumber` (generate/manual) tidak muncul di mana pun — tidak di form,
+tidak di tabel, tidak di filter. Padahal dialah yang menentukan apakah sebuah
+baris bertahan saat `jadwal:generate-rotasi --overwrite-generate` dijalankan.
+
+Lebih jauh: `sumber` **tidak pernah di-set `manual` dari jalur Filament**.
+`CreateJadwal` tidak punya hook, jadi baris yang diinput admin memakai default
+DB yaitu `generate` — dan ikut terhapus oleh generator. Fase 15 menambahkan
+kolom ini dengan alasan eksplisit "supaya generator tidak menimpa entry yang
+sudah diedit manual admin"; niat itu tidak pernah terwujud untuk jalur admin
+panel selama 13 fase.
+
+Catatan cakupan: `sumber` cuma berpengaruh di satu jalur.
+`jadwal:generate-bulanan` idempoten (melewati tanggal yang sudah punya baris,
+apa pun sumbernya) dan `generate-rotasi` juga tidak menimpa apa pun secara
+default. Kolom ini baru menentukan nasib baris ketika `--overwrite-generate`
+dijalankan secara sadar — jadi ini risiko saat tindakan pemulihan, bukan
+risiko harian.
+
+**KEPUTUSAN:** `sumber` jadi field yang diatur admin secara sadar, bukan
+otomatis.
+- Create lewat Filament default `manual` — baris itu memang tidak pernah
+  dibuat generator, jadi menandainya `generate` memang salah.
+- Edit **TIDAK** mengubah `sumber` otomatis. Auto-switch ke `manual` sempat
+  dipertimbangkan (sesuai tersirat fase 15) tapi ditolak: itu opt-out senyap
+  dan terlalu tumpul — admin yang cuma memperbaiki typo di `keterangan` ikut
+  mengeluarkan barisnya dari kendali generator selamanya, tanpa diberi tahu,
+  dan tanpa jalan kembali. Lama-lama makin banyak baris jadi `manual` dan
+  `--overwrite-generate` kehilangan gunanya persis saat paling dibutuhkan
+  (ketika pola rotasi diperbaiki dan jadwal perlu dibangun ulang). Ada
+  regression test yang mengunci keputusan ini.
+- Field-nya diberi helper text yang menyebut konsekuensinya, dan kolom +
+  filter `sumber` ditambahkan ke tabel.
+
+### BUG: baris hasil sinkronisasi tidak bisa disimpan lewat Edit
+
+`shift_id` diberi `required()` untuk semua `jenis` kecuali `libur`. Baris
+hasil sinkronisasi punya `jenis='cuti'`/`'dinas'` dengan `shift_id` null —
+jadi begitu admin membukanya dan menekan simpan, form menuntut shift diisi,
+padahal mengisinya justru merusak data. Sekarang `required()` & `visible()`
+hanya untuk jenis `reguler`/`piket`.
+
+### BUG: guard `disabled()` memakai state hidup, bukan nilai tersimpan
+
+`->disabled(fn (Get $get, ?string $state) => in_array($state, ['cuti','dinas']))`
+mengevaluasi state form yang sedang berjalan. Akibatnya saat admin membuat
+jadwal baru lalu memilih "Cuti" di dropdown, field itu **langsung mengunci
+dirinya sendiri** dan admin terjebak — tidak bisa mengembalikannya ke Reguler.
+
+Guard sekarang dinilai dari `$record` (pola yang sama dengan `AbsensiForm`
+fase 27). Sekalian opsi cuti/dinas dihapus dari form create — baris jenis itu
+lahir dari approval, bukan diketik admin.
+
+### Guard diperluas
+
+Sebelumnya hanya field `jenis` yang dikunci pada baris tersinkronisasi,
+sehingga baris cuti masih bisa dipindahkan ke karyawan atau tanggal lain tanpa
+peringatan apa pun. Sekarang `karyawan_id`, `tanggal`, `shift_id`, dan
+`sumber` ikut dikunci, plus Placeholder peringatan yang mengarahkan perbaikan
+ke modul Cuti/Dinas. `keterangan` tetap terbuka, konsisten dengan keputusan di
+AbsensiForm.
+
+### Halaman View + Infolist
+
+`getPages()` sebelumnya cuma index/create/edit dan `recordActions` cuma
+`EditAction` — sama seperti Absensi sebelum fase 27 batch B.
+`ViewJadwal` + `JadwalInfolist` ditambahkan, `ViewAction` masuk ke
+`ActionGroup`.
+
+Infolist tidak cuma menampilkan nilai `sumber`, tapi menerjemahkan
+konsekuensinya jadi kalimat ("Baris ini DILINDUNGI, tidak akan ditimpa" vs
+"BOLEH ditimpa oleh `--overwrite-generate`"). Nilai `generate`/`manual` itu
+sendiri tidak mengatakan apa-apa bagi admin yang bukan developer — dan itulah
+inti dari item todo aslinya. Asal data (sinkronisasi vs manual/generator) juga
+ditampilkan eksplisit.
+
+### Perbaikan kecil
+
+- Badge `jenis` sebelumnya membuat `reguler` dan `libur` sama-sama abu-abu —
+  dua jenis yang artinya berlawanan tampil identik. Kasus yang sama dengan
+  badge status TukarJadwal di fase 25. Sekarang 5 jenis punya warna & label
+  sendiri.
+- Filter karyawan ditambahkan (filter rentang tanggal sudah ada sejak fase 11,
+  tapi tabel tidak bisa dipersempit ke satu orang).
+- Filter tanggal diberi `?? null` supaya tidak memicu warning undefined array
+  key saat dibuka tanpa diisi.
+- Kolom `shift` diberi `placeholder('-')` karena bisa null.
+
+### Status
+
+`JadwalResourceTest`: 7 → 19 test. Full suite: **322 test passing (1020
+assertions)** — naik dari 310.
+
+Sisa review UX Filament: 8 Resource (Hari Libur + 7 di grup Master Data).
+
 ## fase 27 lanjutan: Review UX Data Absensi — batch B & C (selesai)
 
 Commit `430a031` dan `7eac0c5`. Melanjutkan batch A (integritas data form)
