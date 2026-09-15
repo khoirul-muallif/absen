@@ -1,6 +1,7 @@
 <?php
 
 use App\Filament\Resources\Absensis\Pages\CreateAbsensi;
+use App\Filament\Resources\Absensis\Pages\EditAbsensi;
 use App\Filament\Resources\Absensis\Pages\ListAbsensis;
 use App\Models\Absensi;
 use App\Models\Karyawan;
@@ -43,18 +44,155 @@ it('bisa membuat data absensi manual dengan status dipilih langsung', function (
     expect(Absensi::where('karyawan_id', $karyawan->id)->where('status', 'izin')->exists())->toBeTrue();
 });
 
-it('menolak submit tanpa karyawan, shift, atau qr instansi', function () {
+it('menolak submit tanpa karyawan', function () {
     livewire(CreateAbsensi::class)
         ->fillForm([
             'tanggal' => today()->toDateString(),
         ])
         ->call('create')
-        ->assertHasFormErrors(['karyawan_id', 'shift_id', 'qr_instansi_id']);
+        ->assertHasFormErrors(['karyawan_id']);
 });
 
-// ── Placeholder preview (mode harian, lihat catatan fase 9 & fase 14 di
-// PROJECT_CONTEXT: tentukanStatus() tidak melihat toleransi_menit sama
-// sekali untuk status harian) ──────────────────────────────────────────────
+// ── shift_id & qr_instansi_id: required kondisional ───────────────────────
+//
+// Sebelumnya keduanya required tanpa syarat, padahal nullable di DB dan
+// sinkronisasi Cuti/Dinas justru mengosongkan qr_instansi_id. Memaksa admin
+// memilih QR untuk baris cuti/libur cuma bikin data berbohong.
+
+it('tidak mewajibkan shift & QR untuk baris non-kehadiran', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawan->id,
+            'tanggal' => today()->toDateString(),
+            'status' => 'libur',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)->first())
+        ->shift_id->toBeNull()
+        ->qr_instansi_id->toBeNull();
+});
+
+it('mewajibkan shift kalau waktu_masuk diisi', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawan->id,
+            'tanggal' => today()->toDateString(),
+            'waktu_masuk' => today()->setTime(8, 5)->toDateTimeString(),
+            'status' => 'terlambat',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['shift_id']);
+});
+
+// ── Unique (karyawan_id, tanggal) ─────────────────────────────────────────
+//
+// Constraint-nya sudah ada di DB sejak fase 1, tapi tidak divalidasi di form
+// — submit duplikat baru gagal sebagai QueryException 1062 mentah. Pola yang
+// sama dengan bug KuotaCuti fase 25.
+
+it('menolak absensi duplikat untuk karyawan & tanggal yang sama', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-08-01',
+    ]);
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawan->id,
+            'tanggal' => '2026-08-01',
+            'status' => 'alpha',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['tanggal']);
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)->count())->toBe(1);
+});
+
+it('mengizinkan tanggal yang sama untuk karyawan berbeda', function () {
+    $karyawanA = Karyawan::factory()->create();
+    $karyawanB = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawanA->id,
+        'tanggal' => '2026-08-01',
+    ]);
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawanB->id,
+            'tanggal' => '2026-08-01',
+            'status' => 'alpha',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+});
+
+it('edit tidak kena unique constraint dirinya sendiri', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    $absensi = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-08-01',
+        'status' => 'alpha',
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->fillForm(['keterangan' => 'Diperbarui admin'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+});
+
+// ── Keterkaitan tanggal <-> waktu_masuk ───────────────────────────────────
+//
+// Sebelumnya dua field ini sama sekali tidak terikat. Kondisi
+// DATE(waktu_masuk) != tanggal itu persis data cacat yang dibersihkan di
+// fase 26 lanjutan: rekap dikelompokkan per `tanggal`, keterlambatan
+// dihitung dari `waktu_masuk`.
+
+it('menolak waktu_masuk yang tanggalnya berbeda dari field tanggal', function () {
+    $karyawan = Karyawan::factory()->create();
+    $shift = Shift::factory()->create(['jam_masuk' => '08:00:00']);
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawan->id,
+            'shift_id' => $shift->id,
+            'tanggal' => '2026-08-01',
+            'waktu_masuk' => '2026-08-05 08:05:00',
+            'status' => 'terlambat',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['waktu_masuk']);
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)->exists())->toBeFalse();
+});
+
+it('menerima waktu_pulang di tanggal berikutnya (shift malam)', function () {
+    $karyawan = Karyawan::factory()->create();
+    $shift = Shift::factory()->create(['jam_masuk' => '22:00:00', 'jam_pulang' => '07:00:00']);
+
+    livewire(CreateAbsensi::class)
+        ->fillForm([
+            'karyawan_id' => $karyawan->id,
+            'shift_id' => $shift->id,
+            'tanggal' => '2026-08-01',
+            'waktu_masuk' => '2026-08-01 22:00:00',
+            'waktu_pulang' => '2026-08-02 07:00:00',
+            'status' => 'tepat_waktu',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+});
+
+// ── Hitung ulang saat create & edit ───────────────────────────────────────
 
 it('form absensi bisa mengisi waktu_masuk dan menyimpan status hasil hitungan', function () {
     $karyawan = Karyawan::factory()->create();
@@ -68,7 +206,9 @@ it('form absensi bisa mengisi waktu_masuk dan menyimpan status hasil hitungan', 
 
     $waktuMasuk = today()->setTime(8, 5); // 5 menit lewat jam masuk
 
-    $component = livewire(CreateAbsensi::class)
+    // Sesuai temuan di Unit\Models\ShiftTest: mode harian selalu 'terlambat'
+    // begitu lewat 0 menit dari jam masuk, terlepas dari toleransi_menit.
+    livewire(CreateAbsensi::class)
         ->fillForm([
             'karyawan_id' => $karyawan->id,
             'shift_id' => $shift->id,
@@ -76,16 +216,72 @@ it('form absensi bisa mengisi waktu_masuk dan menyimpan status hasil hitungan', 
             'tanggal' => today()->toDateString(),
             'waktu_masuk' => $waktuMasuk->toDateTimeString(),
             'status' => 'terlambat',
-        ]);
-
-    // Sesuai temuan di Unit\Models\ShiftTest: mode harian selalu 'terlambat'
-    // begitu lewat 0 menit dari jam masuk, terlepas dari toleransi_menit.
-    $component
+        ])
         ->call('create')
         ->assertHasNoFormErrors();
 
-    $record = Absensi::where('karyawan_id', $karyawan->id)->first();
-    expect($record->status)->toBe('terlambat');
+    expect(Absensi::where('karyawan_id', $karyawan->id)->first())
+        ->status->toBe('terlambat')
+        ->menit_terlambat->toBe(5);
+});
+
+// REGRESSION GUARD: EditAbsensi sebelumnya TIDAK punya hook sama sekali —
+// mengubah waktu_masuk menyimpan waktu barunya tapi meninggalkan
+// menit_terlambat & status pada nilai lama.
+
+it('edit waktu_masuk ikut menghitung ulang menit_terlambat & status', function () {
+    $karyawan = Karyawan::factory()->create();
+    $shift = Shift::factory()->create([
+        'jam_masuk' => '08:00:00',
+        'toleransi_menit' => 15,
+        'mode_toleransi' => 'harian',
+    ]);
+
+    $absensi = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-01',
+        'waktu_masuk' => '2026-08-01 08:05:00',
+        'menit_terlambat' => 5,
+        'status' => 'terlambat',
+    ]);
+
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->fillForm(['waktu_masuk' => '2026-08-01 08:20:00'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($absensi->fresh()->menit_terlambat)->toBe(20);
+});
+
+it('akumulasi bulanan saat edit tidak menghitung record itu sendiri dua kali', function () {
+    $karyawan = Karyawan::factory()->create();
+    $shift = Shift::factory()->create([
+        'jam_masuk' => '08:00:00',
+        'toleransi_menit' => 30,
+        'mode_toleransi' => 'akumulasi_bulanan',
+    ]);
+
+    // Record yang akan diedit: sudah tercatat telat 20 menit.
+    $absensi = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-10',
+        'waktu_masuk' => '2026-08-10 08:20:00',
+        'menit_terlambat' => 20,
+        'status' => 'terlambat',
+    ]);
+
+    // Diubah jadi telat 5 menit. Tidak ada absensi lain di bulan itu, jadi
+    // akumulasi seharusnya 5 — bukan 25 (20 lama + 5 baru).
+    livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
+        ->fillForm(['waktu_masuk' => '2026-08-10 08:05:00'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($absensi->fresh())
+        ->menit_terlambat->toBe(5)
+        ->melebihi_toleransi_bulanan->toBeFalsy(); // 5 menit, jauh di bawah 30
 });
 
 it('akumulasi bulanan: absensi kedua di bulan yang sama menjumlahkan menit_terlambat sebelumnya', function () {
@@ -106,7 +302,7 @@ it('akumulasi bulanan: absensi kedua di bulan yang sama menjumlahkan menit_terla
         'menit_terlambat' => 20,
     ]);
 
-    $waktuMasuk = today()->setTime(8, 15); // +15 menit hari ini -> total 35, lebih dari toleransi 30
+    $waktuMasuk = today()->setTime(8, 15); // +15 menit -> total 35, lebih dari toleransi 30
 
     livewire(CreateAbsensi::class)
         ->fillForm([
@@ -120,8 +316,9 @@ it('akumulasi bulanan: absensi kedua di bulan yang sama menjumlahkan menit_terla
         ->call('create')
         ->assertHasNoFormErrors();
 
-    // Verifikasi lewat model langsung, karena preview placeholder adalah UI-only
-    // dan perhitungan aktualnya ada di AbsensiController::masuk() (API), bukan
-    // di form Filament ini (form ini simpan manual/admin).
-    expect($shift->sudahMelebihiToleransiBulanan(20 + 15))->toBeTrue();
+    // Sekarang diverifikasi lewat kolom yang benar-benar tersimpan, bukan
+    // lewat pemanggilan model langsung seperti versi lama test ini.
+    expect(Absensi::where('karyawan_id', $karyawan->id)->where('tanggal', today()->toDateString())->first())
+        ->menit_terlambat->toBe(15)
+        ->melebihi_toleransi_bulanan->toBeTruthy();
 });
