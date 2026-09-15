@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Cutis\Schemas;
 
+use App\Models\Cuti;
 use App\Models\Dinas;
 use App\Models\JenisCuti;
 use App\Models\KuotaCuti;
@@ -45,7 +46,7 @@ class CutiForm
                         Placeholder::make('info_kuota')
                             ->label('Info kuota')
                             ->live()
-                            ->content(function (Get $get) {
+                            ->content(function (Get $get, ?Cuti $record) {
                                 $karyawanId = $get('karyawan_id');
                                 $jenisCutiId = $get('jenis_cuti_id');
                                 $tanggalMulai = $get('tanggal_mulai');
@@ -61,20 +62,35 @@ class CutiForm
 
                                 $tahun = $tanggalMulai ? \Carbon\Carbon::parse($tanggalMulai)->year : now()->year;
 
-                                $kuota = KuotaCuti::where('karyawan_id', $karyawanId)
-                                    ->where('jenis_cuti_id', $jenisCutiId)
-                                    ->where('tahun', $tahun)
-                                    ->first();
+                                $kuota = KuotaCuti::untuk($karyawanId, $jenisCutiId, $tahun);
 
                                 if (! $kuota) {
-                                    return "Belum ada data kuota untuk tahun {$tahun}.";
+                                    return new HtmlString(
+                                        "Belum ada data kuota untuk tahun {$tahun}. Pengajuan tetap bisa "
+                                        .'disimpan dan disetujui, tapi <b>tidak akan memotong kuota</b> '
+                                        .'(kebijakan: kuota yang belum pernah di-set bukan dasar untuk menolak).'
+                                    );
                                 }
 
-                                $sisa = $kuota->kuota - $kuota->terpakai;
-
-                                return new HtmlString(
-                                    "Kuota {$tahun}: <b>{$kuota->kuota}</b> · Terpakai: <b>{$kuota->terpakai}</b> · Sisa: <b>{$sisa}</b>"
+                                // Record sendiri dikecualikan supaya jumlah_hari-nya
+                                // tidak terhitung dua kali saat form edit.
+                                $pending = Cuti::hariPendingUntuk(
+                                    $karyawanId,
+                                    $jenisCutiId,
+                                    $tahun,
+                                    $record?->id
                                 );
+
+                                $efektif = $kuota->sisa - $pending;
+
+                                $ringkas = "Kuota {$tahun}: <b>{$kuota->kuota}</b> · Terpakai: <b>{$kuota->terpakai}</b>"
+                                    ." · Sisa: <b>{$kuota->sisa}</b>";
+
+                                if ($pending > 0) {
+                                    $ringkas .= " · Pending lain: <b>{$pending}</b> · Efektif: <b>{$efektif}</b>";
+                                }
+
+                                return new HtmlString($ringkas);
                             }),
 
                         Grid::make(3)->schema([
@@ -124,18 +140,18 @@ class CutiForm
                                             $jenisCuti = JenisCuti::find($jenisCutiId);
                                             if ($jenisCuti?->potong_kuota) {
                                                 $jumlahHari = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
-                                                $kuota = KuotaCuti::where('karyawan_id', $karyawanId)
-                                                    ->where('jenis_cuti_id', $jenisCutiId)
-                                                    ->where('tahun', $tanggalMulai->year)
-                                                    ->first();
 
-                                                // Konsisten dengan kebijakan fase 22: kuota yang belum ada
-                                                // row-nya sama sekali TIDAK jadi dasar penolakan.
-                                                if ($kuota) {
-                                                    $sisa = $kuota->kuota - $kuota->terpakai;
-                                                    if ($jumlahHari > $sisa) {
-                                                        $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
-                                                    }
+                                                // null = belum ada row KuotaCuti sama sekali.
+                                                // Konsisten dengan kebijakan fase 22: itu BUKAN
+                                                // sisa 0, dan bukan dasar untuk menolak.
+                                                $sisa = KuotaCuti::sisaUntuk(
+                                                    $karyawanId,
+                                                    $jenisCutiId,
+                                                    $tanggalMulai->year
+                                                );
+
+                                                if ($sisa !== null && $jumlahHari > $sisa) {
+                                                    $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
                                                 }
                                             }
                                         }

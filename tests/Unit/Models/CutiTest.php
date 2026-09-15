@@ -311,3 +311,126 @@ it('approve berhasil kalau kuota pas-pasan cukup (edge case tepat di batas)', fu
     expect($cuti->fresh()->status)->toBe('approved')
         ->and($kuota->terpakai)->toBe(5);
 });
+
+// ============================================================================
+// TAMBAHAN untuk tests/Unit/Models/CutiTest.php
+//
+// Tempel blok di bawah ini di AKHIR file. Cek dulu import yang sudah ada —
+// kemungkinan besar Cuti, JenisCuti, Karyawan, KuotaCuti sudah ke-import.
+// ============================================================================
+
+// --- Cuti::hariPendingUntuk() ---
+//
+// Helper ini dipakai di 3 tempat (placeholder CutiForm, CutiInfolist, tooltip
+// approve CutisTable) dan di CutiController::ajukan(). Risiko utamanya adalah
+// record yang sedang dinilai ikut terhitung sebagai "pending lain" — bikin
+// angkanya dobel tanpa error apa pun.
+
+it('hariPendingUntuk menjumlahkan jumlah_hari dari semua pengajuan pending', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create();
+    $jenisCuti = \App\Models\JenisCuti::factory()->create();
+
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-03-01',
+        'tanggal_selesai' => '2026-03-02',
+        'jumlah_hari' => 2,
+        'status' => 'pending',
+    ]);
+
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-05-01',
+        'tanggal_selesai' => '2026-05-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    expect(\App\Models\Cuti::hariPendingUntuk($karyawan->id, $jenisCuti->id, 2026))->toBe(5);
+});
+
+it('hariPendingUntuk mengecualikan record yang sedang dinilai', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create();
+    $jenisCuti = \App\Models\JenisCuti::factory()->create();
+
+    $sedangDinilai = \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-03-01',
+        'tanggal_selesai' => '2026-03-02',
+        'jumlah_hari' => 2,
+        'status' => 'pending',
+    ]);
+
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-05-01',
+        'tanggal_selesai' => '2026-05-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    // Tanpa exclude: 5. Dengan exclude record sendiri: 3.
+    expect(\App\Models\Cuti::hariPendingUntuk($karyawan->id, $jenisCuti->id, 2026, $sedangDinilai->id))
+        ->toBe(3);
+});
+
+it('hariPendingUntuk mengabaikan status selain pending', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create();
+    $jenisCuti = \App\Models\JenisCuti::factory()->create();
+
+    foreach (['approved', 'rejected'] as $status) {
+        \App\Models\Cuti::factory()->create([
+            'karyawan_id' => $karyawan->id,
+            'jenis_cuti_id' => $jenisCuti->id,
+            'tanggal_mulai' => '2026-03-01',
+            'tanggal_selesai' => '2026-03-04',
+            'jumlah_hari' => 4,
+            'status' => $status,
+        ]);
+    }
+
+    expect(\App\Models\Cuti::hariPendingUntuk($karyawan->id, $jenisCuti->id, 2026))->toBe(0);
+});
+
+it('hariPendingUntuk terpisah per tahun, jenis cuti, dan karyawan', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create();
+    $karyawanLain = \App\Models\Karyawan::factory()->create();
+    $jenisCuti = \App\Models\JenisCuti::factory()->create();
+    $jenisLain = \App\Models\JenisCuti::factory()->create();
+
+    // Tahun berbeda
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2025-03-01',
+        'tanggal_selesai' => '2025-03-02',
+        'jumlah_hari' => 2,
+        'status' => 'pending',
+    ]);
+
+    // Jenis cuti berbeda
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisLain->id,
+        'tanggal_mulai' => '2026-03-01',
+        'tanggal_selesai' => '2026-03-02',
+        'jumlah_hari' => 2,
+        'status' => 'pending',
+    ]);
+
+    // Karyawan berbeda
+    \App\Models\Cuti::factory()->create([
+        'karyawan_id' => $karyawanLain->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-03-01',
+        'tanggal_selesai' => '2026-03-02',
+        'jumlah_hari' => 2,
+        'status' => 'pending',
+    ]);
+
+    expect(\App\Models\Cuti::hariPendingUntuk($karyawan->id, $jenisCuti->id, 2026))->toBe(0);
+});

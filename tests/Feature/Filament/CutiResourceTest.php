@@ -249,3 +249,135 @@ it('tidak mewajibkan lampiran kalau jenis cuti perlu_lampiran = false', function
         ->call('create')
         ->assertHasNoFormErrors();
 });
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/CutiResourceTest.php
+//
+// Tempel blok di bawah ini di AKHIR file (sebelum penutup file, setelah test
+// lampiran conditional). Import yang dibutuhkan sudah ada semua di file itu.
+// ============================================================================
+
+// --- Warna tombol approve: 4 keadaan kuota ---
+//
+// Sebelumnya CutisTable cuma punya 2 keadaan (hijau/merah) dan menganggap
+// "row KuotaCuti belum ada" sebagai sisa 0 — bikin tombol merah untuk approve
+// yang sebenarnya akan SUKSES (kebijakan fase 22). Empat test di bawah
+// mengunci keempat cabang infoKuota().
+
+it('tombol approve berwarna warning kalau KuotaCuti belum ada row sama sekali', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    // sengaja TIDAK bikin KuotaCuti
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    // REGRESSION GUARD: ini yang dulu keliru jadi 'danger'.
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'warning', $cuti);
+});
+
+it('tombol approve berwarna success kalau sisa kuota mencukupi', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 12,
+        'terpakai' => 0,
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'success', $cuti);
+});
+
+it('tombol approve berwarna danger kalau sisa kuota kurang dari jumlah hari', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 4, // sisa cuma 1
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'danger', $cuti);
+});
+
+it('tombol approve tetap success untuk jenis cuti yang tidak memotong kuota', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => false]);
+    // tanpa KuotaCuti sama sekali — tidak relevan karena tidak potong kuota
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-10',
+        'jumlah_hari' => 10,
+        'status' => 'pending',
+    ]);
+
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'success', $cuti);
+});
+
+it('pengajuan pending lain tidak membuat tombol approve jadi danger', function () {
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+    KuotaCuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tahun' => 2026,
+        'kuota' => 5,
+        'terpakai' => 0,
+    ]);
+
+    // Pengajuan lain yang masih pending, 3 hari
+    Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-20',
+        'tanggal_selesai' => '2026-08-22',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari' => 3,
+        'status' => 'pending',
+    ]);
+
+    // Sisa efektif cuma 2 (5 - 3 pending lain), TAPI approve record ini
+    // tetap akan sukses karena afterApprove() cek sisa mentah (5 >= 3).
+    // Warna sengaja mengikuti hasil approve yang sebenarnya, bukan sisa
+    // efektif — pending lain cuma diinformasikan lewat tooltip.
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'success', $cuti);
+});

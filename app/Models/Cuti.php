@@ -35,10 +35,39 @@ class Cuti extends Model
         return $this->belongsTo(JenisCuti::class);
     }
 
+    /**
+     * Total jumlah_hari dari pengajuan cuti yang masih PENDING untuk
+     * kombinasi (karyawan, jenis cuti, tahun).
+     *
+     * Dipakai untuk menghitung "sisa efektif": pengajuan pending belum
+     * menyentuh KuotaCuti.terpakai, jadi sisa mentah di DB selalu terlihat
+     * lebih longgar daripada kenyataannya.
+     *
+     * $kecualiCutiId WAJIB diisi kalau pemanggilnya sedang menilai satu
+     * record pending tertentu (mis. tooltip approve, form edit) — kalau
+     * tidak, jumlah_hari record itu ikut terhitung dua kali.
+     */
+    public static function hariPendingUntuk(
+        int $karyawanId,
+        int $jenisCutiId,
+        int $tahun,
+        ?int $kecualiCutiId = null
+    ): int {
+        return (int) static::where('karyawan_id', $karyawanId)
+            ->where('jenis_cuti_id', $jenisCutiId)
+            ->where('status', 'pending')
+            ->whereYear('tanggal_mulai', $tahun)
+            ->when($kecualiCutiId, fn ($q) => $q->where('id', '!=', $kecualiCutiId))
+            ->sum('jumlah_hari');
+    }
+
     public function afterApprove(): void
     {
         if ($this->jenisCuti->potong_kuota) {
             DB::transaction(function () {
+                // Sengaja TIDAK pakai KuotaCuti::untuk() — di sini row-nya
+                // harus dikunci (lockForUpdate) di dalam transaksi, lihat
+                // kebijakan race condition fase 22.
                 $kuota = $this->karyawan->kuotaCutis()
                     ->where('jenis_cuti_id', $this->jenis_cuti_id)
                     ->where('tahun', $this->tanggal_mulai->year)

@@ -6,6 +6,7 @@ use App\Exceptions\KuotaCutiTidakCukupException;
 use App\Http\Controllers\Controller;
 use App\Models\Cuti;
 use App\Models\JenisCuti;
+use App\Models\KuotaCuti;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,10 +25,7 @@ class CutiController extends Controller
         $jenisCutiAktif = JenisCuti::where('is_active', true)->get();
 
         $data = $jenisCutiAktif->map(function ($jenis) use ($karyawan, $tahun) {
-            $kuota = $karyawan->kuotaCutis()
-                ->where('jenis_cuti_id', $jenis->id)
-                ->where('tahun', $tahun)
-                ->first();
+            $kuota = KuotaCuti::untuk($karyawan->id, $jenis->id, $tahun);
 
             return [
                 'jenis_cuti_id'  => $jenis->id,
@@ -36,7 +34,7 @@ class CutiController extends Controller
                 'perlu_lampiran' => $jenis->perlu_lampiran,
                 'kuota'          => $kuota->kuota ?? $jenis->default_kuota,
                 'terpakai'       => $kuota->terpakai ?? 0,
-                'sisa'           => $kuota ? $kuota->sisa : $jenis->default_kuota,
+                'sisa'           => $kuota?->sisa ?? $jenis->default_kuota,
             ];
         });
 
@@ -113,19 +111,30 @@ class CutiController extends Controller
         // Cek sisa kuota kalau jenis ini memotong kuota — perhitungkan juga
         // pengajuan lain yang masih pending (belum di-approve, belum menyentuh
         // KuotaCuti.terpakai) supaya tidak overcommit sebelum sempat di-approve.
+        //
+        // KEPUTUSAN SADAR (beda dari Filament): kalau row KuotaCuti belum ada,
+        // API tetap memberi batas = default_kuota jenis cuti, sementara admin
+        // di Filament tidak dibatasi sama sekali. Alasannya karyawan bersifat
+        // self-service dan butuh batas waras; admin dianggap sengaja kalau
+        // meng-approve tanpa kuota. Pola asimetri API-ketat/Filament-longgar
+        // ini sama seperti kebijakan tanggal lewat di fase 23.
+        //
+        // KETERBATASAN YANG DIKETAHUI: selama row KuotaCuti belum ada,
+        // afterApprove() tidak pernah menaikkan `terpakai`, jadi batas
+        // default_kuota ini hanya berlaku terhadap pengajuan yang masih
+        // pending — bukan terhadap cuti yang sudah terpakai sepanjang tahun.
+        // Lihat todo.md (digabung ke pertimbangan KuotaCuti semesteran).
         if ($jenisCuti->potong_kuota) {
-            $kuota = $karyawan->kuotaCutis()
-                ->where('jenis_cuti_id', $jenisCuti->id)
-                ->where('tahun', $tanggalMulai->year)
-                ->first();
+            $sisaTercatat = KuotaCuti::sisaUntuk($karyawan->id, $jenisCuti->id, $tanggalMulai->year)
+                ?? $jenisCuti->default_kuota;
 
-            $hariPendingLain = $karyawan->cutis()
-                ->where('jenis_cuti_id', $jenisCuti->id)
-                ->where('status', 'pending')
-                ->whereYear('tanggal_mulai', $tanggalMulai->year)
-                ->sum('jumlah_hari');
+            $hariPendingLain = Cuti::hariPendingUntuk(
+                $karyawan->id,
+                $jenisCuti->id,
+                $tanggalMulai->year
+            );
 
-            $sisaKuota = ($kuota ? $kuota->sisa : $jenisCuti->default_kuota) - $hariPendingLain;
+            $sisaKuota = $sisaTercatat - $hariPendingLain;
 
             if ($jumlahHari > $sisaKuota) {
                 return response()->json([

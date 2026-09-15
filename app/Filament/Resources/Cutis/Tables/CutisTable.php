@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Cutis\Tables;
 
 use App\Exceptions\KuotaCutiTidakCukupException;
+use App\Models\Cuti;
+use App\Models\KuotaCuti;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -84,35 +86,22 @@ class CutisTable
                     Action::make('approve')
                         ->label('Setujui')
                         ->icon('heroicon-o-check')
-                        ->color(function ($record) {
-                            if (! $record->jenisCuti?->potong_kuota) {
-                                return 'success';
-                            }
-
-                            $kuota = \App\Models\KuotaCuti::where('karyawan_id', $record->karyawan_id)
-                                ->where('jenis_cuti_id', $record->jenis_cuti_id)
-                                ->where('tahun', $record->tanggal_mulai->year)
-                                ->first();
-
-                            $sisa = $kuota ? ($kuota->kuota - $kuota->terpakai) : 0;
-
-                            return $sisa >= $record->jumlah_hari ? 'success' : 'danger';
+                        ->color(fn ($record) => match (self::infoKuota($record)['keadaan']) {
+                            'kurang' => 'danger',
+                            'belum_ada_row' => 'warning',
+                            default => 'success',
                         })
                         ->tooltip(function ($record) {
-                            if (! $record->jenisCuti?->potong_kuota) {
-                                return null;
-                            }
+                            $info = self::infoKuota($record);
 
-                            $kuota = \App\Models\KuotaCuti::where('karyawan_id', $record->karyawan_id)
-                                ->where('jenis_cuti_id', $record->jenis_cuti_id)
-                                ->where('tahun', $record->tanggal_mulai->year)
-                                ->first();
-
-                            $sisa = $kuota ? ($kuota->kuota - $kuota->terpakai) : 0;
-
-                            return $sisa < $record->jumlah_hari
-                                ? "⚠ Sisa kuota ({$sisa}) kurang dari jumlah hari yang diajukan ({$record->jumlah_hari})"
-                                : null;
+                            return match ($info['keadaan']) {
+                                'kurang' => "⚠ Sisa kuota ({$info['sisa']}) kurang dari jumlah hari yang diajukan ({$record->jumlah_hari})",
+                                'belum_ada_row' => "Belum ada data kuota tahun {$info['tahun']} — approve tetap bisa, tapi tidak akan memotong kuota.",
+                                'aman' => $info['pending'] > 0
+                                    ? "Sisa {$info['sisa']} · pending lain {$info['pending']} hari · efektif {$info['efektif']}"
+                                    : null,
+                                default => null,
+                            };
                         })
                         ->visible(fn ($record) => $record->isPending())
                         ->requiresConfirmation()
@@ -151,5 +140,55 @@ class CutisTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Keadaan kuota untuk satu record, dipakai bersama oleh color() & tooltip()
+     * pada action approve.
+     *
+     * 4 keadaan yang sengaja dibedakan (sebelumnya cuma 2, dan row yang belum
+     * ada di-treat sebagai sisa 0 — bikin tombol merah untuk approve yang
+     * sebenarnya akan sukses):
+     *   tidak_potong  - jenis cuti ini memang tidak menyentuh kuota
+     *   belum_ada_row - KuotaCuti belum pernah dibuat (kebijakan fase 22:
+     *                   bukan dasar menolak, tapi admin tetap perlu tahu
+     *                   bahwa approve ini tidak akan tercatat di kuota)
+     *   kurang        - sisa nyata di DB < jumlah_hari; approve akan gagal
+     *                   dengan KuotaCutiTidakCukupException
+     *   aman          - approve akan lolos
+     *
+     * Catatan: 'kurang' sengaja dinilai dari sisa MENTAH (kuota - terpakai),
+     * bukan sisa efektif setelah dikurangi pending lain — karena itulah yang
+     * benar-benar dicek Cuti::afterApprove(). Pengajuan pending lain tidak
+     * membuat approve ini gagal, jadi cuma diinformasikan lewat tooltip.
+     */
+    protected static function infoKuota($record): array
+    {
+        if (! $record->jenisCuti?->potong_kuota) {
+            return ['keadaan' => 'tidak_potong'];
+        }
+
+        $tahun = $record->tanggal_mulai->year;
+
+        $sisa = KuotaCuti::sisaUntuk($record->karyawan_id, $record->jenis_cuti_id, $tahun);
+
+        if ($sisa === null) {
+            return ['keadaan' => 'belum_ada_row', 'tahun' => $tahun];
+        }
+
+        $pending = Cuti::hariPendingUntuk(
+            $record->karyawan_id,
+            $record->jenis_cuti_id,
+            $tahun,
+            $record->id
+        );
+
+        return [
+            'keadaan' => $sisa >= $record->jumlah_hari ? 'aman' : 'kurang',
+            'tahun' => $tahun,
+            'sisa' => $sisa,
+            'pending' => $pending,
+            'efektif' => $sisa - $pending,
+        ];
     }
 }

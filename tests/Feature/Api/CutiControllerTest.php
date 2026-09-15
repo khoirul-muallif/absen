@@ -4,9 +4,19 @@ use App\Models\Cuti;
 use App\Models\JenisCuti;
 use App\Models\Karyawan;
 use App\Models\KuotaCuti;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
+    // Waktu dibekukan supaya tanggal hardcode di file ini (2026-08-xx) selalu
+    // berada di masa depan relatif terhadap "hari ini" — aturan
+    // after_or_equal:today dari fase 23 bikin test ini jadi bom waktu kalau
+    // tanggalnya dibiarkan bergantung pada tanggal server saat dijalankan.
+    // Pola bug yang sama pernah terjadi di Shift::hitungMenitTerlambat()
+    // (fase 14): test lolos cuma karena tanggal hardcode kebetulan sama
+    // dengan tanggal server saat test ditulis.
+    $this->travelTo(Carbon::parse('2026-08-01 08:00:00'));
+
     $this->karyawan = Karyawan::factory()->create();
     Sanctum::actingAs($this->karyawan);
     $this->jenisCuti = JenisCuti::factory()->create([
@@ -71,7 +81,13 @@ test('menolak pengajuan kalau melebihi sisa kuota', function () {
         'alasan'          => 'Liburan panjang',
     ]);
 
-    $response->assertStatus(422);
+    // Assert spesifik ke sebab penolakan: kalau cuma assertStatus(422),
+    // test ini tetap hijau walau yang menolak sebenarnya validasi tanggal
+    // (atau sebab lain apa pun) dan pengecekan kuotanya sudah tidak jalan.
+    $response->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('data.sisa_kuota', 2);
+
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
 });
 
@@ -107,7 +123,8 @@ test('menolak jika jenis cuti perlu_lampiran tapi tidak ada file', function () {
         'alasan'          => 'Sakit',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Jenis cuti "Cuti Sakit" wajib melampirkan surat keterangan.');
 });
 
 test('menolak jenis_cuti_id yang tidak aktif', function () {
@@ -120,7 +137,8 @@ test('menolak jenis_cuti_id yang tidak aktif', function () {
         'alasan'          => 'Tes',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Jenis cuti ini sudah tidak aktif.');
 });
 
 test('riwayat hanya menampilkan cuti milik karyawan yang login', function () {
@@ -172,7 +190,7 @@ test('404 kalau membatalkan cuti milik karyawan lain', function () {
     $response->assertStatus(404);
 });
 
-it('sisa kuota memperhitungkan pengajuan pending lain yang belum di-approve', function () {
+it('mengizinkan pengajuan yang pas dengan sisa setelah dikurangi pending lain (boundary)', function () {
     $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
     KuotaCuti::factory()->create([
         'karyawan_id' => $this->karyawan->id,
@@ -182,7 +200,7 @@ it('sisa kuota memperhitungkan pengajuan pending lain yang belum di-approve', fu
         'terpakai' => 0,
     ]);
 
-    // Pengajuan pertama: 3 hari, masih pending (belum di-approve)
+    // Pengajuan pertama: 3 hari, masih pending (belum menyentuh terpakai)
     Cuti::factory()->create([
         'karyawan_id' => $this->karyawan->id,
         'jenis_cuti_id' => $jenisCuti->id,
@@ -192,18 +210,18 @@ it('sisa kuota memperhitungkan pengajuan pending lain yang belum di-approve', fu
         'status' => 'pending',
     ]);
 
-    // Pengajuan kedua: 3 hari lagi - total jadi 6, padahal kuota cuma 5
-    $response = $this->actingAs($this->karyawan, 'sanctum')->postJson('/api/cuti', [
-        'jenis_cuti_id' => $jenisCuti->id,
-        'tanggal_mulai' => '2026-08-10',
-        'tanggal_selesai' => '2026-08-12',
-        'alasan' => 'Keperluan keluarga',
+    // Sisa efektif tinggal 2 (5 - 0 terpakai - 3 pending). Pengajuan 2 hari
+    // harus PAS diterima — sisi lain dari batas yang diuji test berikutnya.
+    $response = $this->postJson('/api/cuti', [
+        'jenis_cuti_id'   => $jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-10',
+        'tanggal_selesai' => '2026-08-11',
+        'alasan'          => 'Keperluan keluarga',
     ]);
 
-    $response->assertStatus(422)
-        ->assertJsonPath('success', false);
+    $response->assertStatus(201);
 
-    expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(1); // yang kedua ditolak, tidak masuk DB
+    expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(2);
 });
 
 it('menolak pengajuan kalau total dengan pending lain melebihi sisa kuota', function () {
@@ -235,7 +253,8 @@ it('menolak pengajuan kalau total dengan pending lain melebihi sisa kuota', func
     ]);
 
     $response->assertStatus(422)
-        ->assertJsonPath('success', false);
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('data.sisa_kuota', 2); // 5 - 0 terpakai - 3 pending
 
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->count())->toBe(1);
 });
@@ -248,7 +267,9 @@ test('menolak pengajuan cuti untuk tanggal_mulai yang sudah lewat', function () 
         'alasan'          => 'Tes tanggal lewat',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['tanggal_mulai']);
+
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
 });
 
@@ -281,7 +302,9 @@ test('menolak pengajuan cuti yang bentrok dengan cuti approved lain', function (
         'alasan'          => 'Tes bentrok cuti',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Anda sudah tercatat cuti/dinas (disetujui) yang bentrok dengan rentang tanggal ini.');
+
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
 });
 
@@ -300,6 +323,8 @@ test('menolak pengajuan cuti yang bentrok dengan dinas approved lain', function 
         'alasan'          => 'Tes bentrok dinas',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Anda sudah tercatat cuti/dinas (disetujui) yang bentrok dengan rentang tanggal ini.');
+
     expect(Cuti::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
 });

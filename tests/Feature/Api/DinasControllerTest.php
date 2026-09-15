@@ -1,11 +1,18 @@
 <?php
 
+use App\Models\Cuti;
 use App\Models\Dinas;
 use App\Models\Karyawan;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
-use App\Models\Cuti;
 
 beforeEach(function () {
+    // Lihat catatan yang sama di CutiControllerTest: tanggal hardcode
+    // 2026-08-xx harus tetap berada di masa depan relatif terhadap
+    // "hari ini" supaya aturan after_or_equal:today (fase 23) tidak
+    // membuat test ini gagal seiring berjalannya waktu.
+    $this->travelTo(Carbon::parse('2026-08-01 08:00:00'));
+
     $this->karyawan = Karyawan::factory()->create();
     Sanctum::actingAs($this->karyawan);
 });
@@ -29,7 +36,8 @@ test('menolak pengajuan tanpa tujuan', function () {
         'keperluan'       => 'Tes',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['tujuan']);
 });
 
 test('menolak tanggal_selesai sebelum tanggal_mulai', function () {
@@ -40,7 +48,8 @@ test('menolak tanggal_selesai sebelum tanggal_mulai', function () {
         'keperluan'       => 'Tes',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['tanggal_selesai']);
 });
 
 test('riwayat hanya menampilkan dinas milik karyawan yang login', function () {
@@ -97,7 +106,9 @@ test('menolak pengajuan dinas untuk tanggal_mulai yang sudah lewat', function ()
         'keperluan'       => 'Tes tanggal lewat',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['tanggal_mulai']);
+
     expect(Dinas::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
 });
 
@@ -130,6 +141,12 @@ test('menolak pengajuan dinas yang bentrok dengan dinas approved lain', function
     ]);
 
     $response->assertStatus(422);
+
+    // Pastikan yang menolak benar-benar cek bentrok, bukan validasi tanggal
+    // yang kebetulan ikut gagal — tanpa ini, test tetap hijau walau logika
+    // bentroknya sudah mati.
+    expect($response->json('errors'))->toBeNull();
+
     expect(Dinas::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
 });
 
@@ -150,5 +167,7 @@ test('menolak pengajuan dinas yang bentrok dengan cuti approved lain', function 
     ]);
 
     $response->assertStatus(422);
+    expect($response->json('errors'))->toBeNull();
+
     expect(Dinas::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeFalse();
 });

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Cutis\Schemas;
 
+use App\Models\Cuti;
+use App\Models\KuotaCuti;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -19,7 +21,7 @@ class CutiInfolist
                         TextEntry::make('jenisCuti.nama')
                             ->label('Jenis cuti'),
                         TextEntry::make('info_kuota')
-                            ->label('Info kuota saat pengajuan')
+                            ->label('Info kuota saat ini')
                             ->state(function ($record) {
                                 if (! $record->jenisCuti?->potong_kuota) {
                                     return 'Jenis cuti ini tidak memotong kuota.';
@@ -27,18 +29,33 @@ class CutiInfolist
 
                                 $tahun = $record->tanggal_mulai->year;
 
-                                $kuota = \App\Models\KuotaCuti::where('karyawan_id', $record->karyawan_id)
-                                    ->where('jenis_cuti_id', $record->jenis_cuti_id)
-                                    ->where('tahun', $tahun)
-                                    ->first();
+                                $kuota = KuotaCuti::untuk(
+                                    $record->karyawan_id,
+                                    $record->jenis_cuti_id,
+                                    $tahun
+                                );
 
                                 if (! $kuota) {
-                                    return "Belum ada data kuota untuk tahun {$tahun}.";
+                                    return "Belum ada data kuota untuk tahun {$tahun}. "
+                                        .'Approve tetap bisa dilakukan, tapi tidak akan memotong kuota.';
                                 }
 
-                                $sisa = $kuota->kuota - $kuota->terpakai;
+                                $pending = Cuti::hariPendingUntuk(
+                                    $record->karyawan_id,
+                                    $record->jenis_cuti_id,
+                                    $tahun,
+                                    $record->id
+                                );
 
-                                return "Kuota {$tahun}: {$kuota->kuota} · Terpakai: {$kuota->terpakai} · Sisa: {$sisa}";
+                                $ringkas = "Kuota {$tahun}: {$kuota->kuota} · Terpakai: {$kuota->terpakai}"
+                                    ." · Sisa: {$kuota->sisa}";
+
+                                if ($pending > 0) {
+                                    $efektif = $kuota->sisa - $pending;
+                                    $ringkas .= " · Pending lain: {$pending} · Efektif: {$efektif}";
+                                }
+
+                                return $ringkas;
                             })
                             ->columnSpanFull(),
                         TextEntry::make('tanggal_mulai')
