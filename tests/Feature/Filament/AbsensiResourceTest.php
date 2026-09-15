@@ -466,3 +466,83 @@ it('baris Absensi hasil approve Cuti sungguhan ikut terkunci', function () {
     livewire(EditAbsensi::class, ['record' => $absensi->getRouteKey()])
         ->assertFormFieldDisabled('status');
 });
+
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/AbsensiResourceTest.php
+//
+// Tempel di akhir file.
+// ============================================================================
+
+// ── Filter tabel (batch C) ───────────────────────────────────────────────
+//
+// Tabel ini paling sering dibuka untuk operasional harian, tapi sebelumnya
+// tidak bisa dipersempit per periode maupun per karyawan — padahal
+// JadwalsTable sudah punya filter rentang tanggal sejak fase 11.
+
+it('filter rentang tanggal membatasi baris yang tampil', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    $diDalam = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-08-10',
+    ]);
+
+    $sebelum = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-07-20',
+    ]);
+
+    $sesudah = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-09-05',
+    ]);
+
+    livewire(ListAbsensis::class)
+        ->filterTable('rentang_tanggal', [
+            'dari' => '2026-08-01',
+            'sampai' => '2026-08-31',
+        ])
+        ->assertCanSeeTableRecords([$diDalam])
+        ->assertCanNotSeeTableRecords([$sebelum, $sesudah]);
+});
+
+it('filter rentang tanggal hanya dengan batas bawah tetap bekerja', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    $lama = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-07-01',
+    ]);
+
+    $baru = Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-08-15',
+    ]);
+
+    livewire(ListAbsensis::class)
+        ->filterTable('rentang_tanggal', ['dari' => '2026-08-01'])
+        ->assertCanSeeTableRecords([$baru])
+        ->assertCanNotSeeTableRecords([$lama]);
+});
+
+it('filter karyawan membatasi baris ke karyawan yang dipilih', function () {
+    $karyawanA = Karyawan::factory()->create();
+    $karyawanB = Karyawan::factory()->create();
+
+    $milikA = Absensi::factory()->create([
+        'karyawan_id' => $karyawanA->id,
+        'tanggal' => '2026-08-10',
+    ]);
+
+    $milikB = Absensi::factory()->create([
+        'karyawan_id' => $karyawanB->id,
+        'tanggal' => '2026-08-10',
+    ]);
+
+    livewire(ListAbsensis::class)
+        ->filterTable('karyawan_id', $karyawanA->id)
+        ->assertCanSeeTableRecords([$milikA])
+        ->assertCanNotSeeTableRecords([$milikB]);
+});

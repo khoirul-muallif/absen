@@ -2,16 +2,20 @@
 
 namespace App\Filament\Resources\Absensis\Tables;
 
+use Carbon\Carbon;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AbsensisTable
 {
@@ -119,6 +123,41 @@ class AbsensisTable
             ])
             ->defaultSort('tanggal', 'desc')
             ->filters([
+                SelectFilter::make('karyawan_id')
+                    ->label('Karyawan')
+                    ->relationship('karyawan', 'nama')
+                    ->searchable()
+                    ->preload(),
+
+                // Tabel ini yang paling sering dibuka untuk operasional harian,
+                // tapi sebelumnya sama sekali tidak bisa dipersempit per periode
+                // — padahal JadwalsTable sudah punya filter serupa sejak fase 11.
+                Filter::make('rentang_tanggal')
+                    ->schema([
+                        DatePicker::make('dari')
+                            ->label('Dari tanggal')
+                            ->native(false),
+                        DatePicker::make('sampai')
+                            ->label('Sampai tanggal')
+                            ->native(false),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when($data['dari'] ?? null, fn (Builder $q, $tanggal): Builder => $q->whereDate('tanggal', '>=', $tanggal))
+                        ->when($data['sampai'] ?? null, fn (Builder $q, $tanggal): Builder => $q->whereDate('tanggal', '<=', $tanggal)))
+                    ->indicateUsing(function (array $data): array {
+                        $indikator = [];
+
+                        if ($data['dari'] ?? null) {
+                            $indikator[] = 'Dari '.Carbon::parse($data['dari'])->format('d M Y');
+                        }
+
+                        if ($data['sampai'] ?? null) {
+                            $indikator[] = 'Sampai '.Carbon::parse($data['sampai'])->format('d M Y');
+                        }
+
+                        return $indikator;
+                    }),
+
                 SelectFilter::make('status')
                     ->label('Status')
                     ->options([
