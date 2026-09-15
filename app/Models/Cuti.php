@@ -61,6 +61,19 @@ class Cuti extends Model
             ->sum('jumlah_hari');
     }
 
+    /**
+     * Sinkronkan ulang Jadwal & Absensi untuk cuti ini TANPA menyentuh kuota.
+     *
+     * Ini bagian dari afterApprove() yang aman diulang (idempoten). Dipakai
+     * oleh command absensi:backfill-cuti-dinas — jangan panggil afterApprove()
+     * untuk keperluan re-sync, karena sejak fase 22 method itu juga menaikkan
+     * KuotaCuti.terpakai dan akan menghitung ganda kalau dijalankan lagi.
+     */
+    public function resyncJadwalDanAbsensi(): void
+    {
+        $this->sinkronisasiJadwalDanAbsensi('cuti');
+    }
+
     public function afterApprove(): void
     {
         if ($this->jenisCuti->potong_kuota) {

@@ -46,9 +46,16 @@ php artisan schedule:list
 ```
 
 ## 🚑 Darurat / one-off fix (jarang tapi butuh)
-```
+
+# Sinkron ulang Jadwal & Absensi dari Cuti/Dinas approved.
+# Idempoten, TIDAK menyentuh kuota. Ada konfirmasi sebelum jalan.
 php artisan absensi:backfill-cuti-dinas
-```
+
+# Audit menit_terlambat & melebihi_toleransi_bulanan pada data lama
+# (tindak lanjut bug fase 14). Default DRY-RUN — aman dijalankan kapan saja.
+php artisan absensi:audit-menit-terlambat
+php artisan absensi:audit-menit-terlambat --instansi=1
+php artisan absensi:audit-menit-terlambat --fix   # BACKUP DB DULU
 
 ### ⚠️ JANGAN jalankan massal — afterApprove() sudah TIDAK idempoten
 
