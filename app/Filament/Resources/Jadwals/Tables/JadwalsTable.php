@@ -24,6 +24,7 @@ class JadwalsTable
                     ->sortable(),
                 TextColumn::make('shift.nama_shift')
                     ->label('Shift')
+                    ->placeholder('-')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal')
@@ -31,12 +32,38 @@ class JadwalsTable
                     ->sortable(),
                 TextColumn::make('jenis')
                     ->badge()
+                    // Sebelumnya 'reguler' dan 'libur' sama-sama jatuh ke
+                    // default 'gray' — dua jenis yang artinya berlawanan
+                    // tampil identik. Kasus yang sama dengan badge status
+                    // TukarJadwal di fase 25.
                     ->color(fn (string $state): string => match ($state) {
-                        'piket' => 'warning',
-                        'cuti' => 'info',
-                        'dinas' => 'success',
-                        default => 'gray',
+                        'reguler' => 'success',
+                        'piket'   => 'warning',
+                        'libur'   => 'gray',
+                        'cuti'    => 'info',
+                        'dinas'   => 'info',
+                        default   => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'reguler' => 'Reguler',
+                        'piket'   => 'Piket',
+                        'libur'   => 'Libur',
+                        'cuti'    => 'Cuti',
+                        'dinas'   => 'Dinas',
+                        default   => $state,
                     }),
+                // Kolom ini sebelumnya tidak muncul di mana pun — tidak di
+                // tabel, tidak di form, tidak di filter. Padahal dialah yang
+                // menentukan apakah baris ini bertahan saat
+                // `jadwal:generate-rotasi --overwrite-generate` dijalankan.
+                TextColumn::make('sumber')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'manual' ? 'primary' : 'gray')
+                    ->formatStateUsing(fn (string $state): string => $state === 'manual' ? 'Manual' : 'Generate')
+                    ->tooltip(fn (string $state): string => $state === 'manual'
+                        ? 'Dilindungi dari generate ulang.'
+                        : 'Boleh ditimpa oleh jadwal:generate-rotasi --overwrite-generate.')
+                    ->sortable(),
                 TextColumn::make('keterangan')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -55,6 +82,11 @@ class JadwalsTable
                         'cuti' => 'Cuti',
                         'dinas' => 'Dinas',
                     ]),
+                SelectFilter::make('sumber')
+                    ->options([
+                        'generate' => 'Generate',
+                        'manual'   => 'Manual',
+                    ]),
                 SelectFilter::make('shift_id')
                     ->label('Shift')
                     ->relationship('shift', 'nama_shift'),
@@ -65,17 +97,18 @@ class JadwalsTable
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
-                            ->when($data['dari_tanggal'], fn ($q, $tanggal) => $q->whereDate('tanggal', '>=', $tanggal))
-                            ->when($data['sampai_tanggal'], fn ($q, $tanggal) => $q->whereDate('tanggal', '<=', $tanggal));
+                            ->when($data['dari_tanggal'] ?? null, fn ($q, $tanggal) => $q->whereDate('tanggal', '>=', $tanggal))
+                            ->when($data['sampai_tanggal'] ?? null, fn ($q, $tanggal) => $q->whereDate('tanggal', '<=', $tanggal));
                     })
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
                         if ($data['dari_tanggal'] ?? null) {
-                            $indicators[] = 'Dari: ' . \Carbon\Carbon::parse($data['dari_tanggal'])->format('d M Y');
+                            $indicators[] = 'Dari: '.\Carbon\Carbon::parse($data['dari_tanggal'])->format('d M Y');
                         }
                         if ($data['sampai_tanggal'] ?? null) {
-                            $indicators[] = 'Sampai: ' . \Carbon\Carbon::parse($data['sampai_tanggal'])->format('d M Y');
+                            $indicators[] = 'Sampai: '.\Carbon\Carbon::parse($data['sampai_tanggal'])->format('d M Y');
                         }
+
                         return $indicators;
                     }),
             ])

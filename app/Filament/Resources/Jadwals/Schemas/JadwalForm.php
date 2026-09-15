@@ -5,8 +5,10 @@ namespace App\Filament\Resources\Jadwals\Schemas;
 use App\Models\Cuti;
 use App\Models\Dinas;
 use App\Models\HariLibur;
+use App\Models\Jadwal;
 use App\Models\Karyawan;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Components\Utilities\Get;
@@ -19,16 +21,29 @@ class JadwalForm
     {
         return $schema
             ->components([
+                Placeholder::make('peringatan_sinkronisasi')
+                    ->label('⚠️ Baris ini dibuat otomatis')
+                    ->visible(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
+                    ->content(fn (?Jadwal $record): string => 'Jadwal ini hasil sinkronisasi dari pengajuan '
+                        .($record?->jenis === 'cuti' ? 'Cuti' : 'Dinas')
+                        .' yang sudah disetujui. Karyawan, tanggal, jenis, dan shift dikunci — '
+                        .'mengubahnya akan bertentangan dengan pengajuan yang masih approved, dan tertimpa '
+                        .'lagi kalau sinkronisasi dijalankan ulang. Kalau datanya keliru, perbaiki lewat modul '
+                        .($record?->jenis === 'cuti' ? 'Cuti' : 'Dinas').'. Kolom Keterangan tetap bisa diisi.')
+                    ->columnSpanFull(),
+
                 Select::make('karyawan_id')
                     ->relationship('karyawan', 'nama')
                     ->searchable()
                     ->preload()
                     ->live()
+                    ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
                     ->required(),
 
                 DatePicker::make('tanggal')
                     ->required()
                     ->live(onBlur: true) // supaya helperText di bawah re-evaluate saat tanggal diisi
+                    ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
                     ->unique(
                         table: 'jadwals',
                         column: 'tanggal',
@@ -90,28 +105,81 @@ class JadwalForm
                     }),
 
                 Select::make('jenis')
-                    ->options([
-                        'reguler' => 'Reguler',
-                        'piket' => 'Piket',
-                        'libur' => 'Libur',
-                        'cuti' => 'Cuti',
-                        'dinas' => 'Dinas',
-                    ])
+                    // Opsi cuti/dinas cuma muncul untuk baris yang MEMANG sudah
+                    // berjenis itu (hasil sinkronisasi), supaya admin tidak bisa
+                    // mengarang jadwal cuti/dinas dari form — baris jenis itu
+                    // lahir dari approval, bukan diketik manual.
+                    ->options(fn (?Jadwal $record): array => self::dariSinkronisasi($record)
+                        ? [
+                            'reguler' => 'Reguler',
+                            'piket'   => 'Piket',
+                            'libur'   => 'Libur',
+                            'cuti'    => 'Cuti',
+                            'dinas'   => 'Dinas',
+                        ]
+                        : [
+                            'reguler' => 'Reguler',
+                            'piket'   => 'Piket',
+                            'libur'   => 'Libur',
+                        ])
                     ->default('reguler')
                     ->live()
-                    ->disabled(fn (Get $get, ?string $state) => in_array($state, ['cuti', 'dinas']))
-                    ->helperText(fn (Get $get, ?string $state) => in_array($state, ['cuti', 'dinas'])
-                        ? '⚠️ Jadwal ini dibuat otomatis dari pengajuan Cuti/Dinas yang disetujui. Ubah lewat modul Cuti/Dinas, bukan di sini.'
-                        : null)
+                    // Guard dinilai dari $record (nilai tersimpan), BUKAN dari
+                    // state hidup. Versi lama memakai $state: begitu admin
+                    // memilih "Cuti" di form create, field langsung mengunci
+                    // dirinya sendiri dan admin terjebak tidak bisa membatalkan.
+                    ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
                     ->required(),
+
                 Select::make('shift_id')
                     ->relationship('shift', 'nama_shift')
                     ->searchable()
                     ->preload()
-                    ->required(fn (Get $get) => $get('jenis') !== 'libur')
-                    ->visible(fn (Get $get) => $get('jenis') !== 'libur'),
+                    // Wajib hanya untuk jenis yang memang butuh shift.
+                    // Sebelumnya required untuk SEMUA jenis kecuali 'libur' —
+                    // akibatnya baris hasil sinkronisasi (jenis cuti/dinas,
+                    // shift_id null) tidak bisa disimpan sama sekali lewat Edit:
+                    // form menuntut shift diisi, padahal mengisinya justru
+                    // merusak data.
+                    ->required(fn (Get $get): bool => in_array($get('jenis'), ['reguler', 'piket'], true))
+                    ->visible(fn (Get $get): bool => in_array($get('jenis'), ['reguler', 'piket'], true))
+                    ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record)),
+
+                Select::make('sumber')
+                    ->options([
+                        'generate' => 'Generate (boleh ditimpa generator)',
+                        'manual'   => 'Manual (dilindungi dari generate ulang)',
+                    ])
+                    // Baris yang dibuat lewat form ini TIDAK pernah berasal dari
+                    // generator, jadi default-nya manual. Default DB ('generate')
+                    // salah untuk jalur Filament: akibatnya jadwal yang diinput
+                    // admin sendiri ikut terhapus oleh
+                    // `jadwal:generate-rotasi --overwrite-generate`.
+                    ->default('manual')
+                    ->required()
+                    ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
+                    ->helperText('Menentukan nasib baris ini saat `jadwal:generate-rotasi --overwrite-generate` dijalankan: '
+                        .'"Generate" boleh ditimpa ulang oleh generator, "Manual" dilindungi. '
+                        .'Mengedit baris TIDAK mengubah nilai ini otomatis — atur sendiri kalau suntinganmu perlu dilindungi.'),
+
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
             ]);
+    }
+
+    /**
+     * Apakah baris ini lahir dari sinkronisasi Cuti/Dinas approved?
+     *
+     * Dinilai dari $record (nilai yang tersimpan), bukan dari state form yang
+     * sedang berjalan — supaya memilih "Cuti" di form create tidak ikut memicu
+     * penguncian. Baris jenis cuti/dinas dibuat oleh
+     * HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi(); mengubahnya di sini
+     * akan bertentangan dengan pengajuan yang masih approved dan tertimpa lagi
+     * saat sinkronisasi dijalankan ulang. Pola yang sama seperti guard
+     * AbsensiForm (fase 27 batch B).
+     */
+    protected static function dariSinkronisasi(?Jadwal $record): bool
+    {
+        return $record !== null && in_array($record->jenis, ['cuti', 'dinas'], true);
     }
 }
