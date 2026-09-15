@@ -437,3 +437,166 @@ it('masuk: race condition — insert kedua ditolak 422 bukan 500, foto orphan te
     // Pastikan tidak ada foto tersisa di storage (foto orphan sudah dihapus)
     Storage::disk('public')->assertDirectoryEmpty('foto-absen/masuk');
 });
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Api/AbsensiControllerTest.php
+//
+// Tempel di akhir file. Setup di bawah sengaja ditulis lengkap (tidak
+// bergantung pada beforeEach) — kalau file itu sudah punya helper/fixture
+// sendiri untuk karyawan+instansi+qr, silakan disesuaikan biar tidak dobel.
+// ============================================================================
+
+// --- REGRESSION GUARD: melebihi_toleransi_bulanan benar-benar tersimpan ---
+//
+// Kolom ini dihitung di AbsensiController::masuk() sejak fase 9, tapi TIDAK
+// ada di $fillable Absensi sampai fase 26. Akibatnya nilainya dibuang diam-diam
+// oleh mass assignment dan kolomnya selalu false di seluruh data — tidak ada
+// satu pun dari 15 test di file ini yang memeriksanya, jadi tidak pernah
+// ketahuan. Pola yang sama dengan kolom `sumber` di Jadwal (fase 15).
+
+it('masuk: menyimpan melebihi_toleransi_bulanan saat akumulasi bulan ini tembus toleransi', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+
+    // Waktu dibekukan: status & menit_terlambat dihitung dari now().
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-10 08:20:00'));
+
+    $instansi = \App\Models\Instansi::factory()->create([
+        'latitude' => -7.0784947,
+        'longitude' => 110.4119292,
+        'radius_meter' => 100,
+    ]);
+
+    $karyawan = \App\Models\Karyawan::factory()->create([
+        'instansi_id' => $instansi->id,
+        'tipe_jadwal' => \App\Models\Karyawan::TIPE_UMUM,
+    ]);
+
+    $shift = \App\Models\Shift::factory()->create([
+        'instansi_id' => $instansi->id,
+        'jam_masuk' => '08:00:00',
+        'toleransi_menit' => 30,
+        'mode_toleransi' => 'akumulasi_bulanan',
+    ]);
+
+    \App\Models\KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+        'tanggal_berakhir' => null,
+    ]);
+
+    $qr = \App\Models\QrInstansi::factory()->create([
+        'instansi_id' => $instansi->id,
+        'is_active' => true,
+        'expired_at' => null,
+    ]);
+
+    // Sudah telat 20 menit di bulan yang sama. Hari ini telat 20 menit lagi
+    // -> total 40, melewati toleransi 30.
+    \App\Models\Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-05',
+        'waktu_masuk' => '2026-08-05 08:20:00',
+        'menit_terlambat' => 20,
+        'status' => 'terlambat',
+    ]);
+
+    \Laravel\Sanctum\Sanctum::actingAs($karyawan);
+
+    $response = $this->postJson('/api/absensi/masuk', [
+        'latitude' => -7.0784947,
+        'longitude' => 110.4119292,
+        'kode_qr' => $qr->kode_qr,
+        'foto_masuk' => \Illuminate\Http\UploadedFile::fake()->image('wajah.jpg'),
+    ]);
+
+    $response->assertStatus(200);
+
+    $absensiHariIni = \App\Models\Absensi::where('karyawan_id', $karyawan->id)
+        ->where('tanggal', '2026-08-10')
+        ->first();
+
+    expect($absensiHariIni)
+        ->menit_terlambat->toBe(20)
+        ->melebihi_toleransi_bulanan->toBeTrue();
+});
+
+it('masuk: melebihi_toleransi_bulanan tetap false kalau akumulasi masih di bawah toleransi', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-10 08:05:00'));
+
+    $instansi = \App\Models\Instansi::factory()->create([
+        'latitude' => -7.0784947,
+        'longitude' => 110.4119292,
+        'radius_meter' => 100,
+    ]);
+
+    $karyawan = \App\Models\Karyawan::factory()->create([
+        'instansi_id' => $instansi->id,
+        'tipe_jadwal' => \App\Models\Karyawan::TIPE_UMUM,
+    ]);
+
+    $shift = \App\Models\Shift::factory()->create([
+        'instansi_id' => $instansi->id,
+        'jam_masuk' => '08:00:00',
+        'toleransi_menit' => 30,
+        'mode_toleransi' => 'akumulasi_bulanan',
+    ]);
+
+    \App\Models\KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+        'tanggal_berakhir' => null,
+    ]);
+
+    $qr = \App\Models\QrInstansi::factory()->create([
+        'instansi_id' => $instansi->id,
+        'is_active' => true,
+        'expired_at' => null,
+    ]);
+
+    \Laravel\Sanctum\Sanctum::actingAs($karyawan);
+
+    $this->postJson('/api/absensi/masuk', [
+        'latitude' => -7.0784947,
+        'longitude' => 110.4119292,
+        'kode_qr' => $qr->kode_qr,
+        'foto_masuk' => \Illuminate\Http\UploadedFile::fake()->image('wajah.jpg'),
+    ])->assertStatus(200);
+
+    expect(\App\Models\Absensi::where('karyawan_id', $karyawan->id)->first())
+        ->menit_terlambat->toBe(5)
+        ->melebihi_toleransi_bulanan->toBeFalse();
+});
+
+// --- Format jam di riwayat ---
+//
+// `jam_masuk` sebelumnya dikirim sebagai objek Carbon mentah, yang
+// di-json_encode jadi ISO8601 penuh ("2026-08-10T08:00:00.000000Z") — bukan
+// "08:00" seperti yang tersirat dari nama fieldnya. Cast 'datetime:H:i' cuma
+// berlaku saat serialisasi lewat model, bukan saat objeknya ditaruh langsung
+// ke array respons.
+
+it('riwayat: jam_masuk shift dikirim sebagai H:i, bukan timestamp ISO', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create();
+
+    $shift = \App\Models\Shift::factory()->create(['jam_masuk' => '08:00:00']);
+
+    \App\Models\Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-10',
+        'waktu_masuk' => '2026-08-10 08:00:00',
+    ]);
+
+    \Laravel\Sanctum\Sanctum::actingAs($karyawan);
+
+    $response = $this->getJson('/api/absensi/riwayat?bulan=8&tahun=2026');
+
+    $response->assertStatus(200);
+
+    expect($response->json('data.records.0.jam_masuk'))->toBe('08:00');
+});

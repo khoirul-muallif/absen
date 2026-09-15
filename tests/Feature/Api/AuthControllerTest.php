@@ -2,6 +2,8 @@
 
 use App\Models\Instansi;
 use App\Models\Karyawan;
+use App\Models\KaryawanShift;
+use App\Models\Shift;
 use Illuminate\Support\Facades\Hash;
 
 // ── Login ──────────────────────────────────────────────────────────────
@@ -100,15 +102,28 @@ it('menolak logout tanpa token', function () {
 it('mengembalikan data karyawan yang sedang login lewat /me', function () {
     $instansi = Instansi::factory()->create();
     $karyawan = Karyawan::factory()->create(['instansi_id' => $instansi->id]);
+
+    $shift = Shift::factory()->create([
+        'instansi_id'  => $instansi->id,
+        'jam_masuk'    => '08:00:00',
+        'jam_pulang'   => '15:00:00',
+    ]);
+
+    KaryawanShift::factory()->create([
+        'karyawan_id'      => $karyawan->id,
+        'shift_id'         => $shift->id,
+        'tanggal_berlaku'  => today()->subDay(),
+        'tanggal_berakhir' => null,
+    ]);
+
     $token = $karyawan->createToken('absensi-app')->plainTextToken;
 
-    $this->withHeader('Authorization', "Bearer {$token}")
-        ->getJson('/api/auth/me')
-        ->assertOk()
-        ->assertJsonPath('data.id', $karyawan->id)
-        ->assertJsonPath('data.instansi.id', $instansi->id)
-        ->assertJsonPath('shift_aktif', null) // belum ada KaryawanShift
-        ->assertJsonPath('data.absensi_hari_ini', null);
+    $response = $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/auth/me');
+
+    $response->assertStatus(200)
+        ->assertJsonPath('data.shift_aktif.jam_masuk', '08:00')
+        ->assertJsonPath('data.shift_aktif.jam_pulang', '15:00');
 });
 
 it('menolak akses /me tanpa token', function () {

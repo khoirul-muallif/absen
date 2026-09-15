@@ -107,8 +107,8 @@ class AuthController extends Controller
                 ],
                 'shift_aktif' => $shiftAktif ? [
                     'nama_shift' => $shiftAktif->shift->nama_shift,
-                    'jam_masuk'  => $shiftAktif->shift->jam_masuk,
-                    'jam_pulang' => $shiftAktif->shift->jam_pulang,
+                    'jam_masuk'  => $shiftAktif->shift->jam_masuk->format('H:i'),
+                    'jam_pulang' => $shiftAktif->shift->jam_pulang->format('H:i'),
                 ] : null,
                 'absensi_hari_ini' => $absensiHariIni ? [
                     'status'       => $absensiHariIni->status,

@@ -279,7 +279,7 @@ class AbsensiController extends Controller
                 'tanggal'      => $a->tanggal->format('d M Y'),
                 'hari'         => $a->tanggal->locale('id')->isoFormat('dddd'),
                 'shift'        => $a->shift->nama_shift,
-                'jam_masuk'    => $a->shift->jam_masuk,
+                'jam_masuk'    => $a->shift->jam_masuk->format('H:i'),
                 'waktu_masuk'  => $a->waktu_masuk?->format('H:i') ?? '-',
                 'waktu_pulang' => $a->waktu_pulang?->format('H:i') ?? '-',
                 'durasi'       => $a->durasiMenit() ? $a->durasiMenit() . ' menit' : '-',

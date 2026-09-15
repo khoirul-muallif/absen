@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Absensi extends Model
 {
     use HasFactory;
+
     protected $table = 'absensi';
 
     protected $fillable = [
@@ -27,16 +28,22 @@ class Absensi extends Model
         'status',
         'keterangan',
         'menit_terlambat',
+        // Sebelumnya TIDAK ada di sini, padahal dihitung sejak fase 9.
+        // Akibatnya nilai hasil perhitungan dibuang diam-diam oleh mass
+        // assignment dan kolomnya selalu tinggal di default DB (false).
+        // Pola yang sama dengan kolom `sumber` di Jadwal (fase 15).
+        'melebihi_toleransi_bulanan',
     ];
 
     protected $casts = [
-        'tanggal'          => 'date',
-        'waktu_masuk'      => 'datetime',
-        'waktu_pulang'     => 'datetime',
-        'latitude_masuk'   => 'decimal:7',
-        'longitude_masuk'  => 'decimal:7',
-        'latitude_pulang'  => 'decimal:7',
-        'longitude_pulang' => 'decimal:7',
+        'tanggal'                    => 'date',
+        'waktu_masuk'                => 'datetime',
+        'waktu_pulang'               => 'datetime',
+        'latitude_masuk'             => 'decimal:7',
+        'longitude_masuk'            => 'decimal:7',
+        'latitude_pulang'            => 'decimal:7',
+        'longitude_pulang'           => 'decimal:7',
+        'melebihi_toleransi_bulanan' => 'boolean',
     ];
 
     public function karyawan(): BelongsTo
@@ -65,7 +72,6 @@ class Absensi extends Model
 
         return (int) $this->waktu_masuk->diffInMinutes($this->waktu_pulang);
     }
-
 
     // ── Scopes ──────────────────────────────────────────────────────────────
 
