@@ -38,6 +38,13 @@ Laravel + Filament v4.11.7, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5
 - Jangan pakai `TimePicker::native(false)` (nyimpen `00:00` sebagai value valid begitu field disentuh — lihat CHANGELOG fase 25). DatePicker `native(false)` tidak bermasalah.
 - Kalau migration baru dibuat (kolom/tabel berubah), ingetkan di akhir sesi untuk update `SCHEMA.md` juga (export dump baru) — bukan cuma dicatat di CHANGELOG.
 - Jangan pakai $shift->jam_masuk/jam_pulang langsung di setTimeFromTimeString() atau di string — cast-nya datetime:H:i jadi nilainya SELALU Carbon, dan modify() di dalam setTimeFromTimeString() ikut menimpa TANGGALNYA. Pakai jamMasukString()/jamPulangString(). Sudah jadi bug 4 kali (fase 14, seeder, 2 command pengingat).
+- Jangan menyebut nama command CLI (`php artisan ...`) di teks yang dibaca
+  admin lewat Filament — helper text, placeholder, notifikasi, infolist.
+  Admin RS tidak punya akses terminal, jadi itu menyodorkan solusi yang
+  mustahil dia lakukan. Tulis pakai bahasa hasil ("jadwal yang sudah dibuat
+  tidak ikut berubah, ubah lewat menu Jadwal atau minta admin sistem
+  membuat ulang"), dan simpan nama command-nya di `runbook.md`. Sudah
+  terlanjur ada di 4 tempat, lihat todo.md.
 
 ## Kategori Test yang Sering Kelewat
 Selain happy path + validasi input + ownership (pola yang sudah konsisten

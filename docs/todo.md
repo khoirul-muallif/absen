@@ -264,6 +264,46 @@ detail di CHANGELOG fase 20-28.
       (fase 26 lanjutan), tapi tidak meninggalkan jejak di suite. Yang
       paling rawan dan sama sekali tidak terjaga: replay akumulasi bulanan
       lintas chunk (state dibawa lewat reference antar-chunk).
+      
+- [ ] **Teks di admin panel masih bahasa programmer, bukan bahasa admin RS** —
+      ditemukan saat mencoba form Hari Libur di browser (fase 29), bukan dari
+      audit. Beberapa peringatan menyebut nama command CLI sebagai solusi,
+      padahal admin RS TIDAK punya akses terminal sama sekali. Jadi teksnya
+      memberitahu ada masalah lalu menyodorkan jalan keluar yang mustahil
+      dia lakukan.
+
+      Tempat yang kena (semuanya ditulis di fase 28-29):
+      - HariLiburForm, Placeholder "Dampak ke jadwal yang sudah ada" —
+        menyebut `jadwal:generate-bulanan` / `jadwal:generate-rotasi
+        --overwrite-generate`.
+      - JadwalForm, helper text field `sumber` — menyebut
+        `jadwal:generate-rotasi --overwrite-generate`.
+      - JadwalInfolist, section "Asal & Perlindungan Data" — sama.
+      - HariLiburInfolist, baris "Dibaca oleh" — isinya daftar nama command.
+      - Kemungkinan ada juga di Resource lain yang belum direview.
+
+      Dua tingkat perbaikan:
+
+      (a) Murah — tulis ulang pakai bahasa hasil, bukan bahasa perintah.
+          Misal: "Jadwal yang sudah dibuat untuk tanggal ini tidak ikut
+          berubah. Ubah lewat menu Jadwal, atau minta admin sistem
+          membuat ulang jadwal bulan ini." Nama command dipindah ke
+          runbook.md, tempat yang memang dibaca developer.
+
+      (b) Benar — kasih tombol aksinya di Filament, supaya admin tidak
+          perlu terminal sama sekali. Misal Action "Perbarui jadwal
+          terdampak" di halaman Hari Libur yang memanggil generator lewat
+          Artisan::call() untuk bulan & instansi terkait, dengan
+          konfirmasi dan ringkasan hasil. Perlu dipikirkan: batas
+          aksesnya (jangan sampai admin tidak sengaja menimpa sebulan
+          penuh), apakah perlu dry-run dulu yang menampilkan berapa baris
+          akan berubah, dan apakah baris ber-sumber manual perlu
+          ditampilkan sebagai "dilewati".
+
+      Pertanyaan yang menentukan sebelum (b) dikerjakan: siapa sebenarnya
+      yang mengoperasikan panel ini sehari-hari — staf SDM/kepegawaian
+      awam, atau ada IT internal RS yang memang bisa jalanin command?
+      Kalau ada IT internal, (a) saja mungkin cukup.
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,

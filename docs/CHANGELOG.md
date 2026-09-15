@@ -6,6 +6,118 @@
 
 ---
 
+## fase 29: Review UX Hari Libur (HariLiburResource) — selesai
+
+Commit `c6328d7` (batch A) dan `a0939ad` (batch B & C).
+
+### BUG: validasi unique salah cakupan — arahnya KEBALIKAN dari biasanya
+
+Constraint DB-nya `unique(instansi_id, tanggal)`, tapi form cuma memvalidasi
+kolom `tanggal` tanpa `modifyRuleUsing` untuk menyertakan `instansi_id`.
+Efeknya form jadi **lebih ketat daripada DB**: instansi kedua tidak bisa
+mendaftarkan tanggal yang sudah dipakai instansi pertama — data yang sah
+ditolak.
+
+Ini kebalikan dari tiga kasus sebelumnya (KuotaCuti fase 25, Absensi fase 27)
+yang form-nya justru terlalu longgar sehingga QueryException 1062 bocor ke
+admin. Pola yang benar sudah ada di `JadwalForm` sejak awal, cuma tidak
+diterapkan di sini. Belum berdampak karena baru ada satu instansi — diam
+sampai ada yang kedua.
+
+### Menambah hari libur tidak menyentuh Jadwal yang sudah digenerate
+
+Alurnya wajar dan gampang terjadi: `jadwal:generate-bulanan` dijalankan dulu,
+baru admin sadar ada hari libur yang terlewat. Baris Jadwal tetap `reguler`
+dan `RekapHarian` tetap menandai alpha bagi yang tidak absen — tanpa
+peringatan apa pun.
+
+Ditambahkan Placeholder reaktif di form yang menghitung berapa jadwal kerja
+non-libur sudah ada di tanggal yang sedang diisi, beserta arahan cara
+memperbaikinya. (Teks arahannya sendiri ternyata masih bahasa programmer —
+lihat catatan di akhir entri ini.)
+
+### TEMUAN: `is_cuti_bersama` bukan kolom mati, tapi sumber data salah
+
+Dugaan awal: kolom mati seperti enum `'sakit'`. Ternyata bukan.
+
+**Kebijakan RS: saat cuti bersama karyawan TETAP MASUK** — yang ingin libur
+harus mengajukan cuti seperti hari biasa. Sementara sistem memperlakukan baris
+ini persis sama dengan libur nasional:
+- `GenerateJadwalBulanan` → Jadwal `jenis='libur'`
+- `GenerateJadwalRotasi` → menimpa jadi libur, kecuali polanya punya
+  `berlaku_saat_libur_nasional`
+- `RekapHarian` → Absensi `status='libur'`, bukan alpha
+
+Jadi begitu admin mendaftarkan cuti bersama, seluruh karyawan **umum**
+tercatat libur padahal seharusnya masuk, dan yang tidak masuk tidak tertangkap
+sebagai alpha. Karyawan rotasi unit 24 jam selamat lewat flag pola; karyawan
+umum tidak punya perlindungan setara.
+
+Flag `is_cuti_bersama` tidak dibaca di satu tempat pun — seharusnya dialah
+pembedanya.
+
+Perbaikannya menyentuh 3 command sekaligus, jadi ditunda ke fase tersendiri
+(masuk todo.md). Untuk sekarang helper text-nya diubah jadi peringatan
+eksplisit bahwa penandanya belum berpengaruh dan cuti bersama sebaiknya
+**jangan** didaftarkan di sini dulu. Ada test yang mendokumentasikan keadaan
+salah ini supaya pembalikannya nanti disengaja, bukan kebetulan.
+
+### Test dari nol
+
+`HariLiburResourceTest` dibuat dari nol — Resource ini sama sekali belum
+pernah punya test sampai fase 29, padahal satu barisnya berpengaruh ke 4
+tempat. `HariLiburFactory` juga baru dibuat (dengan state `cutiBersama()`),
+sebelumnya belum pernah ada.
+
+### Halaman View + Infolist
+
+`ViewHariLibur` + `HariLiburInfolist` ditambahkan, `ViewAction` masuk ke
+`ActionGroup`.
+
+Infolist tidak berhenti di menampilkan kolom: ada section **"Dampak ke Modul
+Lain"** yang menghitung berapa jadwal kerja non-libur masih tersisa di tanggal
+itu, dan menyebut keempat tempat yang membaca baris ini. Informasi itu selama
+ini cuma ada di kepala developer.
+
+### Perbaikan kecil (batch C)
+
+- Ikon diganti ke `OutlinedCalendarDays`. Sebelumnya `OutlinedRectangleStack`,
+  persis sama dengan `JadwalResource` — dua menu berbeda di grup Presensi
+  tampil dengan ikon identik.
+- `navigationSort = 3` (Absensi 1, Jadwal 2). Sebelumnya kosong.
+- Label eksplisit "Hari Libur" — default Filament memluralkannya jadi
+  "Hari Liburs".
+- Filter instansi & rentang tanggal. Tabel ini bertambah tiap tahun dengan
+  default sort tanggal menaik, jadi libur lama menumpuk di atas.
+
+### Catatan proses — dua hal
+
+**Test file tersimpan ke path salah, lagi.** Isi
+`HariLiburResourceTest.php` sempat masuk ke `HariLiburFactory.php`, dan Pest
+lagi-lagi melaporkan `TestAlreadyExist ... in the filename vendor/...` yang
+menyesatkan. Kejadian kedua setelah `AbsensiResource.php` di fase 27. Yang
+informatif tetap baris `at ...` di bawah pesan errornya.
+
+**Teks peringatan masih bahasa programmer.** Ketahuan karena form-nya dibuka
+di browser, bukan dari membaca kode atau menjalankan test. Peringatan "Dampak
+ke jadwal yang sudah ada" menyebut `jadwal:generate-bulanan` /
+`jadwal:generate-rotasi --overwrite-generate` sebagai solusi — padahal admin
+RS tidak punya akses terminal sama sekali, jadi teksnya memberitahu ada
+masalah lalu menyodorkan jalan keluar yang mustahil dia lakukan. Pola yang
+sama juga terlanjur ditulis di `JadwalForm`, `JadwalInfolist`, dan
+`HariLiburInfolist` (fase 28-29). Masuk todo.md.
+
+Semua test batch A/B/C untuk modul ini hijau — mereka memverifikasi
+peringatannya **muncul**, bukan peringatannya **bisa dipahami**. Tidak ada
+assertion yang bisa menangkap "kalimat ini ditulis untuk orang yang salah".
+
+### Status
+
+`HariLiburResourceTest`: 0 → 12 test. Full suite: **334 test passing (1066
+assertions)** — naik dari 322.
+
+Sisa review UX Filament: 7 Resource, semuanya di grup Master Data.
+
 ## fase 28: Review UX Jadwal (JadwalResource) — selesai
 
 Commit `ba90b26` (batch A) dan `4b4cbb6` (batch B & C). Item todo aslinya cuma
