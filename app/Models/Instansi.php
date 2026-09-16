@@ -24,10 +24,10 @@ class Instansi extends Model
     ];
 
     protected $casts = [
-        'latitude'    => 'decimal:7',
-        'longitude'   => 'decimal:7',
-        'radius_meter'=> 'integer',
-        'is_active'   => 'boolean',
+        'latitude'     => 'decimal:7',
+        'longitude'    => 'decimal:7',
+        'radius_meter' => 'integer',
+        'is_active'    => 'boolean',
     ];
 
     public function qrInstansi(): HasMany
@@ -50,6 +50,57 @@ class Instansi extends Model
     public function shift(): HasMany
     {
         return $this->hasMany(Shift::class);
+    }
+
+    /**
+     * Hari libur milik instansi ini. Sebelumnya relasi ini tidak pernah
+     * didefinisikan walau hari_liburs punya instansi_id.
+     */
+    public function hariLiburs(): HasMany
+    {
+        return $this->hasMany(HariLibur::class);
+    }
+
+    /**
+     * Pola rotasi milik instansi ini. Sama, relasinya belum pernah ada.
+     */
+    public function polaRotasis(): HasMany
+    {
+        return $this->hasMany(PolaRotasi::class);
+    }
+
+    /**
+     * Apakah instansi ini sudah dipakai data lain?
+     *
+     * Lima tabel menggantung ke instansi_id: karyawan, shift, qr_instansi,
+     * hari_liburs, pola_rotasis — dan lewat karyawan, seluruh riwayat absensi
+     * & pengajuan ikut. Menghapus satu instansi berpotensi melenyapkan hampir
+     * seluruh isi sistem. Selama baru ada satu instansi, itu berarti semuanya.
+     */
+    public function sedangDipakai(): bool
+    {
+        return $this->karyawan()->exists()
+            || $this->shift()->exists()
+            || $this->qrInstansi()->exists()
+            || $this->hariLiburs()->exists()
+            || $this->polaRotasis()->exists();
+    }
+
+    /**
+     * Apakah kode instansi masih boleh diubah?
+     *
+     * kode_instansi dikirim ke aplikasi mobile lewat /api/auth/me sebagai
+     * identitas instansi. Begitu sudah ada karyawan yang login atau QR yang
+     * beredar, mengubahnya berisiko bikin data yang sudah tersimpan di sisi
+     * klien tidak lagi cocok.
+     *
+     * CATATAN: kode ini TIDAK dipakai untuk pemindaian QR — endpoint
+     * /api/instansi/qr/{kode} mencari QrInstansi.kode_qr, kolom yang terpisah.
+     * Helper text lama menyebut sebaliknya.
+     */
+    public function kodeMasihBisaDiubah(): bool
+    {
+        return ! $this->karyawan()->exists() && ! $this->qrInstansi()->exists();
     }
 
     /**

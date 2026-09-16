@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Instansis;
 use App\Filament\Resources\Instansis\Pages\CreateInstansi;
 use App\Filament\Resources\Instansis\Pages\EditInstansi;
 use App\Filament\Resources\Instansis\Pages\ListInstansis;
+use App\Filament\Resources\Instansis\Pages\ViewInstansi;
 use App\Filament\Resources\Instansis\Schemas\InstansiForm;
+use App\Filament\Resources\Instansis\Schemas\InstansiInfolist;
 use App\Filament\Resources\Instansis\Tables\InstansisTable;
 use App\Models\Instansi;
 use BackedEnum;
@@ -38,6 +40,11 @@ class InstansiResource extends Resource
         return InstansiForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return InstansiInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return InstansisTable::configure($table);
@@ -53,6 +60,7 @@ class InstansiResource extends Resource
         return [
             'index'  => ListInstansis::route('/'),
             'create' => CreateInstansi::route('/create'),
+            'view'   => ViewInstansi::route('/{record}'),
             'edit'   => EditInstansi::route('/{record}/edit'),
         ];
     }
