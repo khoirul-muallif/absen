@@ -6,6 +6,198 @@
 
 ---
 
+## fase 32: Review UX Pola Rotasi (PolaRotasiResource) — selesai
+
+Commit `69f1e2e` (batch A) dan `0382b4f` (batch B & C).
+
+### BUG: dropdown shift di Repeater mengambil semua instansi
+
+`Shift::query()->pluck('nama_shift', 'id')` — tanpa filter `instansi_id`,
+padahal `pola_rotasis` punya kolom itu. Jadi pola milik satu instansi bisa
+memakai shift milik instansi lain, dan **tidak ada guard server-side sama
+sekali**. Bug yang sama dengan KaryawanShift di fase 31, tapi di sini tanpa
+pembanding apa pun. Sekarang dropdown difilter DAN divalidasi, plus
+`labelLengkap()` dipakai supaya dua shift bernama sama dengan jam berbeda bisa
+dibedakan (fase 30).
+
+### N+1 di itemLabel
+
+`itemLabel` memanggil `Shift::find()` per baris. Siklus 21 hari berarti 21
+query tiap kali Repeater dirender ulang — dan tiap toggle memicu render ulang.
+Diganti cache per-request.
+
+### `count($record->langkah)` di kolom tabel
+
+Dipindah ke `PolaRotasi::panjangSiklus()`. Kolom `langkah` ternyata **NOT
+NULL** di DB, jadi null-safety-nya murni defensif, bukan menutup bug nyata —
+dua test yang sempat ditulis untuk skenario null gagal di level constraint dan
+diganti dengan skenario array kosong. Array kosong memang bisa terjadi lewat
+seeder atau insert langsung karena `minItems(1)` cuma berlaku di form; pola
+seperti itu dilewati generator tanpa pesan apa pun, jadi sekarang ditandai
+badge merah di tabel.
+
+### Tidak ada guard hapus
+
+Perilaku FK `karyawan_pola_rotasis.pola_rotasi_id` tidak disebut di SCHEMA.md
+— kalau CASCADE, menghapus pola menghilangkan assignment diam-diam dan
+karyawan rotasi kehilangan sumber jadwalnya; kalau RESTRICT, muncul
+`QueryException` 1451 mentah. `PolaRotasi::sedangDipakai()` menutup kedua
+kemungkinan, dengan pola tombol yang sama seperti Shift di fase 30 (versi
+abu-abu yang menjelaskan, bukan tombol yang hilang begitu saja). Guard dipasang
+di tabel, hapus massal, dan halaman View.
+
+### KEPUTUSAN: `nama_pola` wajib unik per (instansi, unit_kerja)
+
+Beda dari `nama_shift` yang sengaja dibiarkan boleh duplikat (fase 30), di sini
+`unit_kerja` sudah jadi pembeda tersendiri — jadi nama kembar tidak punya
+alasan struktural dan cuma bikin dropdown Shift Karyawan Rotasi ambigu. Nama
+yang sama di unit berbeda tetap diizinkan.
+
+### `unit_kerja` diberi datalist
+
+Kolom ini adalah kunci yang dipakai opsi `--unit` pada generator rotasi. Satu
+typo berarti polanya tidak pernah ikut tergenerate — tanpa pesan error apa pun,
+karena generator cuma tidak menemukan apa-apa. Sekarang unit yang sudah ada
+ditampilkan sebagai saran.
+
+### Preview siklus (item todo lama, akhirnya dikerjakan)
+
+Form sebelumnya cuma menampilkan data mentah — admin harus membayangkan
+sendiri hasil jadwalnya.
+
+Preview 14 hari ditambahkan, reaktif terhadap langkah yang sedang diisi.
+Kalau `berlaku_saat_libur_nasional` mati dan ada libur nasional di rentang itu,
+barisnya ditandai "di-override libur nasional" sehingga konsekuensi toggle
+terlihat langsung. Di atas tabel ada peringatan bahwa preview menganggap siklus
+dimulai hari ini, sementara anchor sebenarnya `tanggal_mulai` per karyawan —
+urutan shift-nya benar, tanggalnya belum tentu.
+
+**Perhitungannya dipindah ke `PolaRotasi::hitungPreviewSiklus()` di batch B**,
+mengembalikan array alih-alih HTML. Versi batch A merakit HTML langsung di
+dalam Placeholder, jadi satu-satunya assertion yang mungkin cuma mencocokkan
+potongan kalimat — bukan kebenaran posisi siklusnya. Dibuat static supaya
+dipakai form (state Repeater yang belum tersimpan) maupun infolist (record),
+sehingga tidak ada dua versi perhitungan yang bisa menyimpang.
+
+### Toggle "Hari Libur" diperjelas
+
+Diganti jadi pertanyaan "Hari ini libur?" dengan helper text yang berubah
+mengikuti posisinya: OFF → "KERJA — pilih shift-nya di sebelah", ON → "LIBUR —
+karyawan tidak dijadwalkan". Menutup keluhan "tidak eksplisit OFF=kerja/
+ON=libur" di todo. **Ikon reorder belum disentuh** — perlu dilihat langsung di
+browser dulu.
+
+### Halaman View + Infolist
+
+Infolist menampilkan arti `berlaku_saat_libur_nasional` sebagai kalimat (bukan
+cuma ikon centang), urutan siklus sebagai daftar "Hari ke-N → shift/libur",
+preview 14 hari, dan section **"Dipakai Oleh"**: tiap karyawan yang di-assign
+beserta `tanggal_mulai` DAN shift apa yang dia dapat hari ini lewat
+`posisiSiklusPada(today())`. Staggered start — dua karyawan di pola sama dengan
+anchor berbeda — selama ini cuma konsep di kepala; di sini jadi konkret.
+
+### Catatan proses
+
+Model `PolaRotasi` sempat punya `karyawanPolaRotasis()` dan `panjangSiklus()`
+ter-deklarasi dua kali: blok tambahan ditempel utuh padahal dua method itu
+sudah ada. Fatal error "Cannot redeclare method" sebelum apa pun jalan.
+Pelajaran yang sama seperti file test yang dua kali tersimpan ke path salah —
+lebih aman meminta file aslinya dulu daripada memberi blok tempel untuk file
+yang belum pernah dilihat.
+
+Batch A juga sempat di-commit **tanpa test sama sekali** (365 tetap 365)
+meski menambahkan empat guard dan satu fitur; test menyusul lewat amend.
+
+### Status
+
+`PolaRotasiResourceTest`: 5 → 24 test. Full suite: **384 test passing (1222
+assertions)** — naik dari 365.
+
+---
+
+## fase 31: Review UX Shift Karyawan Umum (KaryawanShiftResource) — selesai
+
+Commit `7cc5053` (batch A) dan `c74e6e6` (batch B & C).
+
+### BUG: tidak ada validasi periode tumpang tindih
+
+Tabel `karyawan_shift` cuma punya index `(karyawan_id, tanggal_berlaku)`, bukan
+unique, dan form tidak mengecek apa pun. Jadi satu karyawan bisa punya dua
+penugasan yang periodenya beririsan.
+
+Akibatnya bukan sekadar data berantakan: `AbsensiController::masuk()` memilih
+penugasan lewat `latest('tanggal_berlaku')->first()`, sehingga dengan dua
+penugasan ber-`tanggal_berlaku` sama, shift mana yang dipakai **tidak
+deterministik** antar request — status dan `menit_terlambat` karyawan bisa
+berbeda tergantung urutan baris yang dikembalikan MySQL.
+`GenerateJadwalBulanan` juga mengambil penugasan yang overlap bulan target,
+jadi jadwal yang digenerate bisa salah shift tanpa ada yang tahu.
+
+**KEPUTUSAN: irisan apa pun ditolak.** Sempat dipertimbangkan melonggarkannya
+untuk kasus "jadwal terpecah" — `Shift` punya kolom `hari_kerja`, jadi dua
+penugasan beririsan dengan hari kerja yang tidak bertabrakan (Senin–Rabu pagi,
+Kamis–Jumat siang) sebenarnya masuk akal secara model. Ditolak karena (a)
+dikonfirmasi tidak ada staf umum yang begitu di RS ini, dan (b)
+`AbsensiController::masuk()` tidak pernah melihat `hari_kerja` sama sekali,
+jadi skenario itu akan tetap salah hitung walau datanya diizinkan. Kalau nanti
+dibutuhkan, pelonggaran harus dikerjakan bersamaan dengan perbaikan controller.
+
+Transisi berurutan (berakhir 31 Jul, berlaku mulai 1 Agu) sengaja TIDAK
+dianggap beririsan. Penugasan lama yang open-ended juga terdeteksi — pesan
+errornya menyebut shift mana dan periodenya supaya admin tahu yang mana harus
+diakhiri dulu.
+
+### BUG: dropdown shift tidak dibatasi ke instansi karyawan
+
+Tidak ada `modifyQueryUsing` maupun rule server-side, jadi karyawan bisa
+di-assign shift milik instansi lain tanpa ada yang menolak — sisi shift
+terlewat waktu guard `karyawan_id` dipasang di fase 18. Sekarang dropdown
+difilter DAN divalidasi server-side, simetris dengan pola `karyawan_id`.
+
+### Label "Aktif" salah arti
+
+Sebelumnya kolom tanggal berakhir punya description `'Aktif'` yang cuma
+menandai `tanggal_berakhir` null — itu berarti "berlaku sampai diganti",
+**BUKAN** "sedang berlaku". Penugasan yang mulai bulan depan & open-ended ikut
+ditandai "Aktif", sementara penugasan yang berakhir akhir bulan ini — yang
+justru sedang berlaku — tidak ditandai apa pun.
+
+Diganti kolom Status dengan tiga keadaan (Sedang berlaku / Belum mulai / Sudah
+berakhir) yang dihitung dari tanggal hari ini, plus filter toggle "Hanya yang
+sedang berlaku".
+
+### Halaman View + Infolist
+
+Infolist menampilkan rincian shift (jam masuk/pulang, hari kerja, mode
+toleransi) langsung di halaman penugasan — admin yang membukanya hampir pasti
+ingin tahu jam kerjanya, dan tanpa ini harus pindah ke menu Shift lalu kembali.
+Ada juga section riwayat penugasan lain karyawan yang sama, berguna justru
+karena aturan irisan yang baru: kalau penugasan baru ditolak, admin bisa
+langsung melihat mana yang bentrok.
+
+`DeleteAction` diberi `modalDescription`. Menghapus penugasan aman secara
+teknis (tidak ada FK RESTRICT ke `karyawan_shift`), tapi konsekuensinya nyata:
+karyawan jadi tanpa shift pada periode itu, absennya ditolak API dengan "Tidak
+ada shift aktif untuk hari ini", dan jadwalnya tidak ikut digenerate. Modalnya
+menyarankan mengisi tanggal akhir alih-alih menghapus.
+
+### Perbaikan kecil
+
+- Ikon diganti ke `OutlinedUserGroup`. Sebelumnya `OutlinedCalendarDays`, yang
+  jadi kembar dengan `HariLiburResource` setelah ikon itu diganti di fase 29.
+- `Shift::labelLengkap()` dipasang di dropdown, menyisakan Repeater
+  `PolaRotasiForm` (selesai di fase 32).
+- Nama shift di tabel diberi description berisi jamnya.
+
+### Test
+
+5 → 17 test. Kelima test lama **harus** disesuaikan karena semuanya membuat
+`Karyawan` dan `Shift` tanpa menyamakan instansi — guard baru menolak fixture
+seperti itu. Test "menampilkan daftar" juga diperbaiki: sebelumnya cuma
+`assertSuccessful()` tanpa memeriksa isi tabel, jadi halaman kosong pun lolos.
+
+Full suite naik 352 → 365 (1167 assertions).
+
 ## fase 30: Review UX Shift (ShiftResource) — selesai
 
 Commit `08894b1` (batch A), `fa4a7d6` (label dropdown), `3af8d4b` (batch B & C).

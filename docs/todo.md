@@ -11,24 +11,22 @@ buat curiga, kemungkinan besar test yang ada baru cover happy path.
 Sudah selesai (navigationGroup, audit lintas modul, race condition, tanggal
 edge case, konsistensi respons API, 5 modul approval + Jenis/Kuota Cuti,
 sentralisasi query kuota, jebakan cast datetime, Data Absensi, Jadwal,
-Hari Libur, Shift) — detail di CHANGELOG fase 20-30.
+Hari Libur, Shift, Shift Karyawan Umum, Pola Rotasi) — detail di CHANGELOG
+fase 20-32.
 
-- [ ] **Review UX Filament — 6 Resource yang belum disentuh**
-
-      Manajemen Shift:
-      - [ ] Shift Karyawan Umum (KaryawanShiftResource) — cek guard
-            tipe_jadwal (fase 18) sudah tervisualisasi jelas di dropdown,
-            bukan cuma tervalidasi di server-side. Sekalian pasang
-            Shift::labelLengkap() di dropdown shift-nya (fase 30).
+- [ ] **Review UX Filament — 4 Resource yang belum disentuh**
 
       Manajemen Rotasi:
-      - [ ] Pola Rotasi (PolaRotasiResource) — SUDAH ADA rencana
-            perbaikan detail di item terpisah di bawah (preview 7-14
-            hari, kejelasan toggle Hari Libur, ikon reorder) — jangan
-            dikerjakan asal, ikuti draft yang sudah ada. Sekalian pasang
-            Shift::labelLengkap() di Repeater langkah.
-      - [ ] Shift Karyawan Rotasi (KaryawanPolaRotasiResource) — terkait
-            erat dengan Pola Rotasi di atas, sebaiknya direview bareng.
+      - [ ] Shift Karyawan Rotasi (KaryawanPolaRotasiResource) — menuntaskan
+            grup Manajemen Rotasi. Hal yang sudah diketahui: guard
+            tipe_jadwal=rotasi sudah ada sejak fase 18, dan sudah punya 5
+            test. Yang perlu dicek: apakah ada validasi irisan periode
+            seperti yang baru dipasang di KaryawanShift (fase 31) —
+            karyawan_pola_rotasis punya tanggal_mulai + tanggal_berakhir
+            nullable, dan GenerateJadwalRotasi memilih assignment yang
+            mana kalau ada dua? Cek juga apakah dropdown pola dibatasi ke
+            instansi karyawan (pola bug yang sama sudah ketemu 2x: fase 31
+            & 32).
 
       Master Data:
       - [ ] Karyawan (KaryawanResource) — cek kejelasan section
@@ -39,16 +37,13 @@ Hari Libur, Shift) — detail di CHANGELOG fase 20-30.
             expired_at (null = permanen) di form, potensi admin gak
             sadar QR permanen kalau field dikosongkan begitu saja.
 
-      Pola yang sudah terbentuk dari 4 Resource sebelumnya, dipakai lagi:
+      Pola yang sudah terbentuk dari 6 Resource sebelumnya:
       (A) integritas data — validasi yang cuma ada di DB tapi tidak di
       form, field required padahal nullable, guard untuk baris yang
-      ditulis sistem, guard hapus untuk FK RESTRICT; (B) halaman View +
-      Infolist kalau belum ada, dengan penjelasan yang menerjemahkan
-      nilai kolom jadi konsekuensi; (C) badge/label/filter.
-
-      Urutan yang disarankan: Shift Karyawan Umum dulu (menuntaskan grup
-      Manajemen Shift), lalu Pola Rotasi + Shift Karyawan Rotasi sebagai
-      satu kelompok, baru Master Data.
+      ditulis sistem, guard hapus untuk FK RESTRICT/CASCADE, dropdown
+      lintas-instansi; (B) halaman View + Infolist yang menerjemahkan
+      nilai kolom jadi konsekuensi, bukan cuma menampilkannya;
+      (C) badge/label/filter.
 
 ## Nanti / belum prioritas
 - [ ] **Simulasi karyawan rotasi yang punya langkah LIBUR di polanya
@@ -179,16 +174,16 @@ Hari Libur, Shift) — detail di CHANGELOG fase 20-30.
       face-api.js/MediaPipe) — masih rencana
 - [ ] Scheduler otomatis untuk jadwal:generate-bulanan (masih manual)
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
-- [ ] UX form Pola Rotasi (Filament) — sekarang cuma nunjukin data mentah
-      (list langkah shift/libur berurutan), admin harus bayangin sendiri
-      hasil jadwalnya. Ide perbaikan: tambah preview 7-14 hari ke depan
-      (kalender/tabel kecil) yang auto-generate dari `langkah` yang lagi
-      diisi, update real-time. Juga cek kejelasan toggle "Hari Libur"
-      (gak eksplisit OFF=kerja/ON=libur) dan 3 ikon reorder (↕️⬆️⬇️) yang
-      fungsinya mirip-mirip. Trigger: dibandingin sama form serupa di
-      Morhuman, sadar form sendiri kemungkinan sulit dipahami admin awam
-      (bukan developer) — bukan berarti harus niru Morhuman, tapi worth
-      dites ke user asli nanti.
+
+- [ ] **Ikon reorder di Repeater Pola Rotasi** — 3 ikon (↕️⬆️⬇️) yang
+      fungsinya mirip-mirip dan bikin bingung. Sisa terakhir dari item UX
+      Pola Rotasi; preview 7-14 hari dan kejelasan toggle "Hari Libur"
+      sudah selesai di fase 32. Perlu dilihat langsung di browser dulu —
+      ini bawaan Filament, jadi opsinya antara mengatur ulang lewat
+      konfigurasi Repeater atau menerima apa adanya.
+      Sekalian worth dites ke user asli (admin awam, bukan developer),
+      termasuk apakah preview siklus yang baru benar-benar membantu.
+
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
@@ -322,8 +317,25 @@ Hari Libur, Shift) — detail di CHANGELOG fase 20-30.
         masing-masing form yang menunjuk ke menu pasangannya (helper text
         saling menunjuk sebenarnya SUDAH ada sejak fase 15 — perlu dicek
         apakah masih ada dan masih benar setelah pindah grup).
-      Dikerjakan bareng review KaryawanShiftResource & KaryawanPolaRotasiResource.
+  
 
+
+- [ ] **Anchor preview siklus belum bisa dipilih** — preview 14 hari di
+      form & infolist Pola Rotasi (fase 32) selalu menganggap siklus
+      dimulai HARI INI, padahal anchor sebenarnya tanggal_mulai per
+      karyawan. Sudah diberi peringatan teks, tapi kalau admin ingin
+      memverifikasi jadwal karyawan tertentu, dia harus menghitung sendiri.
+      Ide: dropdown "lihat sebagai karyawan X" di infolist yang memakai
+      tanggal_mulai karyawan itu sebagai anchor. Perhitungannya sudah siap
+
+      — PolaRotasi::hitungPreviewSiklus() menerima parameter $mulai.
+      Status: separuh sudah tertutup di fase 31 — KaryawanShiftForm punya
+      helper text yang menyebut nama menu DAN grup pasangannya secara
+      eksplisit. Sisa: pasangannya di KaryawanPolaRotasiForm (cek apakah
+      helper text fase 15 di sana masih ada dan masih menyebut grup yang
+      benar setelah pindah), plus keputusan apakah kedua menu disatukan
+      lagi dalam satu grup. Dikerjakan bareng review
+      KaryawanPolaRotasiResource.
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
 notifikasi, riwayat sudah ada). Sengaja belum disentuh selama backend masih
