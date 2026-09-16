@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\PolaRotasis\Schemas;
 
-use App\Models\HariLibur;
 use App\Models\Instansi;
 use App\Models\PolaRotasi;
 use App\Models\Shift;
@@ -14,12 +13,13 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
 class PolaRotasiForm
 {
     /** Cache shift per-request supaya itemLabel & preview tidak query berulang. */
-    protected static ?\Illuminate\Support\Collection $cacheShift = null;
+    protected static ?Collection $cacheShift = null;
 
     public static function configure(Schema $schema): Schema
     {
@@ -49,8 +49,7 @@ class PolaRotasiForm
                             // pada generator rotasi. Satu typo berarti polanya
                             // tidak pernah ikut tergenerate, dan tidak ada pesan
                             // error apa pun karena generator cuma tidak menemukan
-                            // apa-apa. Daftar unit yang sudah ada ditampilkan
-                            // supaya admin menyalin penulisan yang sama.
+                            // apa-apa.
                             ->datalist(fn () => PolaRotasi::query()
                                 ->whereNotNull('unit_kerja')
                                 ->distinct()
@@ -172,11 +171,15 @@ class PolaRotasiForm
             ]);
     }
 
-    protected static function shifts(): \Illuminate\Support\Collection
+    /**
+     * Cache shift per-request.
+     *
+     * itemLabel dipanggil sekali per baris tiap Repeater dirender ulang —
+     * versi lama memakai Shift::find() di dalamnya, jadi siklus 21 hari berarti
+     * 21 query tiap kali toggle disentuh.
+     */
+    public static function shifts(): Collection
     {
-        // itemLabel dipanggil sekali per baris tiap Repeater dirender ulang —
-        // versi lama memakai Shift::find() di dalamnya, jadi siklus 21 hari
-        // berarti 21 query tiap kali toggle disentuh.
         return self::$cacheShift ??= Shift::query()->get()->keyBy('id');
     }
 
@@ -196,11 +199,11 @@ class PolaRotasiForm
     }
 
     /**
-     * Tabel preview 14 hari dari `langkah` yang sedang diisi.
+     * Preview dari `langkah` yang sedang diisi (belum tersimpan).
      *
-     * PENTING: preview ini menganggap siklus dimulai HARI INI. Anchor
-     * sebenarnya adalah `tanggal_mulai` per karyawan di menu Shift Karyawan
-     * Rotasi, jadi urutan shift-nya benar tapi tanggalnya belum tentu.
+     * Perhitungannya ada di PolaRotasi::hitungPreviewSiklus() supaya bisa
+     * dites sebagai array dan dipakai ulang oleh infolist. Method ini murni
+     * merakit HTML-nya.
      */
     protected static function preview(Get $get): HtmlString|string
     {
@@ -210,52 +213,51 @@ class PolaRotasiForm
             return 'Tambah minimal satu langkah untuk melihat preview.';
         }
 
-        // Kunci Repeater berupa UUID, jadi perlu di-reindex dulu supaya
-        // posisi siklusnya bisa dihitung dengan modulo.
-        $langkah = array_values($langkah);
-        $panjang = count($langkah);
+        $hasil = PolaRotasi::hitungPreviewSiklus(
+            $langkah,
+            $get('instansi_id'),
+            (bool) $get('berlaku_saat_libur_nasional'),
+        );
 
-        $instansiId = $get('instansi_id');
-        $berlakuSaatLibur = (bool) $get('berlaku_saat_libur_nasional');
+        if ($hasil === []) {
+            return 'Tambah minimal satu langkah untuk melihat preview.';
+        }
 
-        $liburNasional = $instansiId
-            ? HariLibur::where('instansi_id', $instansiId)
-                ->whereBetween('tanggal', [today(), today()->addDays(13)])
-                ->pluck('nama', 'tanggal')
-            : collect();
+        return self::tabelPreview($hasil, count(array_values($langkah)));
+    }
 
+    /**
+     * Rakit tabel HTML dari hasil PolaRotasi::hitungPreviewSiklus().
+     * Dipakai form maupun infolist.
+     */
+    public static function tabelPreview(array $hasil, int $panjangSiklus): HtmlString
+    {
         $baris = '';
 
-        for ($i = 0; $i < 14; $i++) {
-            $tanggal = today()->addDays($i);
-            $posisi = $i % $panjang;
-            $step = $langkah[$posisi];
-
-            $namaLibur = $liburNasional->first(function ($nama, $tgl) use ($tanggal) {
-                return \Carbon\Carbon::parse($tgl)->isSameDay($tanggal);
-            });
-
-            if (($step['libur'] ?? false)) {
+        foreach ($hasil as $item) {
+            if ($item['libur']) {
                 $isi = '<span style="opacity:.6">Libur</span>';
-            } elseif ($namaLibur && ! $berlakuSaatLibur) {
+            } elseif ($item['override_libur_nasional']) {
                 $isi = '<span style="opacity:.6">Libur — di-override libur nasional</span>';
             } else {
-                $isi = self::labelLangkah($step);
+                $isi = self::shifts()->get($item['shift_id'])?->labelLengkap() ?? 'Belum dipilih';
             }
 
-            $tandaLibur = $namaLibur ? " <em style=\"opacity:.6\">({$namaLibur})</em>" : '';
+            $tandaLibur = $item['nama_libur']
+                ? " <em style=\"opacity:.6\">({$item['nama_libur']})</em>"
+                : '';
 
             $baris .= sprintf(
                 '<tr><td style="padding:2px 12px 2px 0">%s</td><td style="padding:2px 12px 2px 0">%s</td><td style="padding:2px 0">%s%s</td></tr>',
-                $tanggal->locale('id')->isoFormat('ddd'),
-                $tanggal->format('d M'),
+                $item['tanggal']->locale('id')->isoFormat('ddd'),
+                $item['tanggal']->format('d M'),
                 $isi,
                 $tandaLibur
             );
         }
 
         return new HtmlString(
-            "<p style=\"margin-bottom:6px\">Panjang siklus: <b>{$panjang} hari</b>. "
+            "<p style=\"margin-bottom:6px\">Panjang siklus: <b>{$panjangSiklus} hari</b>. "
             .'Preview ini menganggap siklus dimulai <b>hari ini</b> — anchor sebenarnya adalah '
             .'tanggal mulai per karyawan di menu Shift Karyawan Rotasi, jadi urutan shift-nya benar '
             .'tapi tanggalnya belum tentu.</p>'

@@ -3,11 +3,14 @@
 use App\Filament\Resources\PolaRotasis\Pages\CreatePolaRotasi;
 use App\Filament\Resources\PolaRotasis\Pages\EditPolaRotasi;
 use App\Filament\Resources\PolaRotasis\Pages\ListPolaRotasis;
+use App\Filament\Resources\PolaRotasis\Pages\ViewPolaRotasi;
+use App\Models\HariLibur;
 use App\Models\Instansi;
 use App\Models\Karyawan;
 use App\Models\KaryawanPolaRotasi;
 use App\Models\PolaRotasi;
 use App\Models\Shift;
+use Carbon\Carbon;
 
 use function Pest\Livewire\livewire;
 
@@ -286,4 +289,152 @@ it('hapus massal dibatalkan kalau ada pola yang masih di-assign', function () {
 
     expect(PolaRotasi::find($dipakai->id))->not->toBeNull()
         ->and(PolaRotasi::find($bebas->id))->not->toBeNull();
+});
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/PolaRotasiResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import:
+//   use App\Filament\Resources\PolaRotasis\Pages\ViewPolaRotasi;
+//   use App\Models\HariLibur;
+//   use Carbon\Carbon;
+// ============================================================================
+
+// ── Halaman View (batch B) ───────────────────────────────────────────────
+
+it('halaman View pola rotasi bisa dibuka', function () {
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'langkah' => [['shift_id' => null, 'libur' => true]],
+    ]);
+
+    livewire(ViewPolaRotasi::class, ['record' => $pola->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('halaman View tetap bisa dibuka untuk pola tanpa langkah', function () {
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'langkah' => [],
+    ]);
+
+    livewire(ViewPolaRotasi::class, ['record' => $pola->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('ViewAction muncul di tabel', function () {
+    $pola = PolaRotasi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ListPolaRotasis::class)
+        ->assertTableActionVisible('view', $pola);
+});
+
+// ── Perhitungan preview siklus ───────────────────────────────────────────
+//
+// Logikanya dipindah dari Placeholder ke PolaRotasi::hitungPreviewSiklus()
+// supaya bisa dites sebagai array. Versi sebelumnya merakit HTML langsung di
+// dalam form, jadi satu-satunya assertion yang mungkin cuma mencocokkan
+// potongan kalimat — bukan kebenaran posisi siklusnya.
+
+it('preview siklus mengulang langkah sesuai panjang siklus', function () {
+    $shiftA = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+    $shiftB = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'berlaku_saat_libur_nasional' => true,
+        'langkah' => [
+            ['shift_id' => $shiftA->id, 'libur' => false],
+            ['shift_id' => $shiftB->id, 'libur' => false],
+            ['shift_id' => null, 'libur' => true],
+        ],
+    ]);
+
+    $hasil = $pola->previewSiklus(7, Carbon::parse('2026-08-01'));
+
+    expect($hasil)->toHaveCount(7)
+        ->and($hasil[0]['posisi'])->toBe(0)
+        ->and($hasil[0]['shift_id'])->toBe($shiftA->id)
+        ->and($hasil[1]['shift_id'])->toBe($shiftB->id)
+        ->and($hasil[2]['libur'])->toBeTrue()
+        // hari ke-4 balik ke posisi 0 (wrap-around)
+        ->and($hasil[3]['posisi'])->toBe(0)
+        ->and($hasil[3]['shift_id'])->toBe($shiftA->id)
+        ->and($hasil[6]['posisi'])->toBe(0);
+});
+
+it('preview siklus kosong untuk pola tanpa langkah', function () {
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'langkah' => [],
+    ]);
+
+    expect($pola->previewSiklus())->toBe([]);
+});
+
+it('libur nasional menimpa langkah kerja kalau pola tidak berlaku saat libur', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-02',
+        'nama' => 'Contoh Libur',
+    ]);
+
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'berlaku_saat_libur_nasional' => false,
+        'langkah' => [['shift_id' => $shift->id, 'libur' => false]],
+    ]);
+
+    $hasil = $pola->previewSiklus(3, Carbon::parse('2026-08-01'));
+
+    expect($hasil[0]['override_libur_nasional'])->toBeFalse()   // 1 Agu, bukan libur
+        ->and($hasil[1]['override_libur_nasional'])->toBeTrue() // 2 Agu, kena libur
+        ->and($hasil[1]['nama_libur'])->toBe('Contoh Libur')
+        ->and($hasil[2]['override_libur_nasional'])->toBeFalse();
+});
+
+it('unit 24 jam tetap bekerja saat libur nasional', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-02',
+        'nama' => 'Contoh Libur',
+    ]);
+
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'berlaku_saat_libur_nasional' => true, // IGD/ICU
+        'langkah' => [['shift_id' => $shift->id, 'libur' => false]],
+    ]);
+
+    $hasil = $pola->previewSiklus(3, Carbon::parse('2026-08-01'));
+
+    // Nama liburnya tetap ditampilkan sebagai konteks, tapi tidak meng-override.
+    expect($hasil[1]['nama_libur'])->toBe('Contoh Libur')
+        ->and($hasil[1]['override_libur_nasional'])->toBeFalse()
+        ->and($hasil[1]['shift_id'])->toBe($shift->id);
+});
+
+it('langkah libur tidak ditandai override walau bertepatan libur nasional', function () {
+    HariLibur::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'tanggal' => '2026-08-01',
+        'nama' => 'Contoh Libur',
+    ]);
+
+    $pola = PolaRotasi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'berlaku_saat_libur_nasional' => false,
+        'langkah' => [['shift_id' => null, 'libur' => true]],
+    ]);
+
+    $hasil = $pola->previewSiklus(1, Carbon::parse('2026-08-01'));
+
+    // Sudah libur menurut siklusnya sendiri — tidak perlu di-override.
+    expect($hasil[0]['libur'])->toBeTrue()
+        ->and($hasil[0]['override_libur_nasional'])->toBeFalse();
 });

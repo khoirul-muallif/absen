@@ -5,7 +5,9 @@ namespace App\Filament\Resources\PolaRotasis;
 use App\Filament\Resources\PolaRotasis\Pages\CreatePolaRotasi;
 use App\Filament\Resources\PolaRotasis\Pages\EditPolaRotasi;
 use App\Filament\Resources\PolaRotasis\Pages\ListPolaRotasis;
+use App\Filament\Resources\PolaRotasis\Pages\ViewPolaRotasi;
 use App\Filament\Resources\PolaRotasis\Schemas\PolaRotasiForm;
+use App\Filament\Resources\PolaRotasis\Schemas\PolaRotasiInfolist;
 use App\Filament\Resources\PolaRotasis\Tables\PolaRotasisTable;
 use App\Models\PolaRotasi;
 use BackedEnum;
@@ -27,6 +29,8 @@ class PolaRotasiResource extends Resource
 
     protected static ?string $label = 'Pola Rotasi';
 
+    protected static ?string $recordTitleAttribute = 'nama_pola';
+
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Rotasi';
 
     protected static ?int $navigationSort = 1;
@@ -34,6 +38,11 @@ class PolaRotasiResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return PolaRotasiForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return PolaRotasiInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -51,6 +60,7 @@ class PolaRotasiResource extends Resource
         return [
             'index'  => ListPolaRotasis::route('/'),
             'create' => CreatePolaRotasi::route('/create'),
+            'view'   => ViewPolaRotasi::route('/{record}'),
             'edit'   => EditPolaRotasi::route('/{record}/edit'),
         ];
     }

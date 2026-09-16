@@ -8,6 +8,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -83,6 +84,8 @@ class PolaRotasisTable
             ])
             ->recordActions([
                 ActionGroup::make([
+                    ViewAction::make(),
+
                     EditAction::make(),
 
                     // Perilaku FK karyawan_pola_rotasis.pola_rotasi_id tidak
