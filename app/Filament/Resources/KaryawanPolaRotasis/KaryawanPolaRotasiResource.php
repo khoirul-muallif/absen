@@ -5,7 +5,9 @@ namespace App\Filament\Resources\KaryawanPolaRotasis;
 use App\Filament\Resources\KaryawanPolaRotasis\Pages\CreateKaryawanPolaRotasi;
 use App\Filament\Resources\KaryawanPolaRotasis\Pages\EditKaryawanPolaRotasi;
 use App\Filament\Resources\KaryawanPolaRotasis\Pages\ListKaryawanPolaRotasis;
+use App\Filament\Resources\KaryawanPolaRotasis\Pages\ViewKaryawanPolaRotasi;
 use App\Filament\Resources\KaryawanPolaRotasis\Schemas\KaryawanPolaRotasiForm;
+use App\Filament\Resources\KaryawanPolaRotasis\Schemas\KaryawanPolaRotasiInfolist;
 use App\Filament\Resources\KaryawanPolaRotasis\Tables\KaryawanPolaRotasisTable;
 use App\Models\KaryawanPolaRotasi;
 use BackedEnum;
@@ -27,6 +29,8 @@ class KaryawanPolaRotasiResource extends Resource
 
     protected static ?string $label = 'Shift Karyawan Rotasi';
 
+    protected static ?string $recordTitleAttribute = 'id';
+
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Rotasi';
 
     protected static ?int $navigationSort = 2;
@@ -34,6 +38,11 @@ class KaryawanPolaRotasiResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return KaryawanPolaRotasiForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return KaryawanPolaRotasiInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -51,6 +60,7 @@ class KaryawanPolaRotasiResource extends Resource
         return [
             'index'  => ListKaryawanPolaRotasis::route('/'),
             'create' => CreateKaryawanPolaRotasi::route('/create'),
+            'view'   => ViewKaryawanPolaRotasi::route('/{record}'),
             'edit'   => EditKaryawanPolaRotasi::route('/{record}/edit'),
         ];
     }

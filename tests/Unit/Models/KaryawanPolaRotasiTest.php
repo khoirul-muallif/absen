@@ -73,3 +73,68 @@ test('dua karyawan staggered di pola sama menghasilkan posisi berbeda di tanggal
     expect($karyawanA->posisiSiklusPada($tanggalCek))
         ->not->toBe($karyawanB->posisiSiklusPada($tanggalCek));
 });
+
+// ============================================================================
+// TAMBAHAN untuk tests/Unit/Models/KaryawanPolaRotasiTest.php
+//
+// Tempel di akhir file. Helper buatAssignment() yang sudah ada dipakai ulang.
+// ============================================================================
+
+// ── Guard perhitungan siklus (fase 33) ───────────────────────────────────
+
+test('melempar exception kalau pola tidak punya langkah sama sekali', function () {
+    // Pola dengan langkah kosong memang mungkin terjadi lewat seeder atau
+    // insert langsung — minItems(1) cuma berlaku di form (lihat fase 32).
+    // Sebelumnya ini jadi `% 0` → DivisionByZeroError, dan yang memanggil
+    // bukan cuma Filament tapi GenerateJadwalRotasi.
+    $a = buatAssignment([], '2026-07-01');
+
+    expect(fn () => $a->posisiSiklusPada(Carbon::parse('2026-07-05')))
+        ->toThrow(LogicException::class);
+});
+
+test('posisi untuk tanggal SEBELUM anchor dihitung mundur, bukan sebagai jarak absolut', function () {
+    // Siklus 3 hari, anchor 10 Juli. Tanggal 8 Juli = 2 hari SEBELUM anchor.
+    //
+    // Versi lama memakai diffInDays() tanpa argumen kedua, jadi nilainya
+    // absolut: 2 % 3 = 2 — seolah assignment sudah berjalan 2 hari.
+    // Sekarang selisihnya bertanda (-2) lalu dinormalisasi: ((-2 % 3) + 3) % 3 = 1.
+    $a = buatAssignment(
+        [
+            ['shift_id' => 1, 'libur' => false],
+            ['shift_id' => 2, 'libur' => false],
+            ['shift_id' => null, 'libur' => true],
+        ],
+        '2026-07-10'
+    );
+
+    expect($a->posisiSiklusPada(Carbon::parse('2026-07-08')))->toBe(1)
+        ->and($a->posisiSiklusPada(Carbon::parse('2026-07-09')))->toBe(2)
+        ->and($a->posisiSiklusPada(Carbon::parse('2026-07-10')))->toBe(0);
+});
+
+// ── berlakuPada() ────────────────────────────────────────────────────────
+//
+// Pemanggil sebaiknya menyaring dengan ini dulu: posisi untuk tanggal di luar
+// masa berlaku assignment memang tidak punya arti bisnis.
+
+test('berlakuPada false sebelum tanggal_mulai', function () {
+    $a = buatAssignment([['shift_id' => 1, 'libur' => false]], '2026-07-10');
+
+    expect($a->berlakuPada(Carbon::parse('2026-07-09')))->toBeFalse()
+        ->and($a->berlakuPada(Carbon::parse('2026-07-10')))->toBeTrue();
+});
+
+test('berlakuPada true tanpa batas kalau tanggal_berakhir null', function () {
+    $a = buatAssignment([['shift_id' => 1, 'libur' => false]], '2026-07-10');
+
+    expect($a->berlakuPada(Carbon::parse('2030-01-01')))->toBeTrue();
+});
+
+test('berlakuPada menghormati tanggal_berakhir', function () {
+    $a = buatAssignment([['shift_id' => 1, 'libur' => false]], '2026-07-10');
+    $a->tanggal_berakhir = Carbon::parse('2026-07-20');
+
+    expect($a->berlakuPada(Carbon::parse('2026-07-20')))->toBeTrue()
+        ->and($a->berlakuPada(Carbon::parse('2026-07-21')))->toBeFalse();
+});
