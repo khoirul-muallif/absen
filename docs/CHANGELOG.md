@@ -6,6 +6,257 @@
 
 ---
 
+## fase 36: Review UX QR Instansi (QrInstansiResource) — selesai
+
+Commit `5b8d1bd`. **Resource terakhir — seluruh 17 Filament Resource selesai
+direview.**
+
+### BUG: kolom "Aktif" menyesatkan untuk QR kedaluwarsa
+
+Tabel cuma menampilkan `is_active`, jadi QR yang `expired_at`-nya sudah lewat
+tetap bercentang hijau padahal pemindaiannya ditolak. `isValid()` sudah ada di
+model sejak fase 1 tapi **tidak pernah dipakai di UI sama sekali** — kelas
+masalah yang sama dengan label "Aktif" di KaryawanShift (fase 31).
+
+Diganti kolom Status tiga keadaan lewat `QrInstansi::statusValiditas()`:
+Berlaku / Kedaluwarsa / Nonaktif. Ditambah filter "Hanya yang masih berlaku"
+yang benar-benar menjawab "QR mana yang bisa dipakai sekarang" — beda dari
+filter `is_active` yang mengabaikan kedaluwarsa.
+
+### BUG: helper text `kode_qr` menjanjikan yang mustahil
+
+Tertulis "Kosongkan dan simpan untuk generate otomatis", padahal field-nya
+`required()` sehingga mengosongkannya justru gagal validasi. Kodenya memang
+sudah ter-generate otomatis sebagai `default()` — kalimatnya keliru arah.
+
+### `kode_qr` bebas diubah kapan saja
+
+Begitu QR pernah dipakai absen, fisiknya sudah dicetak dan ditempel. Mengubah
+kodenya membuat semua QR terpasang jadi tidak valid — karyawan tidak bisa
+absen dan tidak ada yang tahu penyebabnya. Sekarang terkunci, dengan arahan
+membuat QR baru lalu menonaktifkan yang lama supaya riwayat absensinya tetap
+bisa ditelusuri.
+
+### Tidak ada guard hapus
+
+`absensi.qr_instansi_id` memakai `ON DELETE RESTRICT`, jadi menghapus QR yang
+pernah dipakai melempar `QueryException` 1451 mentah. Guard dipasang di tabel,
+hapus massal, dan halaman View.
+
+### Item todo `expired_at` null = permanen
+
+Selain helper text, ditambah Placeholder reaktif yang menyatakan konsekuensinya
+langsung: kosong berbunyi "♾️ PERMANEN — berlaku selamanya sampai dinonaktifkan
+manual". Keadaan kosong jadi terbaca sebagai **pilihan**, bukan sebagai field
+yang belum diisi. Kalau tanggalnya sudah lewat, langsung diperingatkan bahwa QR
+akan mati begitu disimpan.
+
+### Status
+
+`QrInstansiResourceTest` dibuat dari nol: 17 test.
+Full suite: **457 test passing (1447 assertions)** — naik dari 440.
+
+**Belum dikerjakan:** gambar QR-nya sendiri tidak pernah ditampilkan. Menu
+bernama "QR Instansi" cuma memberi string 32 karakter yang harus disalin ke
+generator eksternal untuk dicetak. Butuh paket tambahan — masuk todo.
+
+---
+
+## fase 35: Review UX Instansi (InstansiResource) — selesai
+
+Commit `3f06aa7`.
+
+### Guard hapus dengan taruhan terbesar dari semua Resource
+
+Lima tabel menggantung ke `instansi_id` — karyawan, shift, qr_instansi,
+hari_liburs, pola_rotasis — dan lewat karyawan, **seluruh riwayat absensi &
+pengajuan ikut** karena semua FK `karyawan_id` memakai `ON DELETE CASCADE`.
+Menghapus satu instansi berpotensi melenyapkan hampir seluruh isi sistem, dan
+selama baru ada satu instansi, itu berarti semuanya. Sebelumnya tanpa
+peringatan apa pun.
+
+`Instansi::sedangDipakai()` menutup kelimanya. Relasi `hariLiburs()` dan
+`polaRotasis()` ditambahkan — sebelumnya tidak pernah didefinisikan walau
+kedua tabel punya `instansi_id`.
+
+### BUG: latitude & longitude tanpa batas nilai
+
+Keduanya tertukar tersimpan tanpa keluhan. Akibatnya SEMUA absen ditolak "di
+luar radius" tanpa petunjuk penyebabnya — dan tidak ada apa pun di UI yang
+mengarahkan admin ke sana. Sekarang dibatasi -90..90 dan -180..180.
+
+Batas itu saja belum cukup: lintang 11 dan bujur 7 dua-duanya sah secara angka
+tapi jatuh di Afrika. Ditambah Placeholder reaktif yang mengecek apakah titik
+masuk wilayah Indonesia, dan kalau tidak, memeriksa apakah nilainya cocok bila
+lat-lng ditukar lalu **menyebut angka yang seharusnya**. Peringatan lunak,
+tidak menolak submit — suatu saat bisa saja ada instansi di luar negeri.
+
+### KEPUTUSAN: `kode_instansi` dikunci setelah ada karyawan atau QR
+
+Helper text lama berbunyi "tidak bisa diubah setelah dipakai QR" — **dua-duanya
+keliru**. Tidak ada apa pun yang mencegah perubahan, DAN kode ini tidak dipakai
+pemindaian QR sama sekali: endpoint `/api/instansi/qr/{kode}` mencari
+`QrInstansi.kode_qr`, kolom yang sepenuhnya terpisah. Yang benar, kode ini
+dikirim ke aplikasi mobile lewat `/api/auth/me` sebagai identitas instansi.
+
+### Status
+
+`InstansiResourceTest` dibuat dari nol: 20 test, termasuk dua untuk
+`dalamRadius()` yang selama ini dipakai validasi absen tapi tidak pernah dites
+lewat Resource-nya.
+
+Full suite: 420 → 440 test passing.
+
+---
+
+## fase 34: Review UX Karyawan (KaryawanResource) — selesai
+
+Commit `f9f9f0a`.
+
+### BUG PALING BERBAHAYA: menghapus karyawan melenyapkan seluruh riwayatnya
+
+Semua FK ke `karyawan_id` memakai `ON DELETE CASCADE` (SCHEMA.md), jadi satu
+klik Hapus ikut menghapus absensi, cuti, izin, lembur, dinas, jadwal, kuota,
+dan penugasan shift orang itu — permanen, tanpa peringatan.
+`DeleteBulkAction` bisa melakukannya untuk banyak orang sekaligus. Padahal
+`is_active` sudah ada persis untuk kasus "karyawan sudah tidak bekerja".
+
+`Karyawan::punyaRiwayat()` mengecek delapan relasi. Tombol hapus disembunyikan
+kalau ada riwayat, diganti versi abu-abu yang menjelaskan apa yang akan hilang.
+
+### `tipe_jadwal` tidak muncul di tabel sama sekali
+
+Bukan kolom, bukan filter — padahal itu field yang paling banyak mencabangkan
+perilaku sistem (fase 13) dan menentukan menu mana yang dipakai untuk
+menjadwalkan orangnya. Admin tidak punya cara melihat siapa umum dan siapa
+rotasi selain membuka satu per satu. Sekarang jadi kolom badge + filter, plus
+filter `unit_kerja`.
+
+### KEPUTUSAN: ubah `tipe_jadwal` ditolak selama masih punya penugasan
+
+Sebelumnya bebas, dan hasilnya adalah baris yang menurut guard fase 18
+seharusnya mustahil — karyawan rotasi yang punya `KaryawanShift`, atau
+sebaliknya. Anomali itu selama ini baru terdeteksi **belakangan** oleh command
+`karyawan:cek-tipe-jadwal` (fase 13); lebih masuk akal dicegah di sumbernya.
+Guard cuma aktif kalau nilainya benar-benar berubah, jadi menyunting
+jabatan/telepon tetap bisa.
+
+### `unit_kerja` jadi wajib untuk tipe rotasi, plus datalist
+
+Keputusan fase 33 membuat assignment pola ditolak kalau `unit_kerja` karyawan
+tidak sama persis dengan unit pola — jadi kolom teks bebas ini berubah jadi
+kunci keras, dan karyawan rotasi tanpa `unit_kerja` tidak akan pernah bisa
+dijadwalkan. Datalist menggabungkan unit dari karyawan dan dari pola rotasi.
+
+`Karyawan::karyawanPolaRotasis()` ditambahkan — pasangan dari
+`karyawanShift()` untuk tipe rotasi, sebelumnya tidak pernah didefinisikan.
+
+`Hash::make()` di form dihapus; model sudah punya cast `'password' => 'hashed'`.
+Keduanya tidak bikin double hash (cast mengecek `Hash::isHashed()` dulu), tapi
+menyisakan dua tempat yang seolah bertanggung jawab atas hal yang sama. Ada
+test yang memastikan password tetap tersimpan sebagai hash.
+
+### Catatan proses: 19 test dilewati diam-diam
+
+File test sempat bernama `Karyawanresourcetest.php`. PHPUnit menemukan test
+lewat suffix `Test.php` dengan T besar, jadi 19 test itu **dilewati tanpa pesan
+error apa pun** — di Windows filesystem case-insensitive sehingga tidak ada
+keluhan. Ketahuan cuma karena jumlah suite tidak bertambah (401 → 401).
+
+Jebakan ketiga soal file test yang salah tempat/nama, dan yang paling senyap:
+dua sebelumnya (fase 27 & 29) setidaknya melempar error.
+
+Full suite: 401 → 420 test passing.
+
+---
+
+## fase 33: Review UX Shift Karyawan Rotasi (KaryawanPolaRotasiResource) — selesai
+
+Commit `76b1a46`. Menuntaskan grup Manajemen Rotasi.
+
+### BUG: `posisiSiklusPada()` bisa melempar DivisionByZeroError
+
+Baris terakhirnya `$selisihHari % $panjangSiklus`, dan fase 32 baru saja
+menetapkan bahwa pola dengan `langkah` array kosong memang mungkin terjadi
+lewat seeder atau insert langsung. Yang memanggil method ini bukan cuma
+Filament tapi `GenerateJadwalRotasi`, jadi generator bisa mati di tengah jalan.
+Sekarang melempar `LogicException` yang menyebut pola mana yang bermasalah, dan
+form menolak meng-assign pola tanpa langkah sejak awal.
+
+### BUG: `diffInDays()` mengembalikan nilai absolut
+
+Dipanggil tanpa argumen kedua, jadi untuk tanggal **sebelum** `tanggal_mulai`
+posisinya tetap dihitung positif — assignment yang mulai 10 Agustus, ditanya
+posisi 5 Agustus, menjawab seolah sudah berjalan 5 hari. Pola bug yang sama
+dengan `hitungMenitTerlambat()` di fase 14; komentar di method ini bahkan
+menyebut kemiripannya, tapi sisi tanggal-sebelum-anchor tidak ikut ditutup.
+
+Sekarang selisihnya bertanda lalu dinormalisasi ke 0..n-1. Ditambah
+`berlakuPada()` supaya pemanggil punya cara menyaring tanggal di luar masa
+berlaku. **Belum diverifikasi** apakah `GenerateJadwalRotasi` sudah menyaring —
+masuk todo.
+
+### Irisan periode, dengan akibat lebih parah dari KaryawanShift
+
+Dua assignment beririsan berarti dua `tanggal_mulai` berbeda sebagai anchor,
+dan anchor itulah yang menentukan **seluruh urutan siklus** — bukan cuma shift
+mana yang dipakai pada satu hari. Transisi berurutan tetap diizinkan.
+
+### Dropdown pola tidak dibatasi apa pun
+
+Kejadian **ketiga berturut-turut** setelah KaryawanShift (fase 31) dan
+PolaRotasi (fase 32). Sekarang difilter dan divalidasi ke instansi karyawan.
+
+**KEPUTUSAN:** pola yang `unit_kerja`-nya berbeda dari karyawan DITOLAK, bukan
+sekadar diperingatkan. Pola IGD di-assign ke karyawan Rawat Jalan itu keliru
+secara logika, dan karena `unit_kerja` sudah punya datalist di PolaRotasiForm
+(fase 32), risiko penolakan gara-gara beda penulisan sudah berkurang.
+
+### Infolist: preview ber-anchor assignment
+
+Preview 14 harinya dihitung memakai anchor assignment ini, bukan "hari ini"
+seperti preview generik di halaman Pola Rotasi — jadi tanggal yang ditampilkan
+benar-benar sesuai jadwal yang akan digenerate untuk karyawan tersebut.
+Menutup sebagian item todo "anchor preview siklus belum bisa dipilih".
+
+Label "Aktif" diganti kolom Status tiga keadaan (sama seperti perbaikan di
+KaryawanShift fase 31), ditambah kolom "Shift hari ini" yang menghitung posisi
+siklus aktual.
+
+### Status
+
+`KaryawanPolaRotasiResourceTest`: 5 → 18 test (fixture lama harus disesuaikan
+karena guard `unit_kerja`), plus 5 unit test baru untuk `posisiSiklusPada()`
+dan `berlakuPada()`.
+
+Full suite: 384 → 401 test passing.
+
+---
+
+## RINGKASAN: Review UX 17 Filament Resource selesai (fase 25–36)
+
+Item Prioritas yang berjalan sejak fase 25 tuntas. Test naik **229 → 457**
+(621 → 1447 assertions) sepanjang dua belas fase.
+
+Pola bug yang berulang, dan berapa kali ditemukan:
+
+| Pola | Ditemukan di |
+|---|---|
+| Constraint DB tidak divalidasi di form (1062/1451 bocor mentah) | KuotaCuti 25, Absensi 27, Shift 30, PolaRotasi 32, Karyawan 34, Instansi 35, QrInstansi 36 |
+| Dropdown tidak dibatasi ke instansi terkait | KaryawanShift 31, PolaRotasi 32, KaryawanPolaRotasi 33 |
+| Helper text menyatakan hal yang tidak benar | Shift 30 (toleransi), HariLibur 29 (cuti bersama), Instansi 35 (kode), QrInstansi 36 (generate) |
+| Label status hanya membaca satu kolom, mengabaikan yang lain | KaryawanShift 31, KaryawanPolaRotasi 33, QrInstansi 36 |
+| Guard ada di tabel tapi bolong di halaman lain | ViewCuti/Dinas/TukarJadwal 25, Shift 30 |
+| Halaman View & Infolist tidak ada | 10 dari 17 Resource |
+| Resource sama sekali tanpa test | HariLibur 29, Shift 30, Karyawan 34, Instansi 35, QrInstansi 36 |
+
+Yang tidak terduga: sebagian besar bug paling serius bukan soal UX sama
+sekali. Kolom KPI yang tidak pernah tersimpan (fase 27), jebakan cast
+`datetime:H:i` di lima titik (fase 27), kuota terhitung ganda oleh command
+backfill (fase 26), `DivisionByZeroError` yang menunggu di generator rotasi
+(fase 33) — semuanya ketemu karena membaca kode Resource baris per baris,
+bukan karena mencarinya.
+
 ## fase 32: Review UX Pola Rotasi (PolaRotasiResource) — selesai
 
 Commit `69f1e2e` (batch A) dan `0382b4f` (batch B & C).
