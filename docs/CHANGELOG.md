@@ -6,6 +6,144 @@
 
 ---
 
+## fase 30: Review UX Shift (ShiftResource) — selesai
+
+Commit `08894b1` (batch A), `fa4a7d6` (label dropdown), `3af8d4b` (batch B & C).
+
+### BUG: helper text `toleransi_menit` menyatakan hal yang salah
+
+Tertulis "Karyawan masih dianggap tepat waktu dalam batas ini" — padahal
+`tentukanStatus()` menandai `'terlambat'` begitu lewat 0 menit dan **tidak
+pernah melihat `toleransi_menit` sama sekali**. Perilaku itu sudah
+terdokumentasi di QUICK_CONTEXT dan dikunci dataset eksplisit di `ShiftTest`
+sejak fase 14 ("14 menit lewat, masih dalam toleransi_menit tapi tetap
+terlambat").
+
+Jadi form-nya justru menyebarkan kesalahpahaman yang ingin dicegah oleh item
+todo ini. Helper text diganti jadi menyebut eksplisit bahwa angka itu TIDAK
+memengaruhi status harian, dan helper `mode_toleransi` dibuat reaktif
+mengikuti mode yang sedang dipilih.
+
+### BUG: DeleteAction tanpa guard, padahal FK-nya RESTRICT
+
+`absensi.shift_id` memakai `ON DELETE RESTRICT` (SCHEMA.md). Menghapus shift
+yang pernah dipakai absensi melempar `QueryException` 1451 mentah ke layar —
+kelas bug yang sama dengan 1062 di KuotaCuti (fase 25) dan Absensi (fase 27),
+cuma beda nomor.
+
+- `Shift::sedangDipakai()` mengecek **tiga** relasi: absensi, jadwals,
+  karyawan_shift. Yang terdokumentasi RESTRICT cuma absensi, tapi perilaku FK
+  dua relasi lain belum dipastikan — kalau ternyata CASCADE, penghapusan akan
+  diam-diam menghilangkan jadwal atau assignment periode. Memblokir ketiganya
+  aman untuk kedua kemungkinan.
+- Guard dipasang di tabel, halaman Edit, DAN halaman View secara terpisah.
+  Pola "tabel sudah benar tapi halaman lain bolong" sudah jadi bug di
+  ViewCuti/ViewDinas/ViewTukarJadwal (fase 25).
+- Tombol hapus tidak sekadar hilang: ada versi abu-abu yang menjelaskan kenapa
+  dan menyarankan menonaktifkan shift.
+- **KEPUTUSAN:** pada hapus massal, kalau satu shift dalam batch masih dipakai
+  maka TIDAK ADA yang terhapus — termasuk yang sebenarnya bebas. Lebih aman
+  daripada menghapus sebagian tanpa admin sadar mana yang lolos.
+
+### Tidak ada validasi durasi nol
+
+`jam_masuk == jam_pulang` lolos tersimpan. Shift malam (pulang di dini hari
+keesokan harinya) tetap **SAH**, jadi aturannya bukan "pulang harus setelah
+masuk" melainkan "tidak boleh sama" — keputusan yang sama sudah diambil untuk
+Lembur di fase 25.
+
+### KEPUTUSAN: `nama_shift` boleh duplikat dalam satu instansi
+
+Dugaan awal: ini bug `JenisCuti.nama` fase 25 yang terulang. Ternyata bukan.
+
+Tabel `shift` **tidak punya kolom `unit_kerja`** (yang punya itu
+`pola_rotasis`). Jadi satu-satunya cara merepresentasikan jam masuk berbeda
+antar unit — IGD masuk 07:00, Rawat Jalan 08:00 — adalah dua baris yang
+sama-sama bernama "Pagi". Itu data yang sah. Melarang duplikat akan memaksa
+penamaan "Pagi IGD", yang menyelundupkan informasi unit ke dalam kolom nama —
+hal yang justru dilarang di project ini untuk `tipe_jadwal`.
+
+Yang bermasalah cuma dropdown yang menampilkan keduanya sebagai teks identik.
+Jadi yang diperbaiki labelnya: `Shift::labelLengkap()` mengembalikan
+`"Pagi (07:00–14:00)"`. Sudah dipasang di dropdown `AbsensiForm` &
+`JadwalForm`; `KaryawanShiftForm` dan Repeater langkah di `PolaRotasiForm`
+menyusul saat gilirannya direview.
+
+Duplikat **persis** (nama DAN jam sama) ditandai lewat peringatan di helper
+text, bukan penolakan — mengikuti pola helper `terpakai` di KuotaCuti fase 25.
+
+### Halaman View + Infolist
+
+`ViewShift` + `ShiftInfolist` ditambahkan, `ViewAction` masuk ke `ActionGroup`.
+Infolist tidak berhenti di menampilkan kolom:
+
+- Section **"Toleransi Keterlambatan"** punya baris "Artinya" yang
+  menerjemahkan kombinasi mode + angka jadi kalimat. Menampilkan "Per Hari" dan
+  "15 menit" berdampingan justru mengundang kesimpulan keliru bahwa 15 menit
+  itu batas toleransi harian.
+- Section **"Pemakaian"** menampilkan jumlah penugasan karyawan, baris jadwal,
+  dan baris absensi yang memakai shift ini, plus kalimat apakah shift bisa
+  dihapus. Tombol hapus yang disembunyikan jadi punya penjelasan angkanya.
+- Durasi shift dihitung sadar lintas tengah malam: 22:00→07:00 muncul sebagai
+  "9 jam (melewati tengah malam)", bukan angka negatif.
+
+### Celah test yang ditutup
+
+`DeleteBulkAction::before()` dengan `$action->cancel()` (batch A) sama sekali
+tidak tersentuh test, padahal API itu belum pernah dipakai di project ini —
+error-nya baru akan muncul saat admin benar-benar memakai hapus massal.
+Ditambahkan dua test di batch B: satu memastikan batch dibatalkan kalau ada
+shift terpakai, satu memastikan hapus massal tetap jalan normal kalau semuanya
+bebas.
+
+### TEMUAN: grup menu di todo.md ternyata basi
+
+Pengecekan `navigationGroup` di seluruh Resource mengungkap **lima** grup,
+bukan tiga seperti yang tercatat:
+
+| Grup | Isi |
+|---|---|
+| Presensi | Data Absensi, Jadwal, Hari Libur |
+| Pengajuan & Cuti | Cuti, Izin, Lembur, Dinas, Tukar Jadwal, Jenis Cuti, Kuota Cuti |
+| Manajemen Shift | Shift, Shift Karyawan Umum |
+| Manajemen Rotasi | Pola Rotasi, Shift Karyawan Rotasi |
+| Master Data | Karyawan, Instansi, QR Instansi |
+
+`todo.md` menaruh Shift, Shift Karyawan Umum/Rotasi, dan Pola Rotasi di bawah
+Master Data — pengelompokan dari sebelum commit `4257e23` ("fase 20:
+merapikan sidebar menu"). Sudah dikoreksi.
+
+**Efek samping reorganisasi itu yang belum pernah dicatat:** CHANGELOG fase 15
+menyebut "Shift Karyawan Umum" dan "Shift Karyawan Rotasi" sengaja dinamai
+paralel dan ditaruh bersebelahan supaya jelas keduanya pasangan untuk dua
+`tipe_jadwal` yang berbeda. Sekarang keduanya berada di **grup yang berbeda**,
+jadi tidak lagi bersebelahan — maksud desain itu hilang tanpa pernah
+diputuskan. Admin yang salah pilih menu tidak punya petunjuk visual bahwa ada
+pasangannya di grup lain. Relevan langsung dengan item todo "cek guard
+tipe_jadwal sudah tervisualisasi jelas"; masuk todo.
+
+### Perbaikan kecil
+
+- Helper text `sumber` di `JadwalForm` yang menyebut
+  `jadwal:generate-rotasi --overwrite-generate` diganti bahasa hasil, sesuai
+  larangan yang masuk QUICK_CONTEXT di fase 29. Tiga tempat lain masih
+  tercatat di todo.
+- Kolom nama shift di tabel diberi `description` berisi jamnya.
+- Badge toleransi jadi abu-abu kalau mode harian (angkanya memang tidak
+  dipakai), dengan tooltip yang menjelaskan.
+- Filter `mode_toleransi` ditambahkan.
+
+### Status
+
+`ShiftResourceTest` dibuat dari nol: 0 → 18 test. Resource ini sebelumnya
+cuma punya unit test model.
+
+Full suite: **352 test passing (1118 assertions)** — naik dari 334.
+
+Sisa review UX Filament: 6 Resource — Shift Karyawan Umum (Manajemen Shift),
+Pola Rotasi & Shift Karyawan Rotasi (Manajemen Rotasi), Karyawan, Instansi,
+QR Instansi (Master Data).
+
 ## fase 29: Review UX Hari Libur (HariLiburResource) — selesai
 
 Commit `c6328d7` (batch A) dan `a0939ad` (batch B & C).

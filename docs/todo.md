@@ -10,45 +10,45 @@ buat curiga, kemungkinan besar test yang ada baru cover happy path.
 
 Sudah selesai (navigationGroup, audit lintas modul, race condition, tanggal
 edge case, konsistensi respons API, 5 modul approval + Jenis/Kuota Cuti,
-sentralisasi query kuota, jebakan cast datetime, Data Absensi, Jadwal) —
-detail di CHANGELOG fase 20-28.
+sentralisasi query kuota, jebakan cast datetime, Data Absensi, Jadwal,
+Hari Libur, Shift) — detail di CHANGELOG fase 20-30.
 
-- [ ] **Review UX Filament — 8 Resource yang belum disentuh**
+- [ ] **Review UX Filament — 6 Resource yang belum disentuh**
 
-      Presensi:
-      - [ ] Hari Libur (HariLiburResource)
+      Manajemen Shift:
+      - [ ] Shift Karyawan Umum (KaryawanShiftResource) — cek guard
+            tipe_jadwal (fase 18) sudah tervisualisasi jelas di dropdown,
+            bukan cuma tervalidasi di server-side. Sekalian pasang
+            Shift::labelLengkap() di dropdown shift-nya (fase 30).
+
+      Manajemen Rotasi:
+      - [ ] Pola Rotasi (PolaRotasiResource) — SUDAH ADA rencana
+            perbaikan detail di item terpisah di bawah (preview 7-14
+            hari, kejelasan toggle Hari Libur, ikon reorder) — jangan
+            dikerjakan asal, ikuti draft yang sudah ada. Sekalian pasang
+            Shift::labelLengkap() di Repeater langkah.
+      - [ ] Shift Karyawan Rotasi (KaryawanPolaRotasiResource) — terkait
+            erat dengan Pola Rotasi di atas, sebaiknya direview bareng.
 
       Master Data:
       - [ ] Karyawan (KaryawanResource) — cek kejelasan section
             "Tipe Penjadwalan" (umum/rotasi, fase 13), interaksi dengan
-            2 menu shift yang terpisah (lihat 2 item Shift di bawah).
+            2 menu shift yang sekarang ada di DUA GRUP BERBEDA.
       - [ ] Instansi (InstansiResource)
       - [ ] QR Instansi (QrInstansiResource) — cek kejelasan
             expired_at (null = permanen) di form, potensi admin gak
             sadar QR permanen kalau field dikosongkan begitu saja.
-      - [ ] Pola Rotasi (PolaRotasiResource) — SUDAH ADA rencana
-            perbaikan detail di item terpisah di bawah (preview 7-14
-            hari, kejelasan toggle Hari Libur, ikon reorder) — jangan
-            dikerjakan asal, ikuti draft yang sudah ada.
-      - [ ] Shift Karyawan Rotasi (KaryawanPolaRotasiResource) — terkait
-            erat dengan Pola Rotasi di atas, sebaiknya direview bareng.
-      - [ ] Shift (ShiftResource) — cek kejelasan mode_toleransi
-            (harian/akumulasi_bulanan) di form, mengingat ini konsep yang
-            gampang disalahpahami (lihat CHANGELOG fase 9).
-      - [ ] Shift Karyawan Umum (KaryawanShiftResource) — cek guard
-            tipe_jadwal (fase 18) sudah tervisualisasi jelas di dropdown,
-            bukan cuma tervalidasi di server-side.
 
-      Pola yang sudah terbentuk dari Data Absensi & Jadwal, dipakai lagi
-      untuk sisanya: (A) integritas data — validasi yang cuma ada di DB
-      tapi tidak di form, field yang required padahal nullable, guard
-      untuk baris yang ditulis sistem; (B) halaman View + Infolist kalau
-      belum ada; (C) badge/label/filter.
+      Pola yang sudah terbentuk dari 4 Resource sebelumnya, dipakai lagi:
+      (A) integritas data — validasi yang cuma ada di DB tapi tidak di
+      form, field required padahal nullable, guard untuk baris yang
+      ditulis sistem, guard hapus untuk FK RESTRICT; (B) halaman View +
+      Infolist kalau belum ada, dengan penjelasan yang menerjemahkan
+      nilai kolom jadi konsekuensi; (C) badge/label/filter.
 
-      Urutan yang disarankan: Hari Libur dulu (paling kecil, dan dipakai
-      oleh 2 generator + RekapHarian), lalu Shift & Shift Karyawan
-      Umum/Rotasi + Pola Rotasi sebagai satu kelompok (saling terkait),
-      baru Karyawan/Instansi/QR Instansi.
+      Urutan yang disarankan: Shift Karyawan Umum dulu (menuntaskan grup
+      Manajemen Shift), lalu Pola Rotasi + Shift Karyawan Rotasi sebagai
+      satu kelompok, baru Master Data.
 
 ## Nanti / belum prioritas
 - [ ] **Simulasi karyawan rotasi yang punya langkah LIBUR di polanya
@@ -304,6 +304,25 @@ detail di CHANGELOG fase 20-28.
       yang mengoperasikan panel ini sehari-hari — staf SDM/kepegawaian
       awam, atau ada IT internal RS yang memang bisa jalanin command?
       Kalau ada IT internal, (a) saja mungkin cukup.
+
+- [ ] **"Shift Karyawan Umum" & "Shift Karyawan Rotasi" tidak lagi
+      bersebelahan di menu** — ditemukan saat mengecek navigationGroup di
+      fase 30. CHANGELOG fase 15 mencatat keduanya SENGAJA dinamai paralel
+      dan ditaruh berdampingan supaya jelas ini pasangan untuk 2
+      tipe_jadwal yang berbeda. Setelah reorganisasi sidebar di fase 20,
+      Shift Karyawan Umum masuk grup "Manajemen Shift" sedangkan Shift
+      Karyawan Rotasi masuk "Manajemen Rotasi" — maksud desain itu hilang
+      tanpa pernah diputuskan ulang.
+      Akibatnya admin yang salah pilih menu tidak punya petunjuk visual
+      bahwa ada pasangannya di grup lain; yang ada cuma guard server-side
+      yang menolak setelah submit (fase 18).
+      Arah solusi (belum diputuskan):
+      - Satukan lagi keduanya dalam satu grup, atau
+      - Pertahankan pemisahan tapi tambahkan helper text/link silang di
+        masing-masing form yang menunjuk ke menu pasangannya (helper text
+        saling menunjuk sebenarnya SUDAH ada sejak fase 15 — perlu dicek
+        apakah masih ada dan masih benar setelah pindah grup).
+      Dikerjakan bareng review KaryawanShiftResource & KaryawanPolaRotasiResource.
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
