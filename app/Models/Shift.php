@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Shift extends Model
 {
-    use  HasFactory;
+    use HasFactory;
 
     protected $table = 'shift';
 
@@ -31,7 +31,6 @@ class Shift extends Model
         'toleransi_menit' => 'integer',
         'is_active'       => 'boolean',
         'hari_kerja'      => 'array',
-
     ];
 
     public function instansi(): BelongsTo
@@ -49,6 +48,11 @@ class Shift extends Model
     public function absensi(): HasMany
     {
         return $this->hasMany(Absensi::class);
+    }
+
+    public function jadwals(): HasMany
+    {
+        return $this->hasMany(Jadwal::class);
     }
 
     public function adalahHariKerja(\Carbon\Carbon $tanggal): bool
@@ -90,6 +94,42 @@ class Shift extends Model
         }
 
         return $totalTerlambatBulanIniTermasukHariIni > $this->toleransi_menit;
+    }
+
+    /**
+     * Label shift yang menyertakan jamnya, mis. "Pagi (07:00–14:00)".
+     *
+     * WAJIB dipakai untuk label dropdown shift di seluruh Filament, bukan
+     * `nama_shift` mentah. Tabel `shift` TIDAK punya kolom unit_kerja, jadi
+     * satu-satunya cara merepresentasikan jam masuk yang berbeda antar unit
+     * (IGD 07:00, Rawat Jalan 08:00) adalah dua baris yang sama-sama bernama
+     * "Pagi". Itu data yang sah — yang tidak boleh adalah dropdown yang
+     * menampilkan keduanya sebagai teks identik sehingga tidak bisa dibedakan.
+     * Bandingkan bug JenisCuti.nama di fase 25.
+     */
+    public function labelLengkap(): string
+    {
+        return sprintf(
+            '%s (%s–%s)',
+            $this->nama_shift,
+            $this->jam_masuk->format('H:i'),
+            $this->jam_pulang->format('H:i')
+        );
+    }
+
+    /**
+     * Apakah shift ini masih direferensikan data lain?
+     *
+     * `absensi.shift_id` memakai ON DELETE RESTRICT, jadi menghapus shift yang
+     * pernah dipakai absensi melempar QueryException 1451 mentah ke layar.
+     * Relasi lain (jadwals, karyawan_shift) ikut dicek supaya penghapusan tidak
+     * diam-diam menghilangkan jadwal atau assignment periode.
+     */
+    public function sedangDipakai(): bool
+    {
+        return $this->absensi()->exists()
+            || $this->jadwals()->exists()
+            || $this->karyawan()->exists();
     }
 
     /**
