@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Shifts;
 use App\Filament\Resources\Shifts\Pages\CreateShift;
 use App\Filament\Resources\Shifts\Pages\EditShift;
 use App\Filament\Resources\Shifts\Pages\ListShifts;
+use App\Filament\Resources\Shifts\Pages\ViewShift;
 use App\Filament\Resources\Shifts\Schemas\ShiftForm;
+use App\Filament\Resources\Shifts\Schemas\ShiftInfolist;
 use App\Filament\Resources\Shifts\Tables\ShiftsTable;
 use App\Models\Shift;
 use BackedEnum;
@@ -38,6 +40,11 @@ class ShiftResource extends Resource
         return ShiftForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return ShiftInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return ShiftsTable::configure($table);
@@ -53,6 +60,7 @@ class ShiftResource extends Resource
         return [
             'index'  => ListShifts::route('/'),
             'create' => CreateShift::route('/create'),
+            'view'   => ViewShift::route('/{record}'),
             'edit'   => EditShift::route('/{record}/edit'),
         ];
     }

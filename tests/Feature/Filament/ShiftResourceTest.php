@@ -8,6 +8,7 @@
 use App\Filament\Resources\Shifts\Pages\CreateShift;
 use App\Filament\Resources\Shifts\Pages\EditShift;
 use App\Filament\Resources\Shifts\Pages\ListShifts;
+use App\Filament\Resources\Shifts\Pages\ViewShift;
 use App\Models\Absensi;
 use App\Models\Instansi;
 use App\Models\Karyawan;
@@ -195,4 +196,110 @@ it('tombol hapus di halaman Edit ikut disembunyikan untuk shift yang dipakai', f
 
     livewire(EditShift::class, ['record' => $shift->getRouteKey()])
         ->assertActionHidden('delete');
+});
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/ShiftResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import:
+//   use App\Filament\Resources\Shifts\Pages\ViewShift;
+// ============================================================================
+
+// ── Halaman View (batch B) ───────────────────────────────────────────────
+
+it('halaman View shift bisa dibuka', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ViewShift::class, ['record' => $shift->getRouteKey()])
+        ->assertSuccessful();
+});
+
+it('ViewAction muncul di tabel', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ListShifts::class)
+        ->assertTableActionVisible('view', $shift);
+});
+
+it('tombol hapus di halaman View ikut disembunyikan untuk shift yang dipakai', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal' => '2026-08-03',
+    ]);
+
+    livewire(ViewShift::class, ['record' => $shift->getRouteKey()])
+        ->assertActionHidden('delete');
+});
+
+// ── Guard hapus massal ───────────────────────────────────────────────────
+//
+// Sebelumnya guard ini sama sekali tidak tersentuh test, padahal
+// DeleteBulkAction::before() + $action->cancel() itu API yang belum pernah
+// dipakai di project ini. Tanpa test, error-nya baru muncul saat admin
+// benar-benar memakai hapus massal.
+
+it('hapus massal dibatalkan kalau ada shift yang masih dipakai', function () {
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $dipakai = Shift::factory()->create(['instansi_id' => $this->instansi->id, 'nama_shift' => 'Dipakai']);
+    $bebas = Shift::factory()->create(['instansi_id' => $this->instansi->id, 'nama_shift' => 'Bebas']);
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $dipakai->id,
+        'tanggal' => '2026-08-04',
+    ]);
+
+    livewire(ListShifts::class)
+        ->callTableBulkAction('delete', [$dipakai, $bebas]);
+
+    // Tidak ada yang terhapus — termasuk yang sebenarnya bebas, karena
+    // pembatalan berlaku untuk seluruh batch (lebih aman daripada menghapus
+    // sebagian tanpa admin sadar).
+    expect(Shift::find($dipakai->id))->not->toBeNull()
+        ->and(Shift::find($bebas->id))->not->toBeNull();
+});
+
+it('hapus massal berjalan kalau semua shift belum pernah dipakai', function () {
+    $a = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+    $b = Shift::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ListShifts::class)
+        ->callTableBulkAction('delete', [$a, $b]);
+
+    expect(Shift::find($a->id))->toBeNull()
+        ->and(Shift::find($b->id))->toBeNull();
+});
+
+// ── Filter (batch C) ─────────────────────────────────────────────────────
+
+it('filter mode toleransi memisahkan harian dari akumulasi bulanan', function () {
+    $harian = Shift::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'mode_toleransi' => 'harian',
+    ]);
+
+    $akumulasi = Shift::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'mode_toleransi' => 'akumulasi_bulanan',
+    ]);
+
+    livewire(ListShifts::class)
+        ->filterTable('mode_toleransi', 'akumulasi_bulanan')
+        ->assertCanSeeTableRecords([$akumulasi])
+        ->assertCanNotSeeTableRecords([$harian]);
+});
+
+it('filter status aktif memisahkan shift nonaktif', function () {
+    $aktif = Shift::factory()->create(['instansi_id' => $this->instansi->id, 'is_active' => true]);
+    $nonaktif = Shift::factory()->create(['instansi_id' => $this->instansi->id, 'is_active' => false]);
+
+    livewire(ListShifts::class)
+        ->filterTable('is_active', true)
+        ->assertCanSeeTableRecords([$aktif])
+        ->assertCanNotSeeTableRecords([$nonaktif]);
 });

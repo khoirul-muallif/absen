@@ -8,6 +8,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -99,6 +100,13 @@ class ShiftsTable
                     ->label('Instansi')
                     ->relationship('instansi', 'nama'),
 
+                SelectFilter::make('mode_toleransi')
+                    ->label('Mode Toleransi')
+                    ->options([
+                        'harian' => 'Per Hari',
+                        'akumulasi_bulanan' => 'Akumulasi Bulanan',
+                    ]),
+
                 TernaryFilter::make('is_active')
                     ->label('Status Aktif')
                     ->trueLabel('Aktif')
@@ -106,6 +114,8 @@ class ShiftsTable
             ])
             ->recordActions([
                 ActionGroup::make([
+                    ViewAction::make(),
+
                     EditAction::make(),
 
                     // absensi.shift_id memakai ON DELETE RESTRICT, jadi tanpa
