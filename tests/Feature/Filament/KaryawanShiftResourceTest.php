@@ -3,6 +3,7 @@
 use App\Filament\Resources\KaryawanShifts\Pages\CreateKaryawanShift;
 use App\Filament\Resources\KaryawanShifts\Pages\EditKaryawanShift;
 use App\Filament\Resources\KaryawanShifts\Pages\ListKaryawanShifts;
+use App\Filament\Resources\KaryawanShifts\Pages\ViewKaryawanShift;
 use App\Models\Instansi;
 use App\Models\Karyawan;
 use App\Models\KaryawanShift;
@@ -215,4 +216,134 @@ test('edit tidak kena aturan irisan dirinya sendiri', function () {
         ->assertHasNoFormErrors();
 
     expect($assignment->fresh()->tanggal_berakhir->toDateString())->toBe('2026-09-30');
+});
+
+
+
+// ============================================================================
+// TAMBAHAN untuk tests/Feature/Filament/KaryawanShiftResourceTest.php
+//
+// Tempel di akhir file. Tambahkan import:
+//   use App\Filament\Resources\KaryawanShifts\Pages\ViewKaryawanShift;
+// ============================================================================
+
+// ── Halaman View (batch B) ───────────────────────────────────────────────
+
+test('halaman View penugasan bisa dibuka', function () {
+    $assignment = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+        'tanggal_berakhir' => '2026-08-31',
+    ]);
+
+    livewire(ViewKaryawanShift::class, ['record' => $assignment->getRouteKey()])
+        ->assertSuccessful();
+});
+
+test('ViewAction muncul di tabel', function () {
+    $assignment = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->assertTableActionVisible('view', $assignment);
+});
+
+// ── Status periode (batch A yang ditampilkan di tabel & infolist) ────────
+//
+// Label lama cuma menandai tanggal_berakhir null sebagai "Aktif" — itu
+// berarti "berlaku sampai diganti", BUKAN "sedang berlaku". Tiga test ini
+// mengunci ketiga keadaan supaya artinya tidak melar lagi.
+
+test('penugasan yang mulai bulan depan berstatus Belum mulai', function () {
+    $assignment = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->addMonth()->toDateString(),
+        'tanggal_berakhir' => null, // open-ended, tapi BELUM berlaku
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->assertTableColumnStateSet('status_periode', 'Belum mulai', $assignment);
+});
+
+test('penugasan yang sudah lewat berstatus Sudah berakhir', function () {
+    $assignment = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->subMonths(2)->toDateString(),
+        'tanggal_berakhir' => today()->subMonth()->toDateString(),
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->assertTableColumnStateSet('status_periode', 'Sudah berakhir', $assignment);
+});
+
+test('penugasan berjangka yang mencakup hari ini berstatus Sedang berlaku', function () {
+    $assignment = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->subDays(5)->toDateString(),
+        'tanggal_berakhir' => today()->addDays(5)->toDateString(),
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->assertTableColumnStateSet('status_periode', 'Sedang berlaku', $assignment);
+});
+
+// ── Filter (batch C) ─────────────────────────────────────────────────────
+
+test('filter sedang berlaku menyembunyikan penugasan lama & yang belum mulai', function () {
+    $karyawanB = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+    $karyawanC = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+
+    $sedangBerlaku = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->subDays(5)->toDateString(),
+        'tanggal_berakhir' => today()->addDays(5)->toDateString(),
+    ]);
+
+    $sudahBerakhir = KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawanB->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->subMonths(2)->toDateString(),
+        'tanggal_berakhir' => today()->subMonth()->toDateString(),
+    ]);
+
+    $belumMulai = KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawanC->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => today()->addMonth()->toDateString(),
+        'tanggal_berakhir' => null,
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->filterTable('sedang_berlaku')
+        ->assertCanSeeTableRecords([$sedangBerlaku])
+        ->assertCanNotSeeTableRecords([$sudahBerakhir, $belumMulai]);
+});
+
+test('filter karyawan membatasi baris ke karyawan yang dipilih', function () {
+    $karyawanLain = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+
+    $milikIni = KaryawanShift::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+    ]);
+
+    $milikLain = KaryawanShift::factory()->create([
+        'karyawan_id' => $karyawanLain->id,
+        'shift_id' => $this->shift->id,
+        'tanggal_berlaku' => '2026-08-01',
+    ]);
+
+    livewire(ListKaryawanShifts::class)
+        ->filterTable('karyawan_id', $this->karyawan->id)
+        ->assertCanSeeTableRecords([$milikIni])
+        ->assertCanNotSeeTableRecords([$milikLain]);
 });

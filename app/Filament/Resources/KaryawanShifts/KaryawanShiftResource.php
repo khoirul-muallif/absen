@@ -5,7 +5,9 @@ namespace App\Filament\Resources\KaryawanShifts;
 use App\Filament\Resources\KaryawanShifts\Pages\CreateKaryawanShift;
 use App\Filament\Resources\KaryawanShifts\Pages\EditKaryawanShift;
 use App\Filament\Resources\KaryawanShifts\Pages\ListKaryawanShifts;
+use App\Filament\Resources\KaryawanShifts\Pages\ViewKaryawanShift;
 use App\Filament\Resources\KaryawanShifts\Schemas\KaryawanShiftForm;
+use App\Filament\Resources\KaryawanShifts\Schemas\KaryawanShiftInfolist;
 use App\Filament\Resources\KaryawanShifts\Tables\KaryawanShiftsTable;
 use App\Models\KaryawanShift;
 use BackedEnum;
@@ -19,13 +21,17 @@ class KaryawanShiftResource extends Resource
 {
     protected static ?string $model = KaryawanShift::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
+    // Sebelumnya OutlinedCalendarDays — sama persis dengan HariLiburResource
+    // setelah ikonnya diganti di fase 29.
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
     protected static ?string $navigationLabel = 'Shift Karyawan Umum';
 
     protected static ?string $pluralLabel = 'Shift Karyawan Umum';
 
     protected static ?string $label = 'Shift Karyawan Umum';
+
+    protected static ?string $recordTitleAttribute = 'id';
 
     protected static string|UnitEnum|null $navigationGroup = 'Manajemen Shift';
 
@@ -34,6 +40,11 @@ class KaryawanShiftResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return KaryawanShiftForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return KaryawanShiftInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -51,6 +62,7 @@ class KaryawanShiftResource extends Resource
         return [
             'index'  => ListKaryawanShifts::route('/'),
             'create' => CreateKaryawanShift::route('/create'),
+            'view'   => ViewKaryawanShift::route('/{record}'),
             'edit'   => EditKaryawanShift::route('/{record}/edit'),
         ];
     }
