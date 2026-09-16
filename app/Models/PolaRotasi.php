@@ -36,9 +36,17 @@ class PolaRotasi extends Model
         return $this->hasMany(KaryawanPolaRotasi::class);
     }
 
+    /**
+     * Panjang siklus (jumlah langkah), aman terhadap kolom `langkah` yang null.
+     *
+     * Versi lama memanggil count() langsung pada $this->langkah. Kalau kolomnya
+     * null (bukan array kosong), count() melempar TypeError di PHP 8 — dan
+     * karena dipakai di kolom tabel Filament, yang gagal dirender bukan cuma
+     * satu baris tapi SELURUH tabel.
+     */
     public function panjangSiklus(): int
     {
-        return count($this->langkah);
+        return is_array($this->langkah) ? count($this->langkah) : 0;
     }
 
     /**
@@ -47,5 +55,20 @@ class PolaRotasi extends Model
     public function langkahKe(int $posisi): array
     {
         return $this->langkah[$posisi];
+    }
+
+    /**
+     * Apakah pola ini masih di-assign ke karyawan?
+     *
+     * Perilaku FK `karyawan_pola_rotasis.pola_rotasi_id` tidak disebut di
+     * SCHEMA.md. Kalau CASCADE, menghapus pola akan menghilangkan assignment
+     * diam-diam dan karyawan rotasi kehilangan sumber jadwalnya. Kalau
+     * RESTRICT, muncul QueryException 1451 mentah ke layar. Guard ini aman
+     * untuk kedua kemungkinan — pola yang sama dengan Shift::sedangDipakai()
+     * di fase 30.
+     */
+    public function sedangDipakai(): bool
+    {
+        return $this->karyawanPolaRotasis()->exists();
     }
 }
