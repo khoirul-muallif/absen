@@ -5,7 +5,9 @@ namespace App\Filament\Resources\QrInstansis;
 use App\Filament\Resources\QrInstansis\Pages\CreateQrInstansi;
 use App\Filament\Resources\QrInstansis\Pages\EditQrInstansi;
 use App\Filament\Resources\QrInstansis\Pages\ListQrInstansis;
+use App\Filament\Resources\QrInstansis\Pages\ViewQrInstansi;
 use App\Filament\Resources\QrInstansis\Schemas\QrInstansiForm;
+use App\Filament\Resources\QrInstansis\Schemas\QrInstansiInfolist;
 use App\Filament\Resources\QrInstansis\Tables\QrInstansisTable;
 use App\Models\QrInstansi;
 use BackedEnum;
@@ -38,6 +40,11 @@ class QrInstansiResource extends Resource
         return QrInstansiForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return QrInstansiInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return QrInstansisTable::configure($table);
@@ -53,6 +60,7 @@ class QrInstansiResource extends Resource
         return [
             'index'  => ListQrInstansis::route('/'),
             'create' => CreateQrInstansi::route('/create'),
+            'view'   => ViewQrInstansi::route('/{record}'),
             'edit'   => EditQrInstansi::route('/{record}/edit'),
         ];
     }
