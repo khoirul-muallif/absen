@@ -50,6 +50,12 @@ class AbsensiForm
                         Select::make('shift_id')
                             ->label('Shift')
                             ->relationship('shift', 'nama_shift')
+                            // Label memakai labelLengkap() supaya dua shift
+                            // bernama sama dengan jam berbeda bisa dibedakan —
+                            // tabel `shift` tidak punya kolom unit_kerja, jadi
+                            // "Pagi" IGD 07:00 dan "Pagi" Rawat Jalan 08:00
+                            // memang dua baris yang sah (lihat fase 30).
+                            ->getOptionLabelFromRecordUsing(fn (Shift $record): string => $record->labelLengkap())
                             // Wajib hanya kalau ada waktu_masuk: status &
                             // menit_terlambat dihitung dari jam shift, jadi
                             // tanpa shift tidak ada dasar perhitungannya.

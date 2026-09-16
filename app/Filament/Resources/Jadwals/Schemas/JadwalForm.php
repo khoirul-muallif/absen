@@ -7,6 +7,7 @@ use App\Models\Dinas;
 use App\Models\HariLibur;
 use App\Models\Jadwal;
 use App\Models\Karyawan;
+use App\Models\Shift;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -133,6 +134,10 @@ class JadwalForm
 
                 Select::make('shift_id')
                     ->relationship('shift', 'nama_shift')
+                    // Lihat catatan yang sama di AbsensiForm: dua shift bernama
+                    // sama dengan jam berbeda itu data yang sah, jadi labelnya
+                    // yang dibuat membedakan (fase 30).
+                    ->getOptionLabelFromRecordUsing(fn (Shift $record): string => $record->labelLengkap())
                     ->searchable()
                     ->preload()
                     // Wajib hanya untuk jenis yang memang butuh shift.
@@ -158,9 +163,10 @@ class JadwalForm
                     ->default('manual')
                     ->required()
                     ->disabled(fn (?Jadwal $record): bool => self::dariSinkronisasi($record))
-                    ->helperText('Menentukan nasib baris ini saat `jadwal:generate-rotasi --overwrite-generate` dijalankan: '
-                        .'"Generate" boleh ditimpa ulang oleh generator, "Manual" dilindungi. '
-                        .'Mengedit baris TIDAK mengubah nilai ini otomatis — atur sendiri kalau suntinganmu perlu dilindungi.'),
+                    ->helperText('Menentukan apakah baris ini boleh ditimpa saat jadwal dibuat ulang secara massal. '
+                        .'"Generate" boleh ditimpa, "Manual" dilindungi dan tetap bertahan. '
+                        .'Mengedit baris TIDAK mengubah pilihan ini otomatis — ubah sendiri ke "Manual" '
+                        .'kalau suntinganmu perlu dilindungi.'),
 
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
