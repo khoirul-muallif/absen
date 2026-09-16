@@ -13,10 +13,12 @@ use Laravel\Sanctum\HasApiTokens;
 
 class Karyawan extends Authenticatable
 {
-    use HasApiTokens, Notifiable,HasFactory;
+    use HasApiTokens, Notifiable, HasFactory;
 
     protected $table = 'karyawan';
-    const TIPE_UMUM   = 'umum';
+
+    const TIPE_UMUM = 'umum';
+
     const TIPE_ROTASI = 'rotasi';
 
     protected $fillable = [
@@ -125,6 +127,20 @@ class Karyawan extends Authenticatable
         return $this->hasMany(KuotaCuti::class);
     }
 
+    public function karyawanShift(): HasMany
+    {
+        return $this->hasMany(KaryawanShift::class);
+    }
+
+    /**
+     * Assignment pola rotasi. Pasangan dari karyawanShift() untuk tipe rotasi —
+     * sebelumnya relasi ini tidak pernah didefinisikan di model.
+     */
+    public function karyawanPolaRotasis(): HasMany
+    {
+        return $this->hasMany(KaryawanPolaRotasi::class);
+    }
+
     public function isRotasi(): bool
     {
         return $this->tipe_jadwal === self::TIPE_ROTASI;
@@ -135,9 +151,40 @@ class Karyawan extends Authenticatable
         return $this->tipe_jadwal === self::TIPE_UMUM;
     }
 
-    // pastikan relasi ini ada (dibutuhkan command integrity-check di bawah):
-    public function karyawanShift(): \Illuminate\Database\Eloquent\Relations\HasMany
+    /**
+     * Apakah karyawan ini punya assignment penjadwalan (shift periode untuk
+     * tipe umum, atau pola rotasi untuk tipe rotasi)?
+     *
+     * Dipakai guard di KaryawanForm: mengubah tipe_jadwal saat assignment masih
+     * ada akan meninggalkan baris yang menurut guard fase 18 seharusnya
+     * mustahil — karyawan rotasi yang punya KaryawanShift, atau sebaliknya.
+     * Anomali itu selama ini baru terdeteksi belakangan oleh command
+     * karyawan:cek-tipe-jadwal (fase 13); lebih masuk akal dicegah di sumbernya.
+     */
+    public function punyaAssignmentJadwal(): bool
     {
-        return $this->hasMany(KaryawanShift::class);
+        return $this->karyawanShift()->exists()
+            || $this->karyawanPolaRotasis()->exists();
+    }
+
+    /**
+     * Apakah karyawan ini sudah punya riwayat transaksi?
+     *
+     * SELURUH FK ke karyawan_id memakai ON DELETE CASCADE (lihat SCHEMA.md),
+     * jadi menghapus satu karyawan melenyapkan absensi, cuti, izin, lembur,
+     * dinas, jadwal, kuota, dan assignment-nya sekaligus — permanen, tanpa
+     * jejak. Untuk karyawan yang sudah berhenti bekerja, yang benar adalah
+     * menonaktifkan (is_active = false), bukan menghapus.
+     */
+    public function punyaRiwayat(): bool
+    {
+        return $this->absensi()->exists()
+            || $this->cutis()->exists()
+            || $this->izins()->exists()
+            || $this->lemburs()->exists()
+            || $this->dinas()->exists()
+            || $this->jadwals()->exists()
+            || $this->kuotaCutis()->exists()
+            || $this->punyaAssignmentJadwal();
     }
 }

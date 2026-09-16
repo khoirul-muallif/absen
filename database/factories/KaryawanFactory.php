@@ -15,7 +15,7 @@ class KaryawanFactory extends Factory
             'nama'              => $this->faker->name(),
             'email'             => $this->faker->unique()->safeEmail(),
             'password'          => 'password', // otomatis di-hash karena cast 'hashed' di model
-            'nomor_telepon'     => $this->faker->phoneNumber(),
+            'nomor_telepon'     => '08'.fake()->numerify('##########'),
             'foto_profil'       => null,
             'foto_wajah'        => null,
             'status_pegawai'    => 'tetap',

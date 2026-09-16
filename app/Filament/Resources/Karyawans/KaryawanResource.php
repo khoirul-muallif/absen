@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Karyawans;
 use App\Filament\Resources\Karyawans\Pages\CreateKaryawan;
 use App\Filament\Resources\Karyawans\Pages\EditKaryawan;
 use App\Filament\Resources\Karyawans\Pages\ListKaryawans;
+use App\Filament\Resources\Karyawans\Pages\ViewKaryawan;
 use App\Filament\Resources\Karyawans\Schemas\KaryawanForm;
+use App\Filament\Resources\Karyawans\Schemas\KaryawanInfolist;
 use App\Filament\Resources\Karyawans\Tables\KaryawansTable;
 use App\Models\Karyawan;
 use BackedEnum;
@@ -38,6 +40,11 @@ class KaryawanResource extends Resource
         return KaryawanForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return KaryawanInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return KaryawansTable::configure($table);
@@ -53,6 +60,7 @@ class KaryawanResource extends Resource
         return [
             'index'  => ListKaryawans::route('/'),
             'create' => CreateKaryawan::route('/create'),
+            'view'   => ViewKaryawan::route('/{record}'),
             'edit'   => EditKaryawan::route('/{record}/edit'),
         ];
     }

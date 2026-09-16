@@ -2,9 +2,14 @@
 
 namespace App\Filament\Resources\Karyawans\Tables;
 
+use App\Models\Karyawan;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -44,7 +49,22 @@ class KaryawansTable
                     ->label('Unit Kerja')
                     ->searchable()
                     ->badge()
-                    ->color('info'),
+                    ->color('info')
+                    ->placeholder('-'),
+
+                // Field yang paling banyak mencabangkan perilaku sistem (fase 13)
+                // sebelumnya sama sekali tidak muncul di tabel — bukan kolom,
+                // bukan filter. Admin tidak punya cara melihat siapa umum dan
+                // siapa rotasi selain membuka satu per satu.
+                TextColumn::make('tipe_jadwal')
+                    ->label('Tipe Jadwal')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === Karyawan::TIPE_ROTASI ? 'warning' : 'primary')
+                    ->formatStateUsing(fn (string $state): string => $state === Karyawan::TIPE_ROTASI ? 'Rotasi' : 'Umum')
+                    ->tooltip(fn (string $state): string => $state === Karyawan::TIPE_ROTASI
+                        ? 'Dijadwalkan dari pola siklus lewat menu Shift Karyawan Rotasi.'
+                        : 'Dijadwalkan lewat penugasan shift periode di menu Shift Karyawan Umum.')
+                    ->sortable(),
 
                 TextColumn::make('jabatan')
                     ->label('Jabatan')
@@ -77,7 +97,9 @@ class KaryawansTable
                         'karyawan' => 'primary',
                         default    => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => ucfirst($state)),
+                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
+                    ->tooltip('Belum mengatur akses apa pun — approval selalu lewat akun admin Filament terpisah.')
+                    ->toggleable(),
 
                 TextColumn::make('email')
                     ->label('Email')
@@ -107,6 +129,21 @@ class KaryawansTable
                     ->label('Instansi')
                     ->relationship('instansi', 'nama'),
 
+                SelectFilter::make('tipe_jadwal')
+                    ->label('Tipe Jadwal')
+                    ->options([
+                        Karyawan::TIPE_UMUM   => 'Umum',
+                        Karyawan::TIPE_ROTASI => 'Rotasi',
+                    ]),
+
+                SelectFilter::make('unit_kerja')
+                    ->label('Unit Kerja')
+                    ->options(fn () => Karyawan::query()
+                        ->whereNotNull('unit_kerja')
+                        ->distinct()
+                        ->orderBy('unit_kerja')
+                        ->pluck('unit_kerja', 'unit_kerja')),
+
                 SelectFilter::make('status_pegawai')
                     ->label('Status Pegawai')
                     ->options([
@@ -129,11 +166,48 @@ class KaryawansTable
                     ->falseLabel('Tidak Aktif'),
             ])
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+
+                    // SELURUH FK ke karyawan_id memakai ON DELETE CASCADE
+                    // (SCHEMA.md), jadi satu klik Hapus melenyapkan absensi,
+                    // cuti, izin, lembur, dinas, jadwal, kuota, dan penugasan
+                    // orang itu — permanen, tanpa jejak, tanpa peringatan apa
+                    // pun sebelumnya. Untuk karyawan yang berhenti bekerja,
+                    // yang benar adalah menonaktifkan.
+                    DeleteAction::make()
+                        ->visible(fn (Karyawan $record): bool => ! $record->punyaRiwayat())
+                        ->modalDescription('Karyawan ini belum punya riwayat absensi maupun pengajuan, jadi aman dihapus.'),
+
+                    DeleteAction::make('tidak_bisa_hapus')
+                        ->label('Hapus')
+                        ->icon('heroicon-o-trash')
+                        ->color('gray')
+                        ->visible(fn (Karyawan $record): bool => $record->punyaRiwayat())
+                        ->requiresConfirmation()
+                        ->modalHeading('Karyawan ini tidak bisa dihapus')
+                        ->modalDescription('Karyawan ini sudah punya riwayat (absensi, pengajuan, jadwal, atau penugasan shift). Menghapusnya akan ikut melenyapkan SEMUA data itu secara permanen. Untuk karyawan yang sudah berhenti bekerja, nonaktifkan saja lewat tombol Ubah — datanya tetap tersimpan untuk rekap dan audit.')
+                        ->modalSubmitAction(false)
+                        ->action(fn () => null),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function (DeleteBulkAction $action, $records) {
+                            $punyaRiwayat = $records->filter(fn (Karyawan $karyawan): bool => $karyawan->punyaRiwayat());
+
+                            if ($punyaRiwayat->isNotEmpty()) {
+                                Notification::make()
+                                    ->title('Sebagian karyawan tidak bisa dihapus')
+                                    ->body('Sudah punya riwayat absensi/pengajuan: '.$punyaRiwayat->pluck('nama')->join(', ').'. Tidak ada yang dihapus — nonaktifkan saja kalau sudah berhenti bekerja.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->cancel();
+                            }
+                        }),
                 ]),
             ]);
     }

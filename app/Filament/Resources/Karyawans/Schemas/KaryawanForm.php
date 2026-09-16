@@ -3,14 +3,16 @@
 namespace App\Filament\Resources\Karyawans\Schemas;
 
 use App\Models\Karyawan;
+use App\Models\PolaRotasi;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Hash;
 
 class KaryawanForm
 {
@@ -53,7 +55,11 @@ class KaryawanForm
                         TextInput::make('password')
                             ->label('Password')
                             ->password()
-                            ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
+                            // Hash::make() dihapus — model Karyawan sudah punya
+                            // cast 'password' => 'hashed'. Dua-duanya tidak bikin
+                            // double hash (cast mengecek Hash::isHashed() dulu),
+                            // tapi menyisakan dua tempat yang seolah-olah
+                            // bertanggung jawab atas hal yang sama.
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $operation) => $operation === 'create')
                             ->helperText('Kosongkan jika tidak ingin mengubah password'),
@@ -69,12 +75,34 @@ class KaryawanForm
                             ->relationship('instansi', 'nama')
                             ->required()
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            ->live(),
 
                         TextInput::make('unit_kerja')
                             ->label('Unit Kerja')
                             ->placeholder('IT, Farmasi, IGD...')
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->live(onBlur: true)
+                            // Sejak fase 33, assignment pola rotasi DITOLAK kalau
+                            // unit_kerja karyawan tidak sama persis dengan unit
+                            // pola. Jadi kolom teks bebas ini jadi kunci keras —
+                            // satu typo bikin karyawan rotasi tidak bisa
+                            // di-assign pola apa pun. PolaRotasiForm sudah dapat
+                            // datalist di fase 32; di sini menyusul.
+                            ->datalist(fn () => collect()
+                                ->merge(Karyawan::query()->whereNotNull('unit_kerja')->distinct()->pluck('unit_kerja'))
+                                ->merge(PolaRotasi::query()->whereNotNull('unit_kerja')->distinct()->pluck('unit_kerja'))
+                                ->unique()
+                                ->sort()
+                                ->values()
+                                ->all())
+                            // Karyawan rotasi tanpa unit_kerja tidak akan pernah
+                            // cocok dengan pola mana pun, jadi tidak bisa
+                            // dijadwalkan sama sekali.
+                            ->required(fn (Get $get): bool => $get('tipe_jadwal') === Karyawan::TIPE_ROTASI)
+                            ->helperText(fn (Get $get): string => $get('tipe_jadwal') === Karyawan::TIPE_ROTASI
+                                ? 'Wajib untuk karyawan rotasi, dan harus sama persis dengan unit pada Pola Rotasi — pola cuma bisa di-assign kalau unitnya cocok.'
+                                : 'Pilih dari daftar kalau unitnya sudah ada, supaya penulisannya seragam.'),
 
                         TextInput::make('jabatan')
                             ->label('Jabatan')
@@ -112,18 +140,45 @@ class KaryawanForm
                     ->description('Menentukan mekanisme jadwal kerja karyawan ini')
                     ->icon('heroicon-o-calendar-days')
                     ->schema([
+                        Placeholder::make('peringatan_assignment')
+                            ->label('⚠️ Tipe jadwal terkunci')
+                            ->visible(fn (?Karyawan $record): bool => $record !== null && $record->punyaAssignmentJadwal())
+                            ->content(fn (?Karyawan $record): string => $record?->isUmum()
+                                ? 'Karyawan ini masih punya penugasan shift periode. Lepas dulu penugasannya di menu "Shift Karyawan Umum" sebelum mengubah tipe jadwal — kalau tidak, penugasan itu jadi data anomali yang tidak dipakai siapa pun.'
+                                : 'Karyawan ini masih punya assignment pola rotasi. Lepas dulu assignment-nya di menu "Shift Karyawan Rotasi" sebelum mengubah tipe jadwal.')
+                            ->columnSpanFull(),
+
                         Select::make('tipe_jadwal')
                             ->label('Tipe Jadwal')
                             ->options([
                                 Karyawan::TIPE_UMUM   => 'Umum (jadwal tetap via assignment shift periode)',
-                                Karyawan::TIPE_ROTASI => 'Rotasi (jadwal harian manual, ganti-ganti shift)',
+                                Karyawan::TIPE_ROTASI => 'Rotasi (jadwal harian dari pola siklus)',
                             ])
                             ->default(Karyawan::TIPE_UMUM)
                             ->required()
                             ->live()
+                            // Mengubah tipe saat assignment masih ada meninggalkan
+                            // baris yang menurut guard fase 18 seharusnya mustahil
+                            // — karyawan rotasi yang punya KaryawanShift, atau
+                            // sebaliknya. Anomali itu selama ini baru terdeteksi
+                            // belakangan oleh command karyawan:cek-tipe-jadwal
+                            // (fase 13); lebih masuk akal dicegah di sumbernya.
+                            ->rule(function (?Karyawan $record) {
+                                return function (string $attribute, $value, \Closure $fail) use ($record) {
+                                    if ($record === null || $value === $record->tipe_jadwal) {
+                                        return;
+                                    }
+
+                                    if ($record->punyaAssignmentJadwal()) {
+                                        $fail($record->isUmum()
+                                            ? 'Karyawan ini masih punya penugasan shift periode. Lepas dulu di menu "Shift Karyawan Umum" sebelum mengubah tipe jadwal.'
+                                            : 'Karyawan ini masih punya assignment pola rotasi. Lepas dulu di menu "Shift Karyawan Rotasi" sebelum mengubah tipe jadwal.');
+                                    }
+                                };
+                            })
                             ->helperText(fn ($state) => $state === Karyawan::TIPE_ROTASI
-                                ? 'Karyawan rotasi WAJIB punya row Jadwal eksplisit tiap hari kerja di menu Jadwal — tidak pakai assignment KaryawanShift. Kalau lupa dibuatkan, RekapHarian akan menandai sebagai anomali, bukan otomatis dianggap libur.'
-                                : 'Karyawan umum dijadwalkan lewat assignment Shift periode (menu Karyawan & Shift), bukan Jadwal harian manual.'),
+                                ? 'Karyawan rotasi dijadwalkan dari pola siklus lewat menu "Shift Karyawan Rotasi" (grup Manajemen Rotasi) — tidak pakai penugasan shift periode. Kalau lupa di-assign, RekapHarian menandainya sebagai anomali "jadwal_hilang", bukan otomatis dianggap libur.'
+                                : 'Karyawan umum dijadwalkan lewat penugasan shift periode di menu "Shift Karyawan Umum" (grup Manajemen Shift), bukan pola siklus.'),
                     ]),
 
                 Section::make('Foto')
@@ -152,7 +207,7 @@ class KaryawanForm
                         Toggle::make('is_active')
                             ->label('Karyawan Aktif')
                             ->default(true)
-                            ->helperText('Nonaktifkan jika karyawan sudah tidak bekerja'),
+                            ->helperText('Nonaktifkan jika karyawan sudah tidak bekerja. Ini cara yang benar untuk karyawan yang berhenti — menghapus akun akan ikut melenyapkan seluruh riwayat absensi & pengajuannya.'),
                     ]),
             ]);
     }
