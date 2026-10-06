@@ -12,10 +12,6 @@ Detail & ringkasan pola bug yang berulang ada di CHANGELOG.
 
 Fokus berikutnya:
 
-- **(A) Tutup bug aktif yang tersisa.** Tinggal `is_cuti_bersama` dan celah
-  akumulatif KuotaCuti (keduanya butuh keputusan RS dulu, lihat bagian
-  "Kebutuhan masukan").
-
 - **(B) Simulasi & data dummy yang realistis.** Rotasi ber-libur belum pernah
   dicoba sama sekali, dan itu memblokir verifikasi beberapa item di (A).
 
@@ -29,17 +25,7 @@ paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
-- [ ] **`is_cuti_bersama` bikin generator salah menandai libur** — kebijakan
-      RS: saat cuti bersama karyawan TETAP MASUK, yang ingin libur mengajukan
-      cuti biasa. Tapi GenerateJadwalBulanan, GenerateJadwalRotasi, dan
-      RekapHarian memperlakukan baris ini sama persis seperti libur nasional;
-      flag `is_cuti_bersama` tidak dibaca di satu tempat pun. Akibatnya
-      karyawan umum tercatat libur padahal seharusnya masuk, dan yang tidak
-      masuk tidak tertangkap sebagai alpha. Karyawan rotasi unit 24 jam
-      selamat lewat flag pola; karyawan umum tidak punya perlindungan setara.
-      Menyentuh 3 command sekaligus, plus helper `shiftYangDiharapkanPada()`
-      yang punya TODO di sana. Sementara ini form Hari Libur memperingatkan
-      supaya cuti bersama JANGAN didaftarkan dulu.
+
 
 - [ ] **Fix AbsensiSimulasiSeeder** — `waktu_masuk` di-anchor ke tanggal
       baris, bukan `now()`. Sekarang semua row simulasi punya

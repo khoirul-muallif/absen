@@ -5,6 +5,14 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 38 lanjutan: test generator rotasi untuk cuti bersama
+
+- `CutiBersamaRotasiTest` (baru): cuti bersama tidak mengubah hasil
+  `jadwal:generate-rotasi`, dan libur nasional tetap meng-override pola yang
+  tidak berlaku saat libur nasional.
+- Factory `PolaRotasiFactory` dan `KaryawanPolaRotasiFactory` dibuat. Tanggal
+  dibuat tetap, dan `langkah` diisi dari test, bukan dari default factory.
+- Suite: 476 → 478 test passing (1473 assertions).
 
 ## fase 38: cuti bersama tidak meliburkan (kebijakan BUMS)
 
@@ -49,7 +57,7 @@ Suite penuh: 472 → 476 test passing (1470 assertions).
 
 - Test `GenerateJadwalRotasi` untuk cuti bersama. Butuh factory `PolaRotasi`
   dan `KaryawanPolaRotasi` yang belum ditulis.
-  
+
 ## fase 37: pengingat absen & rekap harian pakai sumber kebenaran tunggal + test
 
 ### Sumber kebenaran tunggal: `Karyawan::shiftYangDiharapkanPada()`
