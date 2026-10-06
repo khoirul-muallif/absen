@@ -109,6 +109,7 @@ class GenerateJadwalBulanan extends Command
                 // 4. Hari libur nasional/cuti bersama? -> generate eksplisit jenis 'libur'
                 //    supaya tabel jadwal lengkap keliatan, bukan cuma "gap kosong"
                 $adalahHariLibur = HariLibur::where('instansi_id', $instansiId)
+                    ->meliburkan()
                     ->whereDate('tanggal', $tanggal)
                     ->exists();
 

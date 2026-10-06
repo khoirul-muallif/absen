@@ -60,7 +60,9 @@ class HariLiburForm
                     ->content(function (Get $get): HtmlString|string {
                         $tanggal = $get('tanggal');
                         $instansiId = $get('instansi_id');
-
+                        if ($get('is_cuti_bersama')) {
+                            return 'Cuti bersama tidak meliburkan karyawan. Jadwal dan rekap tidak berubah.';
+                        }
                         if (! $tanggal || ! $instansiId) {
                             return 'Pilih instansi & tanggal dulu.';
                         }
@@ -92,24 +94,12 @@ class HariLiburForm
 
                 Toggle::make('is_cuti_bersama')
                     ->label('Cuti bersama')
-                    // Helper text lama ("bukan hari libur resmi") menyiratkan ada
-                    // perbedaan perlakuan, padahal keduanya diperlakukan IDENTIK
-                    // di seluruh sistem — termasuk oleh GenerateJadwalBulanan,
-                    // GenerateJadwalRotasi, dan RekapHarian.
-                    //
-                    // Kebijakan RS: saat cuti bersama karyawan TETAP MASUK; yang
-                    // ingin libur harus mengajukan cuti seperti hari biasa.
-                    // Artinya mendaftarkan cuti bersama di sini justru bikin
-                    // generator menandai semua karyawan umum libur — lihat
-                    // peringatan di bawah. Penyesuaian generator belum
-                    // dikerjakan, lihat todo.md.
-                    ->helperText(new HtmlString(
-                        '<b>Penanda saja — belum memengaruhi apa pun.</b> Kebijakan RS: saat cuti bersama '
-                        .'karyawan tetap masuk, yang ingin libur mengajukan cuti biasa. Tapi sistem masih '
-                        .'memperlakukan baris ini <b>sama seperti libur nasional</b>: generator jadwal akan '
-                        .'menandai karyawan umum libur, dan rekap harian tidak menghitungnya alpha. '
-                        .'Sampai itu diperbaiki, sebaiknya cuti bersama <b>jangan</b> didaftarkan di sini.'
-                    )),
+                    ->live()
+                    ->helperText(
+                        'Cuti bersama tidak meliburkan karyawan. Di RS ini karyawan tetap masuk, '
+                        .'dan yang ingin libur mengajukan cuti biasa. Hari ini tetap dihitung kerja '
+                        .'di jadwal dan rekap harian.'
+                    ),
             ]);
     }
 }

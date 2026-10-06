@@ -46,11 +46,12 @@ class GenerateJadwalRotasi extends Command
         }
 
         // Cache hari libur nasional sebulan ini, per instansi karyawan, biar nggak query berulang tiap hari.
-        $hariLiburPerInstansi = HariLibur::whereBetween('tanggal', [$awalBulan, $akhirBulan])
+        $hariLiburPerInstansi = HariLibur::meliburkan()
+            ->whereBetween('tanggal', [$awalBulan, $akhirBulan])
             ->get()
             ->groupBy('instansi_id')
             ->map(fn ($grup) => $grup->pluck('tanggal')->map(fn ($t) => $t->format('Y-m-d'))->flip());
-
+            
         $dibuat = 0;
         $dilewati = 0;
 

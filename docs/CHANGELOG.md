@@ -5,6 +5,51 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+
+## fase 38: cuti bersama tidak meliburkan (kebijakan BUMS)
+
+### Keputusan
+
+Di RS ini cuti bersama tidak meliburkan karyawan. Sebagai RS BUMS, cuti
+bersama yang ditetapkan pemerintah hanya berlaku untuk ASN. Karyawan tetap
+masuk, dan yang ingin libur harus mengajukan cuti biasa. Kebijakan ini tidak
+bisa diketahui dari kode saja, sehingga dicatat di sini.
+
+Libur nasional tetap meliburkan seperti sebelumnya.
+
+### Perubahan
+
+- `HariLibur::scopeMeliburkan()`: hanya baris dengan `is_cuti_bersama = false`.
+  Dipakai di semua tempat yang memutuskan "libur atau tidak".
+- `Karyawan::shiftYangDiharapkanPada()`: cek libur instansi memakai scope.
+  TODO `is_cuti_bersama` di helper dihapus.
+- `GenerateJadwalBulanan`: cuti bersama menghasilkan Jadwal `reguler`.
+- `GenerateJadwalRotasi`: cuti bersama tidak menimpa pola rotasi.
+- `RekapHarian`: cuti bersama tidak menghasilkan Absensi `libur`. Karyawan
+  yang tidak absen dan tidak cuti approved menjadi alpha.
+- `HariLiburForm`: peringatan "jangan didaftarkan" dihapus. Toggle menjadi
+  reaktif dan helper text menjelaskan kebijakan. Peringatan dampak jadwal
+  tidak muncul untuk cuti bersama.
+
+### Data yang sudah ada
+
+Tidak ada Jadwal `libur` untuk cuti bersama di database saat fase ini
+dikerjakan (dicek dengan query join `jadwals` dan `hari_liburs`). Tidak ada
+data yang perlu dibersihkan.
+
+### Test
+
+`CutiBersamaTest` (baru): shift tetap ditemukan pada tanggal cuti bersama,
+rekap menghasilkan alpha, generator bulanan menghasilkan reguler, dan libur
+nasional tetap menghasilkan libur.
+
+Suite penuh: 472 → 476 test passing (1470 assertions).
+
+### Belum dikerjakan
+
+- Test `GenerateJadwalRotasi` untuk cuti bersama. Butuh factory `PolaRotasi`
+  dan `KaryawanPolaRotasi` yang belum ditulis.
+  
 ## fase 37: pengingat absen & rekap harian pakai sumber kebenaran tunggal + test
 
 ### Sumber kebenaran tunggal: `Karyawan::shiftYangDiharapkanPada()`

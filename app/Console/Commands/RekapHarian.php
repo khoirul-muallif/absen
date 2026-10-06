@@ -65,6 +65,7 @@ class RekapHarian extends Command
                 }
 
                 $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
+                    ->meliburkan()
                     ->whereDate('tanggal', $tanggal)
                     ->exists();
 

@@ -222,10 +222,9 @@ class Karyawan extends Authenticatable
             return null;
         }
 
-        // Libur instansi. TODO(is_cuti_bersama): sementara semua baris diperlakukan
-        // sebagai libur, sama seperti GenerateJadwal* dan RekapHarian sekarang.
-        // Saat bug is_cuti_bersama diperbaiki, filter di sini harus ikut berubah.
+        // Libur nasional/instansi. Cuti bersama BUMS tidak meliburkan (lihat scope).
         $adaLibur = HariLibur::where('instansi_id', $this->instansi_id)
+            ->meliburkan()
             ->whereDate('tanggal', $tanggal)
             ->exists();
 
