@@ -148,3 +148,5 @@ php artisan make:filament-resource KaryawanPolaRotasi
 ## 🗑️ Kandidat dihapus (cek dulu sebelum beneran hapus)
 - _(kosongin dulu — isi manual pas nemu command yang emang udah gak
   relevan sama sekali)_
+
+ npx @deepseek-ai/dsh web
