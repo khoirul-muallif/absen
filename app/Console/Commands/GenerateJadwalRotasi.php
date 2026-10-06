@@ -51,7 +51,7 @@ class GenerateJadwalRotasi extends Command
             ->get()
             ->groupBy('instansi_id')
             ->map(fn ($grup) => $grup->pluck('tanggal')->map(fn ($t) => $t->format('Y-m-d'))->flip());
-            
+
         $dibuat = 0;
         $dilewati = 0;
 
@@ -62,8 +62,7 @@ class GenerateJadwalRotasi extends Command
 
             $tanggal = $awalBulan->copy();
             while ($tanggal->lte($akhirBulan)) {
-                if ($tanggal->lt($assignment->tanggal_mulai) ||
-                    ($assignment->tanggal_berakhir && $tanggal->gt($assignment->tanggal_berakhir))) {
+                if (! $assignment->berlakuPada($tanggal)) {
                     $tanggal->addDay();
                     continue;
                 }
