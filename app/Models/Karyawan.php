@@ -10,6 +10,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Cuti;
+use App\Models\Dinas;
+use App\Models\HariLibur;
+use App\Models\Shift;
+use Carbon\Carbon;
 
 class Karyawan extends Authenticatable
 {
@@ -187,4 +192,100 @@ class Karyawan extends Authenticatable
             || $this->kuotaCutis()->exists()
             || $this->punyaAssignmentJadwal();
     }
+
+
+
+    /**
+     * Shift yang SEHARUSNYA dijalani karyawan pada tanggal ini.
+     * Null = tidak ada kewajiban masuk.
+     *
+     * Sumber kebenaran tunggal untuk pengingat & rekap harian.
+     * Urutan cek: cuti/dinas approved -> libur instansi -> jadwal -> fallback shift periode.
+     */
+    public function shiftYangDiharapkanPada(Carbon $tanggal): ?Shift
+    {
+        // Cuti/Dinas approved menang atas semua. Sinkronisasi ke Jadwal & Absensi
+        // dilakukan saat approve (fase 20-21), tapi cek langsung di sini supaya
+        // tidak bergantung pada urutan sinkronisasi.
+        $cutiAtauDinas = Cuti::where('karyawan_id', $this->id)
+                ->where('status', 'approved')
+                ->whereDate('tanggal_mulai', '<=', $tanggal)
+                ->whereDate('tanggal_selesai', '>=', $tanggal)
+                ->exists()
+            || Dinas::where('karyawan_id', $this->id)
+                ->where('status', 'approved')
+                ->whereDate('tanggal_mulai', '<=', $tanggal)
+                ->whereDate('tanggal_selesai', '>=', $tanggal)
+                ->exists();
+
+        if ($cutiAtauDinas) {
+            return null;
+        }
+
+        // Libur instansi. TODO(is_cuti_bersama): sementara semua baris diperlakukan
+        // sebagai libur, sama seperti GenerateJadwal* dan RekapHarian sekarang.
+        // Saat bug is_cuti_bersama diperbaiki, filter di sini harus ikut berubah.
+        $adaLibur = HariLibur::where('instansi_id', $this->instansi_id)
+            ->whereDate('tanggal', $tanggal)
+            ->exists();
+
+        if ($adaLibur) {
+            return null;
+        }
+
+        $jadwal = $this->jadwals()
+            ->whereDate('tanggal', $tanggal)
+            ->with('shift')
+            ->first();
+
+        if ($this->isRotasi()) {
+            // Rotasi: Jadwal WAJIB ada. Tidak ada fallback ke KaryawanShift.
+            // Jadwal dengan jenis libur atau shift_id null = tidak wajib masuk.
+            if (! $jadwal || $jadwal->jenis === Jadwal::JENIS_LIBUR) {
+                return null;
+            }
+
+            return $jadwal->shift; // bisa null kalau jenis cuti/dinas tanpa shift
+        }
+
+        // Umum: Jadwal eksplisit menang (termasuk override dan piket),
+        // kalau tidak ada fallback ke assignment shift periode + pola hari_kerja.
+        if ($jadwal) {
+            if ($jadwal->jenis === Jadwal::JENIS_LIBUR) {
+                return null;
+            }
+
+            return in_array($jadwal->jenis, [Jadwal::JENIS_REGULER, Jadwal::JENIS_PIKET], true)
+                ? $jadwal->shift
+                : null; // cuti/dinas tanpa shift
+        }
+
+        $ks = $this->karyawanShift()
+            ->whereDate('tanggal_berlaku', '<=', $tanggal)
+            ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
+                ->orWhereDate('tanggal_berakhir', '>=', $tanggal))
+            ->with('shift')
+            ->latest('tanggal_berlaku')
+            ->first();
+
+        $shift = $ks?->shift;
+
+        if (! $shift || ! $shift->adalahHariKerja($tanggal)) {
+            return null;
+        }
+
+        return $shift;
+    }
+
+    /**
+     * Anomali: karyawan rotasi yang seharusnya masuk tapi tidak punya Jadwal.
+     * Dipakai RekapHarian untuk stat jadwal_hilang. Pengingat TIDAK mengirim
+     * notifikasi untuk kondisi ini, karena bukan tanggung jawab karyawan.
+     */
+    public function jadwalRotasiHilangPada(Carbon $tanggal): bool
+    {
+        return $this->isRotasi()
+            && ! $this->jadwals()->whereDate('tanggal', $tanggal)->exists();
+    }
+
 }

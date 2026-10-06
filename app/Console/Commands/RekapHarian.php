@@ -36,100 +36,64 @@ class RekapHarian extends Command
         ];
 
         foreach ($karyawanAktif as $karyawan) {
-            // 1. Sudah ada record absensi (termasuk dari sync cuti/dinas/absen manual)?
-            $sudahAda = $karyawan->absensi()->whereDate('tanggal', $tanggal)->exists();
-            if ($sudahAda) {
+            // 1. Sudah ada record absensi (sync cuti/dinas, absen manual)?
+            if ($karyawan->absensi()->whereDate('tanggal', $tanggal)->exists()) {
                 $stat['sudah_absen']++;
                 continue;
             }
 
-            // 2. Cek Jadwal eksplisit untuk tanggal ini
+            // 2. Jadwal libur eksplisit (berlaku untuk umum & rotasi)
             $jadwal = Jadwal::where('karyawan_id', $karyawan->id)
-                ->where('tanggal', $tanggal->toDateString())
+                ->whereDate('tanggal', $tanggal)
                 ->first();
 
-            $shiftId = null;
-            $dijadwalkanKerja = false;
-
-            if ($karyawan->isRotasi()) {
-                // Karyawan ROTASI: Jadwal WAJIB eksplisit tiap hari, TIDAK ADA
-                // fallback ke KaryawanShift. Kalau gak ketemu, ini anomali data
-                // (jadwal lupa dibuat admin) — bukan otomatis dianggap libur.
-                if (! $jadwal) {
-                    $stat['jadwal_hilang']++;
-                    $this->warn("  → Jadwal hilang: {$karyawan->nama} ({$tanggal->format('d M Y')}) — tipe rotasi tanpa Jadwal tercatat, cek manual.");
-                    continue;
-                }
-
-                if ($jadwal->jenis === 'libur') {
-                    $stat['libur_personal']++;
-                    continue;
-                }
-
-                // jenis reguler/piket
-                $dijadwalkanKerja = true;
-                $shiftId = $jadwal->shift_id;
-            } else {
-                // Karyawan UMUM: Jadwal manual (override/piket tambahan) kalau
-                // ada, kalau tidak fallback ke KaryawanShift + pola hari_kerja.
-                if ($jadwal && $jadwal->jenis === 'libur') {
-                    $stat['libur_personal']++;
-                    continue;
-                }
-
-                if ($jadwal && in_array($jadwal->jenis, ['reguler', 'piket'])) {
-                    $dijadwalkanKerja = true;
-                    $shiftId = $jadwal->shift_id;
-                } else {
-                    $karyawanShift = KaryawanShift::with('shift')
-                        ->where('karyawan_id', $karyawan->id)
-                        ->where('tanggal_berlaku', '<=', $tanggal)
-                        ->where(fn ($q) => $q->whereNull('tanggal_berakhir')
-                            ->orWhere('tanggal_berakhir', '>=', $tanggal))
-                        ->latest('tanggal_berlaku')
-                        ->first();
-
-                    if ($karyawanShift && $karyawanShift->shift->adalahHariKerja($tanggal)) {
-                        $dijadwalkanKerja = true;
-                        $shiftId = $karyawanShift->shift_id;
-                    }
-                }
-
-                if (! $dijadwalkanKerja) {
-                    $stat['libur_mingguan']++;
-                    continue; // Bukan hari kerjanya, wajar gak absen
-                }
-            }
-
-            // 3. Cek hari libur nasional/instansi
-            $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
-                ->whereDate('tanggal', $tanggal)
-                ->exists();
-
-            if ($adalahHariLibur) {
-                Absensi::create([
-                    'karyawan_id' => $karyawan->id,
-                    'shift_id' => $shiftId,
-                    'tanggal' => $tanggal,
-                    'status' => 'libur',
-                    'keterangan' => 'Hari libur nasional/cuti bersama - otomatis dari rekap harian',
-                ]);
-                $stat['libur_nasional']++;
+            if ($jadwal?->jenis === Jadwal::JENIS_LIBUR) {
+                $stat['libur_personal']++;
                 continue;
             }
 
-            // 4. Dijadwalkan kerja, bukan hari libur, gak ada absensi = alpha
+            // 3. Seharusnya kerja atau tidak?
+            // shiftYangDiharapkanPada() sudah mengembalikan null untuk libur instansi,
+            // cuti/dinas approved, dan hari tidak wajib masuk.
+            $shift = $karyawan->shiftYangDiharapkanPada($tanggal);
+
+            if (! $shift) {
+                if ($karyawan->jadwalRotasiHilangPada($tanggal)) {
+                    $stat['jadwal_hilang']++;
+                    $this->warn("  → Jadwal hilang: {$karyawan->nama} ({$tanggal->format('d M Y')}) — cek manual.");
+                    continue;
+                }
+
+                $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
+                    ->whereDate('tanggal', $tanggal)
+                    ->exists();
+
+                if ($adalahHariLibur) {
+                    Absensi::create([
+                        'karyawan_id' => $karyawan->id,
+                        'tanggal'     => $tanggal,
+                        'status'      => 'libur',
+                        'keterangan'  => 'Hari libur nasional/cuti bersama - otomatis dari rekap harian',
+                    ]);
+                    $stat['libur_nasional']++;
+                } else {
+                    $stat['libur_mingguan']++;
+                }
+                continue;
+            }
+
+            // 4. Seharusnya kerja, belum absen = alpha
             $qrInstansiId = $karyawan->instansi->qrInstansi()
                 ->where('is_active', true)
                 ->first()?->id;
 
             Absensi::create([
-                'karyawan_id' => $karyawan->id,
-                'shift_id' => $shiftId,
+                'karyawan_id'    => $karyawan->id,
+                'shift_id'       => $shift->id,
                 'qr_instansi_id' => $qrInstansiId,
-                'tanggal' => $tanggal,
-                'status' => 'alpha',
-                'keterangan' => 'Tidak hadir - otomatis dari rekap harian',
+                'tanggal'        => $tanggal,
+                'status'         => 'alpha',
+                'keterangan'     => 'Tidak hadir - otomatis dari rekap harian',
             ]);
 
             $stat['alpha']++;

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Absensi;
+use App\Models\Cuti;
 use App\Models\HariLibur;
 use App\Models\Instansi;
 use App\Models\Jadwal;
@@ -159,4 +160,46 @@ test('karyawan tidak aktif (is_active false) tidak diproses sama sekali', functi
     jalankanRekap('2026-07-17');
 
     expect(Absensi::where('karyawan_id', $karyawan->id)->exists())->toBeFalse();
+});
+test('cuti approved membuat karyawan tidak dianggap alpha', function () {
+    $shift = Shift::factory()->create(['instansi_id' => $this->instansi->id, 'hari_kerja' => []]);
+    $karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+    KaryawanShift::factory()->openEnded()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $shift->id,
+        'tanggal_berlaku' => '2026-07-01',
+    ]);
+    // Sengaja tanpa sinkronisasi Absensi, supaya yang diuji jalur helper
+    Cuti::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal_mulai' => '2026-07-16',
+        'tanggal_selesai' => '2026-07-18',
+        'status' => 'approved',
+    ]);
+
+    jalankanRekap('2026-07-17');
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)->exists())->toBeFalse();
+});
+
+test('jadwal libur dihitung sebagai libur personal di tabel ringkasan', function () {
+    $karyawan = Karyawan::factory()->rotasi()->create(['instansi_id' => $this->instansi->id]);
+    Jadwal::create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-07-17',
+        'shift_id' => null,
+        'jenis' => 'libur',
+        'sumber' => 'generate',
+    ]);
+
+    Artisan::call('absensi:rekap-harian', ['--tanggal' => '2026-07-17']);
+
+    $baris = collect(explode("\n", Artisan::output()))
+        ->first(fn ($l) => str_contains($l, '|') && str_contains($l, '17 Jul 2026'));
+
+    // Kolom: Tanggal | Total | Sudah Absen | Libur Mingguan | Libur Nasional | Libur Personal | Jadwal Hilang | Alpha
+    $kolom = array_values(array_filter(array_map('trim', explode('|', $baris)), fn ($k) => $k !== ''));
+
+    expect($kolom[1])->toBe('1')   // Total karyawan
+        ->and($kolom[5])->toBe('1'); // Libur Personal
 });

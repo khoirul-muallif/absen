@@ -5,6 +5,65 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 37: pengingat absen & rekap harian pakai sumber kebenaran tunggal + test
+
+### Sumber kebenaran tunggal: `Karyawan::shiftYangDiharapkanPada()`
+
+Sebelumnya `PengingatBelumAbsen` dan `RekapHarian` masing-masing punya logika
+sendiri untuk menentukan "karyawan seharusnya kerja hari ini?". Dua versi itu
+sudah menyimpang: pengingat tidak mengecek libur, cuti, atau dinas sama sekali,
+dan rotasi tidak pernah masuk daftar notifikasi.
+
+Helper baru menentukan shift yang diharapkan pada suatu tanggal. Urutan cek:
+cuti/dinas approved, libur instansi, Jadwal (rotasi wajib punya Jadwal, umum
+boleh fallback ke assignment shift periode + pola hari_kerja). `null` berarti
+tidak wajib masuk.
+
+`Karyawan::jadwalRotasiHilangPada()` dipisah dari helper di atas karena
+`null` dan "jadwal hilang" adalah dua kondisi yang berbeda: yang pertama
+normal, yang kedua anomali yang perlu dicek admin.
+
+### Bug yang ditutup
+
+- `PengingatBelumAbsen` dan `PengingatBelumAbsenPulang`: tidak ada guard libur,
+  cuti, atau dinas approved. Karyawan yang sedang cuti dikirimi "belum absen".
+- `PengingatBelumAbsenPulang`: shift malam salah hitung. Deadline sekarang
+  dihitung dari tanggal absen masuk; jika jam pulang <= jam masuk, deadline
+  digeser ke hari berikutnya.
+- Karyawan rotasi tidak pernah dapat notifikasi, karena query dimulai dari
+  KaryawanShift. Sekarang pengingat pulang mengambil kandidat dari Absensi yang
+  sudah masuk, sehingga rotasi ikut tercakup.
+- `RekapHarian`: `shift_id` sebelumnya dapat berisi objek, sekarang diisi id.
+  Blok duplikat (alpha dan libur) di dalam loop dihapus, sehingga setiap
+  karyawan paling banyak mendapat satu Absensi per hari.
+- `RekapHarian`: statistik `libur_personal` sekarang terisi untuk Jadwal jenis
+  `libur`. Sebelumnya jatuh ke `libur_mingguan`.
+
+### Keputusan
+
+- Grace period 15 menit di pengingat masuk (deadline = jam masuk + toleransi +
+  15) dipertahankan sebagai perilaku saat ini. Belum dikonfirmasi ke RS;
+  dicatat di todo.md.
+- `is_cuti_bersama` sengaja TIDAK dibedakan dulu. Helper memperlakukan semua
+  `HariLibur` sebagai libur, sama seperti command lain. Ada TODO di helper,
+  dan perbaikannya menunggu fase tersendiri.
+
+### Test
+
+- `RekapHarianTest`: ditambah test cuti approved (tidak menjadi alpha) dan test
+  statistik libur personal.
+- `PengingatBelumAbsenTest` (baru): pengingat masuk dan pulang, termasuk
+  batas waktu (1 menit sebelum dan sesudah), cuti, libur rotasi, rotasi yang
+  punya Jadwal, shift malam, dan dedupe (command dijalankan dua kali).
+  Waktu dikunci dengan `travelTo()`.
+
+Suite penuh: 457 → 472 test passing (1463 assertions).
+
+### Belum dikerjakan
+
+- `is_cuti_bersama` (3 command + helper)
+- Celah akumulatif KuotaCuti saat row belum ada
+- Pengingat pulang untuk rotasi yang melewati tengah malam (lihat todo.md)
 
 ## fase 36: Review UX QR Instansi (QrInstansiResource) — selesai
 

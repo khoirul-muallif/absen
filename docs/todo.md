@@ -7,46 +7,27 @@
 ## Prioritas — belum ditetapkan
 
 **Review UX 17 Filament Resource SELESAI** (fase 25–36). Test 229 → 457.
+Pengingat & RekapHarian selesai ditest: suite 472 test hijau.
 Detail & ringkasan pola bug yang berulang ada di CHANGELOG.
 
-Fokus berikutnya belum diputuskan. Tiga kandidat, urut dari yang paling
-mendesak menurut isi todo sekarang:
+Fokus berikutnya:
 
-- **(A) Tutup bug aktif yang sudah teridentifikasi.** Ada beberapa yang jelas
-  merugikan dan analisisnya sudah lengkap: PengingatBelumAbsen (guard
-  libur/cuti, shift malam, rotasi tak pernah dapat notifikasi), celah
-  akumulatif KuotaCuti, dan `is_cuti_bersama` yang bikin generator salah
-  menandai libur. Semua ada di bagian "Bug aktif" di bawah.
+- **(A) Tutup bug aktif yang tersisa.** Tinggal `is_cuti_bersama` dan celah
+  akumulatif KuotaCuti (keduanya butuh keputusan RS dulu, lihat bagian
+  "Kebutuhan masukan").
 
 - **(B) Simulasi & data dummy yang realistis.** Rotasi ber-libur belum pernah
   dicoba sama sekali, dan itu memblokir verifikasi beberapa item di (A).
-  Termasuk memperbaiki AbsensiSimulasiSeeder.
 
 - **(C) Lanjut ke frontend.** Backend sekarang jauh lebih solid daripada saat
-  frontend di-freeze di fase 5 — tapi (A) menyentuh perilaku yang dilihat
-  karyawan, jadi mengerjakannya duluan menghindari kerja dobel.
+  frontend di-freeze di fase 5.
 
 Catatan: keputusan bisnis yang masih menggantung (enum 'sakit', KuotaCuti
-semesteran, alur Izin, override TukarJadwal) semuanya butuh masukan dari pihak
-RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
+semesteran, alur Izin, override TukarJadwal, `is_cuti_bersama`, grace period
+pengingat) butuh masukan dari pihak RS, bukan kerja teknis — bisa ditanyakan
+paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
-
-- [ ] **PengingatBelumAbsen/PengingatBelumAbsenPulang: 3 bug aktif**
-      (ditemukan fase 26 lanjutan, yang diperbaiki baru cast-nya):
-      - Tidak ada guard libur sama sekali: tidak cek shift->hari_kerja,
-        HariLibur, maupun Cuti/Dinas approved. Karyawan yang sedang cuti
-        approved TETAP dikirimi "Anda belum absen masuk" — barisnya ada tapi
-        waktu_masuk null. Sama untuk Sabtu/Minggu & libur nasional.
-        RekapHarian sudah benar cek hari_kerja, command ini tidak.
-      - Shift malam rusak di PengingatBelumAbsenPulang: batas notifikasi
-        dihitung dari jam pulang HARI INI yang sudah lewat, jadi notifikasi
-        "belum absen pulang" terkirim ~15 menit setelah karyawan absen MASUK.
-      - Karyawan rotasi TIDAK PERNAH dikirimi notifikasi sama sekali —
-        command query dari KaryawanShift, yang sejak fase 13 cuma dimiliki
-        karyawan umum. Jadi rotasi yang benar-benar lupa absen pun tidak
-        diingatkan.
-      - Kedua command masih tanpa test sama sekali.
 
 - [ ] **`is_cuti_bersama` bikin generator salah menandai libur** — kebijakan
       RS: saat cuti bersama karyawan TETAP MASUK, yang ingin libur mengajukan
@@ -56,8 +37,9 @@ RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       karyawan umum tercatat libur padahal seharusnya masuk, dan yang tidak
       masuk tidak tertangkap sebagai alpha. Karyawan rotasi unit 24 jam
       selamat lewat flag pola; karyawan umum tidak punya perlindungan setara.
-      Menyentuh 3 command sekaligus. Sementara ini form Hari Libur
-      memperingatkan supaya cuti bersama JANGAN didaftarkan dulu.
+      Menyentuh 3 command sekaligus, plus helper `shiftYangDiharapkanPada()`
+      yang punya TODO di sana. Sementara ini form Hari Libur memperingatkan
+      supaya cuti bersama JANGAN didaftarkan dulu.
 
 - [ ] **Fix AbsensiSimulasiSeeder** — `waktu_masuk` di-anchor ke tanggal
       baris, bukan `now()`. Sekarang semua row simulasi punya
@@ -66,14 +48,24 @@ RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       `DATE(waktu_masuk) == tanggal` supaya tidak kambuh.
 
 - [ ] **Verifikasi GenerateJadwalRotasi menyaring tanggal di luar masa berlaku
-      assignment** — `posisiSiklusPada()` sekarang menormalisasi tanggal
-      sebelum anchor jadi posisi yang konsisten (fase 33), tapi posisi untuk
-      tanggal di luar masa berlaku memang tidak punya arti bisnis.
-      `KaryawanPolaRotasi::berlakuPada()` sudah tersedia untuk menyaringnya —
-      perlu dicek apakah generator sudah memakainya, atau masih bisa
-      menghasilkan jadwal untuk tanggal sebelum assignment berlaku.
+      assignment** — `posisiSiklusPada()` sudah menormalisasi tanggal (fase 33),
+      tapi perlu dicek apakah generator memakai `KaryawanPolaRotasi::berlakuPada()`
+      untuk menyaring, atau masih bisa menghasilkan jadwal sebelum assignment
+      berlaku.
+
+- [ ] **Pengingat pulang & rotasi yang melewati tengah malam** — pengingat
+      pulang mencari absensi `today()-1` dan `today()`. Karyawan rotasi yang
+      lembur melewati tengah malam, atau yang Jadwal-nya berganti hari di
+      tengah shift, bisa menerima notifikasi keliru karena deadline dihitung
+      dari tanggal absen masuk saja. Belum diuji sama sekali.
 
 ## Kebutuhan masukan dari pihak RS
+
+- [ ] **Grace period 15 menit di pengingat masuk** — deadline pengingat
+      masuk = jam masuk + toleransi_menit + 15 menit. Itu berarti karyawan
+      shift 07:30 baru diingatkan pukul 08:00 (dengan toleransi 15). Perlu
+      dikonfirmasi apakah lapis kedua ini memang diinginkan. Kalau tidak,
+      hapus `+ 15` dari `PengingatBelumAbsen` dan ubah test batasnya.
 
 - [ ] **Keputusan enum `absensi.status = 'sakit'`** — muncul di dropdown form
       & filter tabel seolah fitur yang hidup, padahal tidak ada
