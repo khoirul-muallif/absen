@@ -348,3 +348,57 @@ it('menolak tukar kalau karyawan tujuan sedang dinas approved di tanggal tujuann
         ->call('create')
         ->assertHasFormErrors(['jadwal_tujuan_id']);
 });
+
+it('opsiJadwal tidak error untuk karyawan rotasi yang punya Jadwal libur', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $karyawan = \App\Models\Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => null,
+        'tanggal' => '2026-10-06',
+        'jenis' => 'libur',
+    ]);
+
+    $opsi = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'opsiJadwal'))
+        ->invoke(null, $karyawan->id);
+
+    expect($opsi)->toHaveCount(1)
+        ->and(array_values($opsi)[0])->toContain('(Libur)');
+});
+
+it('approveAndSwap menandai kedua Jadwal sumber=manual, tidak tertimpa generator', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $admin = \App\Models\User::factory()->create();
+
+    $pengaju = \App\Models\Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    $tujuan  = \App\Models\Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalA = \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => '2026-10-10', 'jenis' => 'piket', 'sumber' => 'generate',
+    ]);
+    $jadwalB = \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => '2026-10-11', 'jenis' => 'piket', 'sumber' => 'generate',
+    ]);
+
+    $tukar = \App\Models\TukarJadwal::create([
+        'jadwal_id' => $jadwalA->id,
+        'karyawan_pengaju_id' => $pengaju->id,
+        'tanggal_asal' => $jadwalA->tanggal,
+        'shift_asal_id' => $shift->id,
+        'jadwal_tujuan_id' => $jadwalB->id,
+        'karyawan_tujuan_id' => $tujuan->id,
+        'tanggal_tujuan' => $jadwalB->tanggal,
+        'shift_tujuan_id' => $shift->id,
+        'alasan' => 'uji',
+        'status' => 'menunggu_admin',
+    ]);
+
+    $tukar->approveAndSwap($admin);
+
+    expect($jadwalA->fresh()->sumber)->toBe('manual')
+        ->and($jadwalB->fresh()->sumber)->toBe('manual');
+});
+

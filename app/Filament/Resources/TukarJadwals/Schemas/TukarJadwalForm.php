@@ -200,7 +200,9 @@ class TukarJadwalForm
             ->orderBy('tanggal')
             ->get()
             ->mapWithKeys(fn (Jadwal $jadwal) => [
-                $jadwal->id => "{$jadwal->tanggal->format('d M Y')} ({$jadwal->shift->nama_shift})",
+                $jadwal->id => $jadwal->shift
+                    ? "{$jadwal->tanggal->format('d M Y')} ({$jadwal->shift->nama_shift})"
+                    : "{$jadwal->tanggal->format('d M Y')} (Libur)",
             ])
             ->toArray();
     }

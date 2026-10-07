@@ -159,16 +159,12 @@ class TukarJadwal extends Model
             }
 
             if ($this->isPindahSendiri()) {
-                $jadwalA->update(['tanggal' => $this->tanggal_baru]);
+                $jadwalA->update(['tanggal' => $this->tanggal_baru, 'sumber' => 'manual']);
             } else {
                 $jadwalB = Jadwal::lockForUpdate()->findOrFail($this->jadwal_tujuan_id);
 
                 if ($jadwalB->karyawan_id !== $this->karyawan_tujuan_id) {
-                    throw new \Exception(
-                        'Gagal: jadwal rekan tujuan sudah berubah kepemilikan sejak pengajuan ini dibuat '
-                        . '(kemungkinan sudah ditukar lewat pengajuan lain). '
-                        . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
-                    );
+                    throw new \Exception(/* ... */);
                 }
 
                 $karyawanA = $jadwalA->karyawan_id;
@@ -177,13 +173,10 @@ class TukarJadwal extends Model
 
                 try {
                     $jadwalA->update(['tanggal' => now()->addYears(100)]);
-                    $jadwalB->update(['karyawan_id' => $karyawanA]);
-                    $jadwalA->update(['karyawan_id' => $karyawanB, 'tanggal' => $tanggalA]);
+                    $jadwalB->update(['karyawan_id' => $karyawanA, 'sumber' => 'manual']);
+                    $jadwalA->update(['karyawan_id' => $karyawanB, 'tanggal' => $tanggalA, 'sumber' => 'manual']);
                 } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                    throw new \Exception(
-                        'Gagal menukar jadwal: salah satu karyawan sudah memiliki jadwal sendiri '
-                        . 'di tanggal pasangannya.'
-                    );
+                    throw new \Exception(/* ... */);
                 }
             }
 
