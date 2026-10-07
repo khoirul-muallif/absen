@@ -205,10 +205,14 @@ class AbsensiController extends Controller
 
         $karyawan = $request->user()->load('instansi');
 
-        $absensi = $karyawan->absensi()
-            ->whereDate('tanggal', today())
-            ->whereNotNull('waktu_masuk')
-            ->first();
+        // Absen masuk yang masih terbuka, dalam jendela yang sama dengan pengingat
+        // (hari ini & kemarin) supaya shift malam yang pulang di T+1 tetap ketemu.
+       $absensi = $karyawan->absensi()
+        ->whereNotNull('waktu_masuk')
+        ->whereBetween('tanggal', [today()->subDay(), today()])
+        ->orderByRaw('waktu_pulang IS NULL DESC') // baris yang masih terbuka dulu
+        ->orderByDesc('tanggal')                  // lalu yang paling baru
+        ->first();
 
         if (! $absensi) {
             return response()->json([
@@ -220,7 +224,7 @@ class AbsensiController extends Controller
         if ($absensi->waktu_pulang !== null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan absen pulang hari ini.',
+                'message' => 'Anda sudah melakukan absen pulang.',
             ], 422);
         }
 

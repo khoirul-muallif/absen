@@ -31,6 +31,110 @@ function buatInstansiDenganTitik(): Instansi
         'radius_meter' => 100,
     ]);
 }
+function requestPulang(): array
+{
+    return [
+        'latitude'    => -6.9800000,
+        'longitude'   => 110.4000000,
+        'foto_pulang' => UploadedFile::fake()->image('pulang.jpg'),
+    ];
+}
+
+describe('pulang: shift malam & jendela dua hari', function () {
+    beforeEach(function () {
+        Storage::fake('public');
+
+        $this->instansi = buatInstansiDenganTitik();
+        $this->karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+        $this->shiftMalam = Shift::factory()->create([
+            'instansi_id' => $this->instansi->id,
+            'nama_shift'  => 'Malam',
+            'jam_masuk'   => '22:00:00',
+            'jam_pulang'  => '07:00:00',
+        ]);
+
+        loginSebagai($this->karyawan);
+    });
+
+    it('shift malam bisa absen pulang di pagi hari berikutnya', function () {
+        $absensi = Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-06',
+            'waktu_masuk'  => Carbon::parse('2026-10-06 21:55:00'),
+            'waktu_pulang' => null,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-10-07 07:05:00'));
+
+        $this->postJson('/api/absensi/pulang', requestPulang())
+            ->assertSuccessful()
+            ->assertJsonPath('success', true);
+
+        expect($absensi->fresh()->waktu_pulang)->not->toBeNull();
+    });
+
+    it('memilih absensi terbuka terbaru jika ada dua baris terbuka', function () {
+        $lama = Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-06',
+            'waktu_masuk'  => Carbon::parse('2026-10-06 21:55:00'),
+            'waktu_pulang' => null,
+        ]);
+        $baru = Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-07',
+            'waktu_masuk'  => Carbon::parse('2026-10-07 21:55:00'),
+            'waktu_pulang' => null,
+        ]);
+
+        // Dua-duanya masuk jendela (6 & 7 Okt) sehingga urutan benar-benar diuji
+        $this->travelTo(Carbon::parse('2026-10-07 23:00:00'));
+
+        $this->postJson('/api/absensi/pulang', requestPulang())->assertSuccessful();
+
+        expect($baru->fresh()->waktu_pulang)->not->toBeNull()
+            ->and($lama->fresh()->waktu_pulang)->toBeNull();
+    });
+
+    it('menolak pulang kalau absen masuk di luar jendela dua hari', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-03',
+            'waktu_masuk'  => Carbon::parse('2026-10-03 21:55:00'),
+            'waktu_pulang' => null,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-10-07 07:05:00'));
+
+        $this->postJson('/api/absensi/pulang', requestPulang())
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Anda belum melakukan absen masuk hari ini.');
+    });
+
+    it('menolak pulang kedua dengan pesan sudah pulang', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-07',
+            'waktu_masuk'  => Carbon::parse('2026-10-07 21:55:00'),
+            'waktu_pulang' => Carbon::parse('2026-10-08 07:00:00'),
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-10-08 07:30:00'));
+
+        $this->postJson('/api/absensi/pulang', requestPulang())
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Anda sudah melakukan absen pulang.');
+    });
+});
+
+
+
+
 
 // ── status() ─────────────────────────────────────────────────────────────
 
@@ -336,7 +440,7 @@ it('pulang: ditolak kalau sudah absen pulang', function () {
         'longitude' => $instansi->longitude,
         'foto_pulang' => UploadedFile::fake()->image('pulang.jpg'),
     ])->assertStatus(422)
-        ->assertJsonPath('message', 'Anda sudah melakukan absen pulang hari ini.');
+            ->assertJsonPath('message', 'Anda sudah melakukan absen pulang.');
 });
 
 it('absen masuk ditolak kalau hari ini sudah berstatus dinas', function () {
