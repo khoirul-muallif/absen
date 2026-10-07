@@ -75,15 +75,10 @@ paralel dengan apa pun yang dipilih.
       Perlu dijawab: per-JenisCuti atau global? Untuk jenis cuti BARU yang
       memang semesteran, atau Cuti Tahunan yang SUDAH ADA diubah?
 
-      (b) Celah akumulatif saat row KuotaCuti belum ada (fase 26). Selama row
-      belum pernah dibuat, `afterApprove()` tidak pernah menaikkan `terpakai`,
-      jadi cuti approved tidak pernah masuk hitungan. Fallback `default_kuota`
-      di CutiController cuma mengurangi pengajuan PENDING — artinya karyawan
-      bisa ajukan 12 hari, approve, ajukan 12 hari lagi, approve, tanpa batas
-      sepanjang tahun. Solusi akar: `firstOrCreate` row dari `default_kuota`.
-      SENGAJA ditunda karena kunci row-nya akan berubah di (a).
-      **Kalau (a) diputuskan tidak jadi dikerjakan, (b) tetap harus
-      diselesaikan sendiri — ini celah nyata, bukan kerapian.**
+      (b) ~~Celah akumulatif saat row KuotaCuti belum ada~~ — **DITUTUP fase 42.**
+      `KuotaCuti::pastikanUntuk()` membuat row otomatis saat approve dengan
+      `kuota = default_kuota`, dan `afterApprove()` tidak lagi melewatkan
+      pemeriksaan saat row belum ada. Lihat CHANGELOG fase 42.
 
 - [ ] **Izin: rethink alur approval + endpoint jam_kembali** — izin keluar
       sementara itu darurat/insidental, tidak realistis menunggu approval
