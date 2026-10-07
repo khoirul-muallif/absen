@@ -25,11 +25,10 @@ paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
-- [ ] **Fix AbsensiSimulasiSeeder** — `waktu_masuk` di-anchor ke tanggal
-      baris, bukan `now()`. Sekarang semua row simulasi punya
-      `DATE(waktu_masuk) != tanggal` (lihat CHANGELOG fase 26 lanjutan).
-      Sekalian tambah assertion/test kecil yang mengunci
-      `DATE(waktu_masuk) == tanggal` supaya tidak kambuh.
+- [ ] **AbsensiSimulasiSeeder: lookup shift tanpa instansi, akumulasi lintas
+      bulan, dan absensi di hari libur mingguan** — invarian
+      `DATE(waktu_masuk) == tanggal` sudah benar di kode saat ini (fase 27),
+      sekarang dikunci test. Tiga hal di atas belum diperbaiki.
 
 - [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
       di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).

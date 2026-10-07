@@ -13,7 +13,9 @@ class AbsensiSimulasiSeeder extends Seeder
     public function run(): void
     {
         $karyawan = Karyawan::where('email', 'budi@rsb.com')->firstOrFail();
-        $shift = Shift::where('nama_shift', 'umum')->firstOrFail();
+        $shift = Shift::where('instansi_id', $karyawan->instansi_id)
+            ->where('nama_shift', 'umum')
+            ->firstOrFail();
         $qr = QrInstansi::first();
 
         // Pastikan shift dalam mode akumulasi buat simulasi ini
@@ -32,10 +34,16 @@ class AbsensiSimulasiSeeder extends Seeder
             1 => 3,   // kemarin, telat 3 menit
         ];
 
-        $akumulasi = 0;
+        $bulanAktif = null;
+        $akumulasi  = 0;
 
         foreach ($simulasiTelat as $hariLalu => $menitTelat) {
             $tanggal = today()->subDays($hariLalu);
+
+            if ($bulanAktif !== $tanggal->format('Y-m')) {
+                $bulanAktif = $tanggal->format('Y-m');
+                $akumulasi  = 0; // akumulasi dimulai ulang tiap bulan
+            }
             $waktuMasuk = $tanggal->copy()
                 ->setTimeFromTimeString($shift->jam_masuk->format('H:i:s'))
                 ->addMinutes($menitTelat);
@@ -43,6 +51,11 @@ class AbsensiSimulasiSeeder extends Seeder
             $status = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari itu
             $melebihi = $shift->sudahMelebihiToleransiBulanan($akumulasi);
 
+            if (! $shift->adalahHariKerja($tanggal)) {
+                $this->command->warn("Lewati {$tanggal->toDateString()}: bukan hari kerja shift.");
+                continue;
+            }
+            
             Absensi::updateOrCreate(
                 ['karyawan_id' => $karyawan->id, 'tanggal' => $tanggal->toDateString()],
                 [
