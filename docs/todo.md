@@ -96,26 +96,47 @@ paralel dengan apa pun yang dipilih.
       macet permanen. Draft: action "Batalkan" khusus status menunggu_rekan,
       atau expiry otomatis lewat scheduler. Perlu diputuskan apakah pembatalan
       butuh baris catatan/log terpisah.
+      - TukarJadwal yang melibatkan hari libur rotasi — **DITELUSURI.** Dua
+        temuan: (1) label dropdown Jadwal di TukarJadwalForm error untuk
+        baris libur (shift_id null) — FIXED, sekarang tampil "(Libur)".
+        (2) BUG LEBIH SERIUS, tidak spesifik rotasi-libur: approveAndSwap()
+        tidak pernah menandai sumber=manual pada Jadwal hasil tukar/pindah,
+        jadi bisa tertimpa diam-diam oleh jadwal:generate-rotasi
+        --overwrite-generate. FIXED — menerapkan kebijakan sumber=manual
+        yang sudah ada sejak fase 15/28, bukan keputusan baru. Dikunci test
+        di TukarJadwalResourceTest.
+
+- [ ] **Cuti/Dinas approved di hari libur pola rotasi — potong kuota atau
+      tidak?** 
+      — ditemukan saat verifikasi simulasi rotasi berlibur (lihat
+      Simulasi & data). Karyawan rotasi yang mengajukan cuti mencakup hari
+      yang memang liburnya (sesuai pola) tetap kena potong kuota penuh,
+      berbeda dari karyawan umum (generator skip non-hari_kerja, jadi tidak
+      pernah "buang" kuota di hari libur). Perilaku saat ini didokumentasikan
+      di CutiTest sebagai regression guard, bukan rekomendasi. Pertanyaan
+      yang menentukan: apakah hari libur pola rotasi harus dikecualikan dari
+      hitungan jumlah_hari cuti, mirip cara umum dikecualikan lewat
+      hari_kerja shift?
 
 ## Simulasi & data
 
-- [ ] **Simulasi karyawan rotasi yang punya langkah LIBUR di polanya
-      (mis. 5 hari kerja/minggu)** — belum pernah dicoba sama sekali, baik
-      manual maupun di test. Seeder rotasi sekarang kerja nonstop 15 hari
-      TANPA satu pun langkah libur, jadi seluruh jalur "karyawan rotasi sedang
-      libur" tidak pernah dilewati. Secara struktur SUDAH didukung.
-      Yang perlu dicek kalau dikerjakan:
-      - `AbsensiController::masuk()` untuk rotasi dengan Jadwal yang ADA tapi
-        shift_id null (libur) — pesannya jelas atau malah error? Test yang ada
-        cuma cover "rotasi tanpa Jadwal".
-      - Cuti/Dinas approved menimpa Jadwal libur dan tetap memotong kuota
-        untuk hari itu. Untuk karyawan umum tidak masalah (generator skip
-        non-hari_kerja), tapi rotasi bisa "buang" jatah cuti di hari yang
-        memang liburnya. Keputusan bisnis, belum pernah dibahas.
-      - TukarJadwal yang melibatkan hari libur rotasi — terkait keterbatasan
-        fase 11.
-      - Tambah 1 pola + 1 karyawan rotasi ber-libur ke seeder supaya bisa
-        diklik manual di admin panel.
+- [x] ~~Simulasi karyawan rotasi yang punya langkah LIBUR di polanya~~ —
+      **SELESAI.** `PolaRotasiSeeder` baru (pola "Rotasi 5 Kerja 2 Libur",
+      unit Rawat Inap, `berlaku_saat_libur_nasional=false`) + karyawan Yono
+      Pratama di-assign lewat `KaryawanPolaRotasi`. Jadwal digenerate manual
+      via `jadwal:generate-rotasi`, terverifikasi siklus 7 hari berulang
+      benar. Dua temuan dari verifikasi ini:
+      - `AbsensiController::masuk()`: FIXED — rotasi dengan Jadwal libur
+        sebelumnya dapat pesan "Hubungi admin" (sama seperti anomali tanpa
+        Jadwal sama sekali). Sekarang pesannya jelas: "Hari ini jadwal Anda
+        libur, tidak perlu absen masuk." Dikunci test di AbsensiControllerTest.
+      - Cuti/Dinas approved menimpa Jadwal libur rotasi & tetap memotong
+        kuota penuh untuk hari itu — **belum diperbaiki, keputusan bisnis
+        belum ada**. Didokumentasikan sebagai regression guard di CutiTest
+        ("DOKUMENTASI: ..."), mengikuti pola is_cuti_bersama fase 29. Masuk
+        ke "Kebutuhan masukan dari pihak RS" di bawah.
+      - TukarJadwal yang melibatkan hari libur rotasi — belum ditelusuri,
+        masih terkait keterbatasan fase 11.
       - Jalur pengingat dan RekapHarian untuk rotasi berlibur sudah dicakup
         test di fase 39. Yang tersisa hanya `AbsensiController::masuk()` untuk
         Jadwal dengan `shift_id` null, yang belum diuji.

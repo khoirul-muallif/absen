@@ -5,6 +5,109 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 44: TukarJadwal — label dropdown libur, Jadwal hasil swap dilindungi dari generator — selesai
+
+Commit `799315a`.
+
+### BUG: label dropdown error untuk Jadwal libur
+
+`TukarJadwalForm::opsiJadwal()` mengakses `$jadwal->shift->nama_shift` tanpa
+cek null. Untuk baris `jenis = libur` (`shift_id` null), `$jadwal->shift`
+adalah null — warning "Attempt to read property on null", label tampil
+rusak. Muncul setiap kali admin membuka form TukarJadwal untuk karyawan
+rotasi yang punya hari libur di polanya. Sekarang tampil `"(Libur)"`.
+
+### BUG LEBIH SERIUS: Jadwal hasil swap tidak dilindungi dari generator
+
+`TukarJadwal::approveAndSwap()` mengubah `karyawan_id` dan `tanggal` pada
+swap, tapi tidak pernah menandai `sumber = 'manual'`. Untuk karyawan rotasi,
+baris Jadwal dibuat `jadwal:generate-rotasi` dengan `sumber = 'generate'`.
+Kalau command itu dijalankan ulang dengan `--overwrite-generate` (misalnya
+setelah pola rotasi diperbaiki), baris yang sudah ditukar lewat TukarJadwal
+yang disetujui ikut **tertimpa diam-diam**, karena `sumber`-nya tidak pernah
+diubah.
+
+Ini bukan bug spesifik rotasi-libur — berlaku untuk semua TukarJadwal pada
+karyawan rotasi, ditemukan lewat verifikasi simulasi rotasi berlibur (fase
+43). Perbaikannya menerapkan kebijakan `sumber=manual` yang sudah ada sejak
+fase 15 dan 28 ("manual = dilindungi dari generator"), bukan keputusan
+bisnis baru. `approveAndSwap()` sekarang menandai kedua Jadwal (`jadwalA`
+dan `jadwalB` pada mode tukar, atau `jadwalA` saja pada mode pindah) sebagai
+`sumber = 'manual'` saat disetujui.
+
+### Test
+
+`TukarJadwalResourceTest`: 2 test baru — label dropdown tidak error untuk
+Jadwal libur, `approveAndSwap()` menandai kedua Jadwal `sumber=manual`.
+
+Full suite: 515 → 517 test passing.
+
+---
+
+## fase 43: simulasi rotasi berlibur — seeder, pesan masuk, dokumentasi kuota — selesai
+
+Commit `3cd7eef`.
+
+### Data simulasi baru
+
+Seeder rotasi sebelumnya (Dedi/Siti/Rina) kerja nonstop 15 hari tanpa satu
+pun langkah libur — jalur "karyawan rotasi sedang libur" tidak pernah
+dilewati sama sekali, baik manual maupun di test. `PolaRotasiSeeder` baru
+menambahkan pola "Rotasi 5 Kerja 2 Libur" (unit Rawat Inap, siklus 7 hari:
+pagi/siang/malam/pagi/siang/libur/libur), sengaja `berlaku_saat_libur_nasional
+= false` — kebalikan dari pola IGD yang sudah punya test di fase 39, supaya
+jalur "libur nasional memaksa override untuk unit non-24-jam" juga punya
+data uji. Karyawan baru Yono Pratama di-assign ke pola ini lewat
+`KaryawanPolaRotasi`, bukan lewat Jadwal manual seperti Dedi/Siti/Rina —
+supaya `jadwal:generate-rotasi` dan jalur rotasi-libur bisa diuji dan
+diklik manual di admin panel.
+
+Jadwal tidak digenerate otomatis di seeder; jalankan manual setelah seed:
+`php artisan jadwal:generate-rotasi {bulan} {tahun}`. Terverifikasi siklus 7
+hari berulang benar sepanjang bulan.
+
+**Temuan sampingan:** setelah `migrate:fresh --seed`, Dedi/Siti/Rina
+terverifikasi `tipe_jadwal = umum`, bukan `rotasi` — backfill migration fase
+13 jalan sebelum seeder mengisi data, jadi tidak ada yang di-backfill. Bukan
+bug baru, ini Known Gap #1 di PROJECT_CONTEXT yang sekarang terkonfirmasi
+penyebabnya. `GenerateJadwalRotasi` tidak pernah menjangkau ketiganya karena
+memfilter `tipe_jadwal = 'rotasi'` — tidak berdampak nyata karena mereka
+memang tidak dijadwalkan lewat command itu.
+
+### BUG: pesan absen masuk keliru untuk rotasi yang sedang libur
+
+`AbsensiController::masuk()` menyamakan dua kasus berbeda: "tidak ada Jadwal
+sama sekali" (anomali, lihat RekapHarian "jadwal_hilang") dan "Jadwal ada,
+tapi hari ini memang libur sesuai pola" — keduanya mendapat pesan "Tidak ada
+shift aktif untuk hari ini. Hubungi admin." Karyawan yang sedang libur sah
+diberi pesan seolah ada yang salah di sistem. Sekarang dipisah tiga kasus:
+tidak ada Jadwal (pesan lama, tetap "Hubungi admin"), Jadwal `jenis=libur`
+("Hari ini jadwal Anda libur, tidak perlu absen masuk."), dan guard jaga-jaga
+untuk Jadwal ada tapi `shift_id` null di luar kasus libur (seharusnya sudah
+tertangkap cek cuti/dinas di atas).
+
+### DIDOKUMENTASIKAN, BELUM DIPERBAIKI: Cuti/Dinas di hari libur rotasi tetap potong kuota penuh
+
+`Cuti::afterApprove()` men-sync Jadwal dan memotong kuota untuk setiap
+tanggal dalam rentang pengajuan, tanpa cek apakah tanggal itu sebenarnya
+hari libur menurut pola rotasi karyawan. Berbeda dari karyawan umum (generator
+skip hari non-`hari_kerja`, jadi tidak pernah "buang" kuota di hari libur),
+karyawan rotasi yang mengajukan cuti mencakup hari liburnya sendiri tetap
+kena potong kuota penuh, dan Jadwal `libur` tertimpa jadi `cuti`.
+
+Ini keputusan bisnis yang belum pernah dibahas — bukan diperbaiki sekarang.
+Perilaku saat ini dikunci lewat test dokumentasi di `CutiTest` (mengikuti
+pola `is_cuti_bersama` fase 29), supaya kalau nanti dibalik, itu perubahan
+sadar bukan kebetulan. Masuk ke "Kebutuhan masukan dari pihak RS" di
+todo.md.
+
+### Test
+
+`AbsensiControllerTest`: 1 test baru (pesan rotasi-libur).
+`CutiTest`: 1 test dokumentasi baru.
+
+Full suite: 513 → 515 test passing.
+
 ## fase 42: menutup celah akumulatif KuotaCuti saat row belum ada — selesai
 
 **KEPUTUSAN RS:** approve tidak boleh melebihi kuota, berlaku sama untuk
