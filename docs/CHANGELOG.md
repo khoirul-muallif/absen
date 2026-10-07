@@ -5,6 +5,72 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 40: absen pulang shift malam tidak lagi terkunci ke hari ini — selesai
+
+Commit `f8a57a7`.
+
+### BUG: karyawan shift malam tidak bisa absen pulang
+
+`AbsensiController::pulang()` mencari absen masuk dengan `whereDate('tanggal', today())`.
+Karyawan shift malam yang masuk tanggal T lalu pulang pagi T+1 mendapat
+"Anda belum melakukan absen masuk hari ini" (422), padahal pengingat pulang
+sudah benar mengirim notifikasi di jam yang sama.
+
+Sekarang pencarian memakai jendela hari ini dan kemarin. Baris yang masih
+terbuka (belum pulang) diutamakan, lalu yang paling baru. Pesan "sudah absen
+pulang" tidak lagi menyebut "hari ini", karena baris yang sudah pulang bisa
+bertanggal kemarin.
+
+### Test
+
+`AbsensiControllerTest`: 4 test baru di `describe('pulang: shift malam & jendela dua hari')`
+(shift malam pulang T+1, dua baris terbuka memilih yang terbaru, di luar jendela ditolak,
+pulang kedua ditolak dengan pesan yang benar).
+
+Full suite: 505 test passing (1515 assertions).
+
+---
+
+## fase 39: pengingat absen per-absensi & rotasi ikut Jadwal saat libur nasional — selesai
+
+Commit `409f357`.
+
+### Pengingat pulang: dedup per absensi, bukan per hari
+
+Dedup sebelumnya mencari notifikasi `belum_absen_pulang` yang dibuat hari ini. Akibatnya
+notifikasi shift malam (T+1 pagi) bisa memblokir pengingat absensi lain yang deadline-nya
+jatuh di hari yang sama. `BelumAbsen` sekarang menyimpan `absensi_id` dan `tanggal` shift
+(bukan tanggal kirim), dan dedup pulang memakai `absensi_id`.
+
+### Pengingat masuk: teks rusak & dedup per tanggal shift
+
+Teks "Pulang: ..." ditulis `{jamPulangString()}` tanpa `$`, sehingga karyawan menerima
+teks harfiah. Diperbaiki memakai helper. Dedup masuk memakai `data->tanggal`.
+
+### KEPUTUSAN: rotasi ikut Jadwal, tidak dicek ulang lewat HariLibur
+
+`shiftYangDiharapkanPada()` sebelumnya mengembalikan null untuk semua karyawan saat
+ada libur nasional, termasuk rotasi. Padahal `GenerateJadwalRotasi` sengaja
+mempertahankan shift untuk pola `berlaku_saat_libur_nasional = true` (IGD/ICU).
+Sekarang rotasi hanya membaca Jadwal (sumber kebenaran tunggal untuk rotasi).
+Libur instansi hanya berlaku untuk karyawan umum.
+
+**Efek ke data:** rotasi IGD yang libur nasional lalu tidak absen akan tercatat
+alpha oleh RekapHarian. Tim IGD perlu diberi tahu sebelum deploy.
+
+### Test
+
+`PengingatBelumAbsenPulangTest` (8 test) dan `PengingatBelumAbsenTest` (12 test),
+termasuk regresi untuk rotasi IGD dan rotasi non-24 jam saat libur nasional.
+
+Full suite: 481 → 501 test passing.
+
+### Catatan
+
+Notifikasi lama di database belum punya `absensi_id`, jadi dedup untuk notifikasi
+yang sudah ada bisa meleset sekali di hari deploy. Dampaknya paling buruk satu
+pengingat tambahan.
+
 ## fase 38 lanjutan: test generator rotasi untuk cuti bersama
 
 - `CutiBersamaRotasiTest` (baru): cuti bersama tidak mengubah hasil

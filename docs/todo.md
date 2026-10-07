@@ -25,25 +25,23 @@ paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
-
-
 - [ ] **Fix AbsensiSimulasiSeeder** — `waktu_masuk` di-anchor ke tanggal
       baris, bukan `now()`. Sekarang semua row simulasi punya
       `DATE(waktu_masuk) != tanggal` (lihat CHANGELOG fase 26 lanjutan).
       Sekalian tambah assertion/test kecil yang mengunci
       `DATE(waktu_masuk) == tanggal` supaya tidak kambuh.
 
-- [ ] **Verifikasi GenerateJadwalRotasi menyaring tanggal di luar masa berlaku
-      assignment** — `posisiSiklusPada()` sudah menormalisasi tanggal (fase 33),
-      tapi perlu dicek apakah generator memakai `KaryawanPolaRotasi::berlakuPada()`
-      untuk menyaring, atau masih bisa menghasilkan jadwal sebelum assignment
-      berlaku.
+- [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
+      di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).
+      Tinggal memastikan tidak ada jalur lain yang menghasilkan jadwal di
+      luar masa berlaku assignment.
 
-- [ ] **Pengingat pulang & rotasi yang melewati tengah malam** — pengingat
-      pulang mencari absensi `today()-1` dan `today()`. Karyawan rotasi yang
-      lembur melewati tengah malam, atau yang Jadwal-nya berganti hari di
-      tengah shift, bisa menerima notifikasi keliru karena deadline dihitung
-      dari tanggal absen masuk saja. Belum diuji sama sekali.
+- [ ] **Pengingat pulang untuk rotasi yang Jadwal-nya berganti hari di tengah
+      shift** — shift malam dan pencarian absensi dua hari sudah diuji (fase 40).
+      Yang belum: kasus rotasi yang Jadwal hari T+1-nya berbeda dari hari T,
+      sehingga deadline pulang yang dihitung dari `absensi.shift_id` bisa tidak
+      sama dengan shift Jadwal hari ini. Perlu test dan keputusan mana yang
+      jadi sumber deadline.
 
 ## Kebutuhan masukan dari pihak RS
 
@@ -124,6 +122,9 @@ paralel dengan apa pun yang dipilih.
         fase 11.
       - Tambah 1 pola + 1 karyawan rotasi ber-libur ke seeder supaya bisa
         diklik manual di admin panel.
+      - Jalur pengingat dan RekapHarian untuk rotasi berlibur sudah dicakup
+        test di fase 39. Yang tersisa hanya `AbsensiController::masuk()` untuk
+        Jadwal dengan `shift_id` null, yang belum diuji.
 
 - [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
       production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
