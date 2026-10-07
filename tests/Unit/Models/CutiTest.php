@@ -3,12 +3,13 @@
 use App\Models\Absensi;
 use App\Models\Cuti;
 use App\Models\Instansi;
+use App\Models\Jadwal;
 use App\Models\JenisCuti;
 use App\Models\Karyawan;
 use App\Models\KuotaCuti;
 use App\Models\Shift;
 use App\Models\User;
-use App\Models\Jadwal;
+use Carbon\Carbon;
 
 beforeEach(function () {
     $this->admin = User::factory()->create();
@@ -436,4 +437,55 @@ it('hariPendingUntuk terpisah per tahun, jenis cuti, dan karyawan', function () 
     ]);
 
     expect(\App\Models\Cuti::hariPendingUntuk($karyawan->id, $jenisCuti->id, 2026))->toBe(0);
+});
+// tests/Unit/Models/CutiTest.php — tambahkan di akhir file
+
+it('DOKUMENTASI: Cuti approved tetap memotong kuota & menimpa Jadwal libur rotasi — keputusan bisnis belum ada, lihat todo.md', function () {
+    $this->travelTo(Carbon::parse('2026-10-05 08:00:00'));
+
+    $instansi = \App\Models\Instansi::factory()->create();
+    $pola = \App\Models\PolaRotasi::factory()->create([
+        'instansi_id' => $instansi->id,
+        'langkah' => [
+            ['shift_id' => \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id])->id, 'libur' => false],
+            ['shift_id' => null, 'libur' => true],
+        ],
+    ]);
+    $karyawan = \App\Models\Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    $karyawan->karyawanPolaRotasis()->create([
+        'pola_rotasi_id' => $pola->id,
+        'tanggal_mulai'  => '2026-10-01',
+    ]);
+
+    // Tanggal 6 Okt = posisi 5 (0-indexed dari 1 Okt) → genap/ganjil tergantung
+    // siklus 2 hari: 1,3,5... kerja; 2,4,6... libur. Pastikan Jadwal libur ada.
+    \App\Models\Jadwal::create([
+        'karyawan_id' => $karyawan->id,
+        'tanggal' => '2026-10-06',
+        'jenis' => 'libur',
+        'shift_id' => null,
+        'sumber' => 'generate',
+    ]);
+
+    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true, 'default_kuota' => 12]);
+    $cuti = Cuti::create([
+        'karyawan_id' => $karyawan->id,
+        'jenis_cuti_id' => $jenisCuti->id,
+        'tanggal_mulai' => '2026-10-06',
+        'tanggal_selesai' => '2026-10-06',
+        'jumlah_hari' => 1,
+        'alasan' => 'uji dokumentasi',
+        'status' => 'pending',
+    ]);
+
+    $cuti->approve($this->admin);
+
+    $jadwal = \App\Models\Jadwal::where('karyawan_id', $karyawan->id)
+        ->whereDate('tanggal', '2026-10-06')->first();
+    $kuota = KuotaCuti::where('karyawan_id', $karyawan->id)->first();
+
+    // PERILAKU SAAT INI (bukan rekomendasi): kuota tetap terpotong penuh,
+    // dan Jadwal yang sebelumnya libur tertimpa jadi cuti.
+    expect($jadwal->jenis)->toBe('cuti')
+        ->and($kuota->terpakai)->toBe(1);
 });

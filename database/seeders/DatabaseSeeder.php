@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             InstansiSeeder::class,
             ShiftSeeder::class,
             JenisCutiSeeder::class,
+            PolaRotasiSeeder::class,
             KaryawanSeeder::class,
             HariLiburSeeder::class,
         ]);

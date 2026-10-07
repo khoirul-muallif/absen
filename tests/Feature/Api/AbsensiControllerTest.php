@@ -704,3 +704,27 @@ it('riwayat: jam_masuk shift dikirim sebagai H:i, bukan timestamp ISO', function
 
     expect($response->json('data.records.0.jam_masuk'))->toBe('08:00');
 });
+
+it('masuk: karyawan rotasi dengan Jadwal libur ditolak dengan pesan yang jelas, bukan "hubungi admin"', function () {
+    Storage::fake('public');
+
+    $instansi = buatInstansiDenganTitik();
+    $karyawan = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => null,
+        'tanggal'     => today(),
+        'jenis'       => 'libur',
+    ]);
+    $qr = QrInstansi::factory()->create(['instansi_id' => $instansi->id]);
+
+    loginSebagai($karyawan);
+
+    $this->postJson('/api/absensi/masuk', [
+        'latitude'   => $instansi->latitude,
+        'longitude'  => $instansi->longitude,
+        'kode_qr'    => $qr->kode_qr,
+        'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Hari ini jadwal Anda libur, tidak perlu absen masuk.');
+});

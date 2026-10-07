@@ -115,7 +115,24 @@ class AbsensiController extends Controller
                 ->whereDate('tanggal', today())
                 ->first();
 
-            if (! $jadwalHariIni || ! $jadwalHariIni->shift) {
+            if (! $jadwalHariIni) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tidak ada shift aktif untuk hari ini. Hubungi admin.',
+                ], 422);
+            }
+
+            if ($jadwalHariIni->jenis === Jadwal::JENIS_LIBUR) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Hari ini jadwal Anda libur, tidak perlu absen masuk.',
+                ], 422);
+            }
+
+            if (! $jadwalHariIni->shift) {
+                // Jadwal ada, bukan libur, tapi shift_id null — seharusnya sudah
+                // ketangkep cek status cuti/dinas di atas. Guard ini murni jaga-jaga
+                // supaya tidak error null di $shift->... bawah, bukan jalur normal.
                 return response()->json([
                     'success' => false,
                     'message' => 'Tidak ada shift aktif untuk hari ini. Hubungi admin.',
@@ -125,7 +142,7 @@ class AbsensiController extends Controller
             $shift   = $jadwalHariIni->shift;
             $shiftId = $jadwalHariIni->shift_id;
         }
-
+        
         // Hitung akumulasi bulan berjalan (buat KPI, bukan buat status harian)
         $totalTerlambatSebelumnya = 0;
         if ($shift->mode_toleransi === 'akumulasi_bulanan') {
