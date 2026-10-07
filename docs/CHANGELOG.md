@@ -5,6 +5,39 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 41: AbsensiSimulasiSeeder dikunci test invarian — selesai
+
+Commit `346da60`.
+
+### Tiga perbaikan di seeder
+
+- **Lookup shift per instansi.** `Shift::where('nama_shift', 'umum')` sebelumnya
+  tanpa filter instansi. Karena `nama_shift` boleh duplikat antar instansi
+  (fase 30), seeder bisa mengambil shift milik instansi lain. Sekarang dicari
+  lewat `instansi_id` karyawan.
+- **Akumulasi di-reset tiap ganti bulan.** Loop menjumlahkan menit telat tanpa
+  melihat bulan. Simulasi yang dijalankan di awal bulan membawa menit telat
+  bulan lalu ke KPI bulan ini, padahal mode akumulasi bulanan menghitung per
+  bulan.
+- **Hari bukan `hari_kerja` dilewati.** Seeder sebelumnya bisa menulis absensi
+  di Sabtu atau Minggu. Sekarang hari itu dilewati dengan peringatan di konsol.
+
+### Yang ternyata sudah benar
+
+Invarian `DATE(waktu_masuk) == tanggal` sudah benar sejak fase 27, karena
+`waktu_masuk` dibangun dari `$tanggal->copy()`. Item todo lama tentang bug itu
+tidak perlu diperbaiki di kode, cukup dikunci test.
+
+### Test
+
+`AbsensiSimulasiSeederTest` (tests/Feature/Seeder/):
+- `waktu_masuk` selalu jatuh di tanggal baris absensi
+- tidak ada absensi di akhir pekan
+- akumulasi di-reset saat simulasi melewati awal bulan
+
+Full suite: 507 test passing (1520 assertions) sebelum test akumulasi lintas
+bulan ditambahkan. Angka final perlu dicatat setelah suite dijalankan ulang.
+
 ## fase 40: absen pulang shift malam tidak lagi terkunci ke hari ini — selesai
 
 Commit `f8a57a7`.
