@@ -158,7 +158,7 @@ it('tidak memotong kuota jika jenis_cuti potong_kuota false', function () {
     expect($kuota->terpakai)->toBe(2); // tidak berubah
 });
 
-it('tidak error kalau belum ada row KuotaCuti untuk karyawan/jenis/tahun tersebut', function () {
+it('approve tanpa row KuotaCuti membuat row dan memotong terpakai', function () {
     // Sengaja TIDAK bikin KuotaCuti sama sekali - increment() pada query
     // kosong tidak akan menimpa row apapun, tapi juga tidak boleh throw.
     $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
@@ -172,7 +172,10 @@ it('tidak error kalau belum ada row KuotaCuti untuk karyawan/jenis/tahun tersebu
     ]);
 
     expect(fn () => $cuti->approve($this->admin))->not->toThrow(\Throwable::class);
-    expect(KuotaCuti::count())->toBe(0);
+
+    $kuota = KuotaCuti::where('karyawan_id', $this->karyawan->id)->first();
+    expect(KuotaCuti::count())->toBe(1)
+        ->and($kuota->terpakai)->toBe(1);
 });
 
 it('approve mensinkronkan jadwal jadi jenis cuti untuk setiap tanggal dalam rentang', function () {

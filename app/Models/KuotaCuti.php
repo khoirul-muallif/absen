@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\JenisCuti;
+use App\Models\Karyawan;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class KuotaCuti extends Model
 {
@@ -63,5 +66,24 @@ class KuotaCuti extends Model
     public static function sisaUntuk(int $karyawanId, int $jenisCutiId, int $tahun): ?int
     {
         return static::untuk($karyawanId, $jenisCutiId, $tahun)?->sisa;
+    }
+
+    /**
+     * Pastikan row KuotaCuti ada untuk kombinasi ini. Dipanggil HANYA dari
+     * Cuti::afterApprove(), di dalam transaksi, sebelum lockForUpdate().
+     *
+     * insertOrIgnore: kalau row sudah ada, tidak diubah. Aman dipanggil dua
+     * approve yang berjalan bersamaan, karena unique(karyawan_id, jenis_cuti_id,
+     * tahun) yang menangani duplikatnya.
+     */
+    public static function pastikanUntuk(int $karyawanId, int $jenisCutiId, int $tahun, int $defaultKuota): void
+    {
+        DB::table('kuota_cutis')->insertOrIgnore([
+            'karyawan_id'   => $karyawanId,
+            'jenis_cuti_id' => $jenisCutiId,
+            'tahun'         => $tahun,
+            'kuota'         => $defaultKuota,
+            'terpakai'      => 0,
+        ]);
     }
 }

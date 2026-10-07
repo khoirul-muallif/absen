@@ -64,11 +64,15 @@ class CutiForm
 
                                 $kuota = KuotaCuti::untuk($karyawanId, $jenisCutiId, $tahun);
 
-                                if (! $kuota) {
+                               if (! $kuota) {
+                                    $jumlahHariPending = Cuti::hariPendingUntuk($karyawanId, $jenisCutiId, $tahun);
+
                                     return new HtmlString(
-                                        "Belum ada data kuota untuk tahun {$tahun}. Pengajuan tetap bisa "
-                                        .'disimpan dan disetujui, tapi <b>tidak akan memotong kuota</b> '
-                                        .'(kebijakan: kuota yang belum pernah di-set bukan dasar untuk menolak).'
+                                        "Belum ada data kuota untuk tahun {$tahun}, jadi dipakai kuota default "
+                                        ."jenis cuti ini: <b>{$jenisCuti->default_kuota} hari</b>. Row kuota akan "
+                                        .'dibuat otomatis saat pengajuan ini disetujui, dan kuotanya tetap diperiksa — '
+                                        .'tidak ada pengecualian lagi.'
+                                        .($jumlahHariPending > 0 ? " Pending lain: <b>{$jumlahHariPending}</b> hari." : '')
                                     );
                                 }
 
@@ -141,16 +145,17 @@ class CutiForm
                                             if ($jenisCuti?->potong_kuota) {
                                                 $jumlahHari = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
 
-                                                // null = belum ada row KuotaCuti sama sekali.
-                                                // Konsisten dengan kebijakan fase 22: itu BUKAN
-                                                // sisa 0, dan bukan dasar untuk menolak.
+                                                // null = belum ada row KuotaCuti sama sekali. Sejak fase 42, baris tanpa
+                                                // row dianggap punya sisa = default_kuota jenis cuti (bukan "tidak
+                                                // terbatas"), karena row akan dibuat otomatis saat approve dan tetap
+                                                // diperiksa (Cuti::afterApprove() -> KuotaCuti::pastikanUntuk()).
                                                 $sisa = KuotaCuti::sisaUntuk(
                                                     $karyawanId,
                                                     $jenisCutiId,
                                                     $tanggalMulai->year
-                                                );
+                                                ) ?? $jenisCuti->default_kuota;
 
-                                                if ($sisa !== null && $jumlahHari > $sisa) {
+                                                if ($jumlahHari > $sisa) {
                                                     $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
                                                 }
                                             }

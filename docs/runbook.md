@@ -150,3 +150,44 @@ php artisan make:filament-resource KaryawanPolaRotasi
   relevan sama sekali)_
 
  npx @deepseek-ai/dsh web
+
+# Backfill KuotaCuti.terpakai dari histori Cuti approved (fase 42)
+# WAJIB dijalankan sekali saat deploy pertama kalau sudah ada Cuti approved
+# dari sebelum fase 42. BACKUP DB DULU.
+
+# 1. Cek selisih dulu — tinjau manusia sebelum lanjut ke langkah 2,
+#    terutama baris yang terpakai_sekarang > seharusnya (kemungkinan
+#    koreksi manual admin yang akan tertimpa).
+SELECT k.id, k.karyawan_id, k.jenis_cuti_id, k.tahun,
+       k.terpakai AS terpakai_sekarang,
+       COALESCE(a.total, 0) AS seharusnya
+FROM kuota_cutis k
+JOIN jenis_cutis j ON j.id = k.jenis_cuti_id AND j.potong_kuota = 1
+LEFT JOIN (
+    SELECT c.karyawan_id, c.jenis_cuti_id,
+           YEAR(c.tanggal_mulai) AS thn, SUM(c.jumlah_hari) AS total
+    FROM cutis c WHERE c.status = 'approved'
+    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai)
+) a ON a.karyawan_id = k.karyawan_id AND a.jenis_cuti_id = k.jenis_cuti_id AND a.thn = k.tahun
+WHERE k.terpakai <> COALESCE(a.total, 0);
+
+# 2. Isi row yang belum ada
+INSERT IGNORE INTO kuota_cutis (karyawan_id, jenis_cuti_id, tahun, kuota, terpakai, created_at, updated_at)
+SELECT c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai), j.default_kuota, SUM(c.jumlah_hari), NOW(), NOW()
+FROM cutis c
+JOIN jenis_cutis j ON j.id = c.jenis_cuti_id
+WHERE c.status = 'approved' AND j.potong_kuota = 1
+GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai);
+
+# 3. Perbaiki row yang sudah ada tapi terpakai-nya tidak cocok
+#    (jalankan SETELAH meninjau hasil query 1)
+UPDATE kuota_cutis k
+JOIN jenis_cutis j ON j.id = k.jenis_cuti_id AND j.potong_kuota = 1
+JOIN (
+    SELECT c.karyawan_id, c.jenis_cuti_id,
+           YEAR(c.tanggal_mulai) AS thn, SUM(c.jumlah_hari) AS total
+    FROM cutis c WHERE c.status = 'approved'
+    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai)
+) a ON a.karyawan_id = k.karyawan_id AND a.jenis_cuti_id = k.jenis_cuti_id AND a.thn = k.tahun
+SET k.terpakai = a.total, k.updated_at = NOW()
+WHERE k.terpakai <> a.total;

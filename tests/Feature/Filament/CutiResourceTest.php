@@ -264,22 +264,51 @@ it('tidak mewajibkan lampiran kalau jenis cuti perlu_lampiran = false', function
 // yang sebenarnya akan SUKSES (kebijakan fase 22). Empat test di bawah
 // mengunci keempat cabang infoKuota().
 
-it('tombol approve berwarna warning kalau KuotaCuti belum ada row sama sekali', function () {
-    $jenisCuti = JenisCuti::factory()->create(['potong_kuota' => true]);
+it('tombol approve berwarna success kalau KuotaCuti belum ada row tapi masih di bawah default_kuota', function () {
+    $jenisCuti = JenisCuti::factory()->create([
+        'potong_kuota'  => true,
+        'default_kuota' => 12,
+    ]);
+    // sengaja TIDAK bikin KuotaCuti — row akan dibuat otomatis saat approve
+    // (KuotaCuti::pastikanUntuk(), fase 42), tapi warna tombol dihitung dari
+    // default_kuota sebagai sisa sementara row belum ada.
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id'     => $this->karyawan->id,
+        'jenis_cuti_id'   => $jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-01',
+        'tanggal_selesai' => '2026-08-03',
+        'jumlah_hari'     => 3,
+        'status'          => 'pending',
+    ]);
+
+    // REGRESSION GUARD fase 42: row belum ada tidak lagi berarti "tidak
+    // diperiksa" (warning) — sekarang diperiksa terhadap default_kuota,
+    // dan 3 <= 12 berarti aman.
+    livewire(ListCutis::class)
+        ->assertTableActionHasColor('approve', 'success', $cuti);
+});
+
+it('tombol approve berwarna danger kalau KuotaCuti belum ada row dan jumlah_hari melebihi default_kuota', function () {
+    $jenisCuti = JenisCuti::factory()->create([
+        'potong_kuota'  => true,
+        'default_kuota' => 2,
+    ]);
     // sengaja TIDAK bikin KuotaCuti
 
     $cuti = Cuti::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jenis_cuti_id' => $jenisCuti->id,
-        'tanggal_mulai' => '2026-08-01',
+        'karyawan_id'     => $this->karyawan->id,
+        'jenis_cuti_id'   => $jenisCuti->id,
+        'tanggal_mulai'   => '2026-08-01',
         'tanggal_selesai' => '2026-08-03',
-        'jumlah_hari' => 3,
-        'status' => 'pending',
+        'jumlah_hari'     => 3,
+        'status'          => 'pending',
     ]);
 
-    // REGRESSION GUARD: ini yang dulu keliru jadi 'danger'.
+    // Row belum ada, tapi default_kuota (2) < jumlah_hari (3) -> danger.
+    // approve() akan membuat row lalu gagal dengan KuotaCutiTidakCukupException.
     livewire(ListCutis::class)
-        ->assertTableActionHasColor('approve', 'warning', $cuti);
+        ->assertTableActionHasColor('approve', 'danger', $cuti);
 });
 
 it('tombol approve berwarna success kalau sisa kuota mencukupi', function () {

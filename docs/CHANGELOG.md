@@ -5,6 +5,80 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 42: menutup celah akumulatif KuotaCuti saat row belum ada — selesai
+
+**KEPUTUSAN RS:** approve tidak boleh melebihi kuota, berlaku sama untuk
+admin (Filament) dan API — tidak ada lagi asimetri longgar/ketat.
+
+### Celah yang ditutup
+
+Sejak fase 22, `Cuti::afterApprove()` membiarkan approve lolos tanpa
+pemeriksaan kalau row `KuotaCuti` untuk kombinasi karyawan/jenis/tahun belum
+pernah dibuat — row-nya tidak pernah di-increment, jadi cuti yang sudah
+approved tidak pernah masuk hitungan `terpakai`. Fallback `default_kuota` di
+`CutiController::ajukan()` cuma membatasi pengajuan yang masih pending.
+Akibatnya karyawan bisa mengajukan `default_kuota` hari, approve, mengajukan
+lagi, approve, tanpa batas sepanjang tahun selama row belum dibuat manual.
+
+### Perbaikan
+
+- `KuotaCuti::pastikanUntuk()` baru — `insertOrIgnore` row dengan
+  `kuota = default_kuota`, `terpakai = 0`. Dipanggil HANYA dari
+  `Cuti::afterApprove()`, sebelum `lockForUpdate()`, di dalam transaksi yang
+  sama. Jalur baca (`untuk()`, `sisaUntuk()`, Infolist, tabel, endpoint kuota)
+  TIDAK memanggil ini — row tetap tidak dibuat sekadar karena dibaca.
+- `Cuti::afterApprove()`: row sekarang selalu ada sebelum dikunci, jadi
+  cabang "row belum ada = dibiarkan lolos" dihapus. Approve yang melebihi
+  kuota (termasuk saat row baru dibuat dari `default_kuota`) tetap melempar
+  `KuotaCutiTidakCukupException` dan di-rollback oleh transaksi — row kuota
+  yang baru dibuat ikut rollback, bukan tertinggal dengan `terpakai` salah.
+- `CutiForm` (Filament): placeholder info kuota dan pesan validasi
+  `tanggal_selesai` diperbarui — row belum ada sekarang berarti "dipakai
+  default_kuota dan tetap diperiksa", bukan "tidak akan memotong kuota".
+- `CutisTable::infoKuota()`: keadaan `belum_ada_row` (warna warning,
+  "approve tetap bisa, tapi tidak akan memotong kuota") dihapus. 3 keadaan
+  sekarang: `tidak_potong`, `aman`, `kurang` — sisa dihitung dari
+  `default_kuota` saat row belum ada, sama seperti `CutiForm`.
+
+### Data existing (dev, belum ada production)
+
+Backfill dua langkah dijalankan manual di database dev untuk memverifikasi
+query sebelum dipakai di deploy pertama:
+1. `INSERT IGNORE` — isi row untuk kombinasi yang belum pernah punya row,
+   `terpakai` dihitung dari `SUM(jumlah_hari)` cuti approved.
+2. `UPDATE` — perbaiki `terpakai` untuk row yang SUDAH ada tapi nilainya
+   tidak cocok dengan total cuti approved (mis. dibuat manual lewat
+   Filament sebelum ada cuti approved).
+
+Query selisih (`WHERE k.terpakai <> COALESCE(a.total, 0)`) WAJIB dijalankan
+dan ditinjau manusia sebelum langkah 2 — row yang `terpakai`-nya LEBIH BESAR
+dari seharusnya mengindikasikan koreksi manual admin yang bisa tertimpa.
+Belum relevan sekarang (belum ada data production), tapi WAJIB dijalankan
+saat deploy pertama kalau sudah ada histori Cuti approved dari sebelum fase
+ini. Prosedur lengkap dicatat di `runbook.md` (bagian darurat/one-off).
+
+### Test
+
+- `KuotaCutiTanpaRowTest` (baru): approve tanpa row membuat row dengan
+  `terpakai` benar, approve yang melebihi `default_kuota` ditolak dan
+  row ikut rollback, dua approve berurutan tidak bisa melewati kuota total,
+  membaca sisa kuota lewat API tidak membuat row.
+- `CutiTest` (unit): test lama yang mengasumsikan "approve tanpa row tidak
+  membuat KuotaCuti" diubah jadi mengunci perilaku baru.
+- `CutiResourceTest`: test warna tombol approve untuk "row belum ada" dipecah
+  jadi dua — `success` kalau `jumlah_hari` di bawah `default_kuota`, `danger`
+  kalau melebihi. Keadaan `warning` untuk "row belum ada" dihapus karena
+  tidak lagi berlaku.
+
+Full suite: 507 → 513 test passing.
+
+### Item todo yang ditutup
+
+"KuotaCuti: tutup celah akumulatif saat row belum ada" — bagian (b) dari
+item gabungan di todo.md selesai. Bagian (a) (periode semesteran) tetap
+menunggu keputusan RS, dan sekarang tidak lagi mendesak karena celahnya
+sudah tertutup secara independen.
+
 ## fase 41: AbsensiSimulasiSeeder dikunci test invarian — selesai
 
 Commit `346da60`.

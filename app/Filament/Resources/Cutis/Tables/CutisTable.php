@@ -88,7 +88,6 @@ class CutisTable
                         ->icon('heroicon-o-check')
                         ->color(fn ($record) => match (self::infoKuota($record)['keadaan']) {
                             'kurang' => 'danger',
-                            'belum_ada_row' => 'warning',
                             default => 'success',
                         })
                         ->tooltip(function ($record) {
@@ -96,7 +95,6 @@ class CutisTable
 
                             return match ($info['keadaan']) {
                                 'kurang' => "⚠ Sisa kuota ({$info['sisa']}) kurang dari jumlah hari yang diajukan ({$record->jumlah_hari})",
-                                'belum_ada_row' => "Belum ada data kuota tahun {$info['tahun']} — approve tetap bisa, tapi tidak akan memotong kuota.",
                                 'aman' => $info['pending'] > 0
                                     ? "Sisa {$info['sisa']} · pending lain {$info['pending']} hari · efektif {$info['efektif']}"
                                     : null,
@@ -146,21 +144,18 @@ class CutisTable
      * Keadaan kuota untuk satu record, dipakai bersama oleh color() & tooltip()
      * pada action approve.
      *
-     * 4 keadaan yang sengaja dibedakan (sebelumnya cuma 2, dan row yang belum
-     * ada di-treat sebagai sisa 0 — bikin tombol merah untuk approve yang
-     * sebenarnya akan sukses):
-     *   tidak_potong  - jenis cuti ini memang tidak menyentuh kuota
-     *   belum_ada_row - KuotaCuti belum pernah dibuat (kebijakan fase 22:
-     *                   bukan dasar menolak, tapi admin tetap perlu tahu
-     *                   bahwa approve ini tidak akan tercatat di kuota)
-     *   kurang        - sisa nyata di DB < jumlah_hari; approve akan gagal
-     *                   dengan KuotaCutiTidakCukupException
-     *   aman          - approve akan lolos
+     * 3 keadaan (sebelumnya 4 — 'belum_ada_row' dihapus di fase 42 karena
+     * KuotaCuti::pastikanUntuk() sekarang membuat row otomatis saat approve,
+     * jadi "belum ada row" tidak lagi berarti "tidak diperiksa"):
+     *   tidak_potong - jenis cuti ini memang tidak menyentuh kuota
+     *   kurang       - sisa (row ada, atau default_kuota kalau row belum ada)
+     *                  < jumlah_hari; approve akan gagal dengan
+     *                  KuotaCutiTidakCukupException
+     *   aman         - approve akan lolos
      *
-     * Catatan: 'kurang' sengaja dinilai dari sisa MENTAH (kuota - terpakai),
-     * bukan sisa efektif setelah dikurangi pending lain — karena itulah yang
-     * benar-benar dicek Cuti::afterApprove(). Pengajuan pending lain tidak
-     * membuat approve ini gagal, jadi cuma diinformasikan lewat tooltip.
+     * Catatan: 'kurang' dinilai dari sisa MENTAH (kuota - terpakai, atau
+     * default_kuota kalau row belum ada), bukan sisa efektif setelah dikurangi
+     * pending lain — karena itulah yang benar-benar dicek Cuti::afterApprove().
      */
     protected static function infoKuota($record): array
     {
@@ -170,11 +165,10 @@ class CutisTable
 
         $tahun = $record->tanggal_mulai->year;
 
-        $sisa = KuotaCuti::sisaUntuk($record->karyawan_id, $record->jenis_cuti_id, $tahun);
-
-        if ($sisa === null) {
-            return ['keadaan' => 'belum_ada_row', 'tahun' => $tahun];
-        }
+        // null = belum ada row. Sejak fase 42, row dibuat otomatis saat approve
+        // dengan kuota = default_kuota, jadi sisa dihitung dengan asumsi itu.
+        $sisa = KuotaCuti::sisaUntuk($record->karyawan_id, $record->jenis_cuti_id, $tahun)
+            ?? $record->jenisCuti->default_kuota;
 
         $pending = Cuti::hariPendingUntuk(
             $record->karyawan_id,
