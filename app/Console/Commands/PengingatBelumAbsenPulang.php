@@ -52,8 +52,8 @@ public function handle(): int
         }
 
         $sudahNotif = $karyawan->notifications()
-            ->whereDate('created_at', today())
             ->where('data->tipe', 'belum_absen_pulang')
+            ->where('data->absensi_id', $absensi->id)
             ->exists();
 
         if ($sudahNotif) {
@@ -62,11 +62,12 @@ public function handle(): int
         }
 
         $karyawan->notify(new BelumAbsen(
-            jenisAbsen: 'pulang',
-            namaShift:  $shift->nama_shift,
-            jamShift:   "Pulang: {$shift->jam_pulang->format('H:i')}",
+            jenisAbsen:   'pulang',
+            namaShift:    $shift->nama_shift,
+            jamShift:     "Pulang: {$shift->jamPulangString()}",
+            tanggalShift: Carbon::parse($absensi->tanggal),
+            absensiId:    $absensi->id,
         ));
-
         $terkirim++;
         $this->line("  → Notifikasi dikirim ke: {$karyawan->nama} (shift {$shift->nama_shift})");
     }

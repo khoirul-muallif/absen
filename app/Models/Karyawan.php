@@ -204,9 +204,7 @@ class Karyawan extends Authenticatable
      */
     public function shiftYangDiharapkanPada(Carbon $tanggal): ?Shift
     {
-        // Cuti/Dinas approved menang atas semua. Sinkronisasi ke Jadwal & Absensi
-        // dilakukan saat approve (fase 20-21), tapi cek langsung di sini supaya
-        // tidak bergantung pada urutan sinkronisasi.
+        // Cuti/Dinas approved menang atas semua (tidak berubah)
         $cutiAtauDinas = Cuti::where('karyawan_id', $this->id)
                 ->where('status', 'approved')
                 ->whereDate('tanggal_mulai', '<=', $tanggal)
@@ -222,7 +220,23 @@ class Karyawan extends Authenticatable
             return null;
         }
 
-        // Libur nasional/instansi. Cuti bersama BUMS tidak meliburkan (lihat scope).
+        // Rotasi: Jadwal adalah satu-satunya sumber kebenaran.
+        // Libur nasional sudah diperhitungkan generator (flag berlaku_saat_libur_nasional),
+        // jadi TIDAK dicek ulang lewat HariLibur di sini.
+        if ($this->isRotasi()) {
+            $jadwal = $this->jadwals()
+                ->whereDate('tanggal', $tanggal)
+                ->with('shift')
+                ->first();
+
+            if (! $jadwal || $jadwal->jenis === Jadwal::JENIS_LIBUR) {
+                return null;
+            }
+
+            return $jadwal->shift;
+        }
+
+        // Umum: libur instansi berlaku (cuti bersama tetap tidak meliburkan, lewat scope)
         $adaLibur = HariLibur::where('instansi_id', $this->instansi_id)
             ->meliburkan()
             ->whereDate('tanggal', $tanggal)
@@ -237,18 +251,6 @@ class Karyawan extends Authenticatable
             ->with('shift')
             ->first();
 
-        if ($this->isRotasi()) {
-            // Rotasi: Jadwal WAJIB ada. Tidak ada fallback ke KaryawanShift.
-            // Jadwal dengan jenis libur atau shift_id null = tidak wajib masuk.
-            if (! $jadwal || $jadwal->jenis === Jadwal::JENIS_LIBUR) {
-                return null;
-            }
-
-            return $jadwal->shift; // bisa null kalau jenis cuti/dinas tanpa shift
-        }
-
-        // Umum: Jadwal eksplisit menang (termasuk override dan piket),
-        // kalau tidak ada fallback ke assignment shift periode + pola hari_kerja.
         if ($jadwal) {
             if ($jadwal->jenis === Jadwal::JENIS_LIBUR) {
                 return null;
@@ -256,7 +258,7 @@ class Karyawan extends Authenticatable
 
             return in_array($jadwal->jenis, [Jadwal::JENIS_REGULER, Jadwal::JENIS_PIKET], true)
                 ? $jadwal->shift
-                : null; // cuti/dinas tanpa shift
+                : null;
         }
 
         $ks = $this->karyawanShift()

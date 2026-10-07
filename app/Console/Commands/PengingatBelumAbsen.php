@@ -48,8 +48,8 @@ class PengingatBelumAbsen extends Command
         }
 
         $sudahNotif = $karyawan->notifications()
-            ->whereDate('created_at', $hari)
             ->where('data->tipe', 'belum_absen_masuk')
+            ->where('data->tanggal', $hari->toDateString())
             ->exists();
 
         if ($sudahNotif) {
@@ -58,9 +58,10 @@ class PengingatBelumAbsen extends Command
         }
 
         $karyawan->notify(new BelumAbsen(
-            jenisAbsen: 'masuk',
-            namaShift:  $shift->nama_shift,
-            jamShift:   "Masuk: {$shift->jam_masuk->format('H:i')} — Pulang: {$shift->jam_pulang->format('H:i')}",
+            jenisAbsen:   'masuk',
+            namaShift:    $shift->nama_shift,
+            jamShift:     "Masuk: {$shift->jamMasukString()} — Pulang: {$shift->jamPulangString()}",
+            tanggalShift: $hari,
         ));
 
         $terkirim++;

@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
 
 class BelumAbsen extends Notification
 {
@@ -13,6 +14,8 @@ class BelumAbsen extends Notification
         public readonly string $jenisAbsen, // 'masuk' | 'pulang'
         public readonly string $namaShift,
         public readonly string $jamShift,
+        public readonly Carbon $tanggalShift, // tanggal shift, bukan tanggal kirim
+        public readonly ?int $absensiId = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -22,7 +25,7 @@ class BelumAbsen extends Notification
 
     public function toDatabase(object $notifiable): array
     {
-        $label = $this->jenisAbsen === 'masuk' ? 'masuk' : 'pulang';
+        $label = $this->jenisAbsen;
 
         return [
             'judul'       => "Pengingat: Belum Absen {$label}",
@@ -30,7 +33,8 @@ class BelumAbsen extends Notification
             'tipe'        => "belum_absen_{$label}",
             'nama_shift'  => $this->namaShift,
             'jam_shift'   => $this->jamShift,
-            'tanggal'     => now()->format('Y-m-d'),
+            'tanggal'     => $this->tanggalShift->toDateString(),
+            'absensi_id'  => $this->absensiId,
         ];
     }
 
