@@ -115,7 +115,6 @@ class AbsensiForm
                                 'terlambat'   => 'Terlambat',
                                 'alpha'       => 'Alpha',
                                 'izin'        => 'Izin',
-                                'sakit'       => 'Sakit',
                                 'cuti'        => 'Cuti',
                                 'dinas'       => 'Dinas',
                                 'libur'       => 'Libur',
@@ -124,7 +123,7 @@ class AbsensiForm
                             ->required()
                             ->disabled(fn (?Absensi $record): bool => self::dariSinkronisasi($record))
                             ->dehydrated()
-                            ->helperText('Otomatis dihitung ulang jika Waktu Masuk & Shift diisi — baik saat membuat baru maupun saat mengedit. Pilih manual hanya untuk status non-kehadiran (izin/sakit/cuti/dinas/libur/alpha).'),
+                            ->helperText('Otomatis dihitung ulang jika Waktu Masuk & Shift diisi — baik saat membuat baru maupun saat mengedit. Pilih manual hanya untuk status non-kehadiran (izin/cuti/dinas/libur/alpha). Cuti sakit sekarang diajukan lewat modul Cuti (jenis "Cuti Sakit"), bukan dipilih di sini.'),
 
                         Textarea::make('keterangan')
                             ->label('Keterangan')

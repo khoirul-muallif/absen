@@ -5,6 +5,42 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 45: keputusan RS — migrasi 'sakit' ke alur Cuti, konfirmasi kuota rotasi
+
+Dua keputusan RS yang sebelumnya menggantung (lihat Known Gap) sekarang final.
+
+### Enum `absensi.status = 'sakit'` → jenis cuti "Cuti Sakit"
+
+Keputusan RS: sakit diajukan lewat modul Cuti (perlu lampiran surat dokter,
+kuota unlimited), bukan status Absensi manual. `JenisCutiSeeder` ternyata
+sudah pas sejak awal (`perlu_lampiran=true`, `potong_kuota=false`, pola sama
+dengan Cuti Melahirkan/Menikah) — tidak ada perubahan di sana.
+
+Yang diubah:
+- `AbsensiForm`: opsi `'sakit'` dicabut dari dropdown status. Dipilih manual
+  di sini artinya baris Absensi tidak terhubung ke pengajuan Cuti apa pun
+  (tidak ada lampiran surat dokter) — melawan dasar keputusan RS.
+- `AbsensiController::rekap()`: baris `'sakit'` dihapus dari response.
+  `absensi.status` sekarang tidak akan pernah lagi bernilai `'sakit'` —
+  `Cuti::afterApprove()` selalu menulis `'cuti'` apapun jenis cutinya — jadi
+  baris itu akan selalu 0 dan menyesatkan kalau dibiarkan.
+
+**KEPUTUSAN:** kolom enum `absensi.status` di DB TETAP punya opsi `'sakit'`
+— sengaja tidak di-migration-hapus. Jadi dead value permanen sekarang, tapi
+menghapusnya dari enum MySQL berisiko (terutama kalau ada data lama yang
+masih memakainya) untuk manfaat yang nol — opsi yang tidak pernah dipilih
+UI dan tidak pernah ditulis sistem itu harmless.
+
+### Cuti/Dinas di hari libur pola rotasi — potong kuota penuh dikonfirmasi
+
+Test dokumentasi di fase 43 (`afterApprove()` tetap memotong kuota penuh
+untuk tanggal yang menurut pola rotasi karyawan itu sebenarnya harinya
+libur) dikonfirmasi RS sebagai perilaku yang DISENGAJA, bukan bug. Tidak ada
+perubahan kode — item ini keluar dari daftar Known Gap.
+
+Suite: 517 test passing (1543 assertions) — tidak berubah dari sebelumnya,
+tidak ada test yang pernah menguji key `'sakit'` secara eksplisit.
+
 ## fase 44: TukarJadwal — label dropdown libur, Jadwal hasil swap dilindungi dari generator — selesai
 
 Commit `799315a`.

@@ -142,7 +142,7 @@ class AbsensiController extends Controller
             $shift   = $jadwalHariIni->shift;
             $shiftId = $jadwalHariIni->shift_id;
         }
-        
+
         // Hitung akumulasi bulan berjalan (buat KPI, bukan buat status harian)
         $totalTerlambatSebelumnya = 0;
         if ($shift->mode_toleransi === 'akumulasi_bulanan') {
@@ -345,7 +345,6 @@ class AbsensiController extends Controller
                 'terlambat'              => $absensi->where('status', 'terlambat')->count(),
                 'alpha'                  => $absensi->where('status', 'alpha')->count(),
                 'izin'                   => $absensi->where('status', 'izin')->count(),
-                'sakit'                  => $absensi->where('status', 'sakit')->count(),
                 'cuti'                   => $absensi->where('status', 'cuti')->count(),
                 'dinas'                  => $absensi->where('status', 'dinas')->count(),
                 'libur'                  => $absensi->where('status', 'libur')->count(),
