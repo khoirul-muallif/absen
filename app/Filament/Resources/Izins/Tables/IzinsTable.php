@@ -48,7 +48,7 @@ class IzinsTable
                     }),
                 TextColumn::make('approver.name')
                     ->label('Disetujui oleh')
-                    ->placeholder('-')
+                    ->formatStateUsing(fn ($state, $record) => $state ?? ($record->status === 'approved' ? 'Otomatis (pengajuan karyawan)' : '-'))
                     ->toggleable(),
                 TextColumn::make('approved_at')
                     ->dateTime()
@@ -91,7 +91,12 @@ class IzinsTable
                         ->label('Tolak')
                         ->icon('heroicon-o-x-mark')
                         ->color('danger')
-                        ->visible(fn ($record) => $record->isPending())
+                        // Sebelumnya: visible(fn ($record) => $record->isPending()).
+                        // Sejak auto-approve (keputusan RS 8 Okt 2026), izin dari API lahir
+                        // LANGSUNG berstatus approved, bukan pending — admin perlu tetap bisa
+                        // menolaknya secara retroaktif kalau ternyata tidak sah. Satu-satunya
+                        // status yang TIDAK boleh ditolak lagi adalah yang sudah rejected.
+                        ->visible(fn ($record) => $record->status !== 'rejected')
                         ->requiresConfirmation()
                         ->schema([
                             Textarea::make('catatan_approval')

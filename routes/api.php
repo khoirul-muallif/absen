@@ -56,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',        [IzinController::class, 'riwayat']);
         Route::post('/',       [IzinController::class, 'ajukan']);
         Route::delete('{id}',  [IzinController::class, 'batalkan']);
+        Route::patch('/{id}/jam-kembali', [IzinController::class, 'isiJamKembali']);
     });
 
     // Lembur

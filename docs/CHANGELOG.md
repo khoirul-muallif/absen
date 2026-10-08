@@ -6,6 +6,55 @@
 
 ---
 
+## fase 47: Izin auto-approved, endpoint jam_kembali self-service
+
+Keputusan RS (8 Okt 2026): izin keluar sementara itu darurat/insidental,
+tidak realistis menunggu approval admin dulu.
+
+### Auto-approve
+
+`IzinController::ajukan()` sekarang langsung menyimpan `status='approved'`,
+`approved_by=null` (sengaja — bukan admin yang approve), `approved_at=now()`.
+Tidak ada status enum baru; `scopeApproved()`/`isApproved()` dari
+`HasApprovalWorkflow` sudah cukup.
+
+Admin TETAP bisa menolak (reject) izin yang sudah auto-approved secara
+retroaktif kalau ternyata tidak sah — itulah peran approval yang masih
+tersisa. `IzinsTable::reject` guard-nya diubah dari `isPending()` jadi
+`status !== 'rejected'`, karena sejak auto-approve izin dari API tidak
+pernah lagi berstatus pending — guard lama akan membuat tombol Tolak mati
+total untuk hampir semua kasus nyata.
+
+### Endpoint baru: PATCH /api/izin/{id}/jam-kembali
+
+Karyawan mengisi `jam_kembali` sendiri setelah balik dari izin. Cuma bisa
+sekali (ditolak kalau `jam_kembali` sudah terisi) — "siapa & kapan mengisi"
+cukup terbaca dari `updated_at` tanpa kolom/tabel log terpisah. Koreksi
+setelah terisi harus lewat admin (Filament).
+
+### `batalkan()` — dasar pembatalan diganti dari status ke jam_kembali
+
+Guard lama (`isPending()`) tidak akan pernah terpenuhi lagi sejak
+auto-approve. Diganti: boleh dibatalkan selama `jam_kembali` masih kosong
+(izin masih "berjalan"; aman karena Izin sengaja tidak sync ke
+Absensi/kuota — tidak ada efek samping yang perlu di-undo).
+
+### Test
+
+`IzinControllerTest`: assertion `batalkan()` & `ajukan()` disesuaikan ke
+semantik baru (approved otomatis, bukan pending). 8 test baru untuk endpoint
+`isiJamKembali()` (isi sukses, ditolak kalau sudah terisi, ditolak kalau
+jam_kembali < jam_keluar, 404 milik orang lain).
+
+Catatan proses: assertion `jam_kembali` sempat salah format dua kali
+berturut-turut — field ini tidak di-cast ke Carbon (beda dari
+`Shift::jam_masuk`), jadi keluar dari DB sebagai `H:i:s` (`11:30:00`) bukan
+`H:i` yang dikirim di request. Kuirk ini sudah tercatat di todo.md sejak
+lama ("Format jam di respons Izin & Lembur belum seragam") — insiden ini
+menegaskan kenapa dia perlu diseragamkan suatu saat, bukan cuma kosmetik.
+
+Full suite: **529 test passing (1572 assertions)** — naik dari 525.
+
 ## fase 46: KuotaCuti semesteran untuk Cuti Tahunan
 
 Keputusan RS: kuota Cuti Tahunan dipecah per semester (bukan per tahun

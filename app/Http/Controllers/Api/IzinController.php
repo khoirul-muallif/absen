@@ -11,7 +11,17 @@ class IzinController extends Controller
 {
     /**
      * POST /api/izin
-     * Ajukan izin baru
+     * Ajukan izin baru.
+     *
+     * KEPUTUSAN RS (8 Okt 2026): izin keluar sementara itu darurat/
+     * insidental, tidak realistis menunggu approval admin dulu. Sekarang
+     * LANGSUNG approved saat diajukan, tidak lewat status pending.
+     * approved_by sengaja NULL (bukan admin yang approve), approved_at =
+     * waktu pengajuan.
+     *
+     * Admin tetap bisa menolak (reject) izin yang sudah auto-approved ini
+     * secara retroaktif lewat Filament kalau ternyata tidak sah — itulah
+     * peran approval yang masih tersisa di sini.
      */
     public function ajukan(Request $request): JsonResponse
     {
@@ -30,18 +40,70 @@ class IzinController extends Controller
             'jam_keluar'  => $request->jam_keluar,
             'jam_kembali' => $request->jam_kembali,
             'keperluan'   => $request->keperluan,
-            'status'      => 'pending',
+            'status'      => 'approved',
+            'approved_by' => null,
+            'approved_at' => now(),
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Pengajuan izin berhasil dikirim, menunggu persetujuan.',
+            'message' => 'Pengajuan izin tercatat.',
             'data'    => [
-                'id'       => $izin->id,
-                'tanggal'  => $izin->tanggal->format('d M Y'),
-                'status'   => $izin->status,
+                'id'      => $izin->id,
+                'tanggal' => $izin->tanggal->format('d M Y'),
+                'status'  => $izin->status,
             ],
         ], 201);
+    }
+
+    /**
+     * PATCH /api/izin/{id}/jam-kembali
+     * Karyawan mengisi jam_kembali sendiri setelah balik dari izin.
+     *
+     * Cuma bisa diisi SEKALI lewat endpoint ini (jam_kembali harus masih
+     * null) — supaya "siapa & kapan mengisi" jelas dari updated_at tanpa
+     * perlu kolom/tabel log terpisah. Koreksi setelah terisi harus lewat
+     * admin (Filament).
+     */
+    public function isiJamKembali(Request $request, string $id): JsonResponse
+    {
+        $izin = $request->user()->izins()->where('id', $id)->first();
+
+        if (! $izin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan izin tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($izin->jam_kembali !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Jam kembali sudah terisi. Hubungi admin kalau perlu dikoreksi.',
+            ], 422);
+        }
+
+        $request->validate([
+            'jam_kembali' => 'required|date_format:H:i',
+        ]);
+
+        if ($request->jam_kembali <= $izin->jam_keluar) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Jam kembali harus setelah jam keluar.',
+            ], 422);
+        }
+
+        $izin->update(['jam_kembali' => $request->jam_kembali]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jam kembali berhasil dicatat.',
+            'data'    => [
+                'id'          => $izin->id,
+                'jam_kembali' => $izin->jam_kembali,
+            ],
+        ]);
     }
 
     /**
@@ -70,7 +132,7 @@ class IzinController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'total'  => $izin->count(),
+                'total'   => $izin->count(),
                 'records' => $izin,
             ],
         ]);
@@ -78,7 +140,13 @@ class IzinController extends Controller
 
     /**
      * DELETE /api/izin/{id}
-     * Batalkan pengajuan izin — hanya boleh kalau masih pending
+     * Batalkan pengajuan izin.
+     *
+     * Sejak auto-approve, izin TIDAK PERNAH berstatus pending dari jalur
+     * API — guard lama (isPending()) akan membuat endpoint ini jadi tidak
+     * pernah bisa dipakai. Diganti: boleh dibatalkan selama jam_kembali
+     * belum terisi (izin masih "berjalan"; aman karena Izin sengaja tidak
+     * sync ke Absensi/kuota — tidak ada efek samping yang perlu di-undo).
      */
     public function batalkan(Request $request, string $id): JsonResponse
     {
@@ -91,10 +159,10 @@ class IzinController extends Controller
             ], 404);
         }
 
-        if (! $izin->isPending()) {
+        if ($izin->jam_kembali !== null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Pengajuan izin yang sudah diproses tidak bisa dibatalkan.',
+                'message' => 'Izin yang sudah ada jam kembalinya tidak bisa dibatalkan sendiri. Hubungi admin.',
             ], 422);
         }
 
