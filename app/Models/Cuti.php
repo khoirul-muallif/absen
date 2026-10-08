@@ -36,29 +36,31 @@ class Cuti extends Model
     }
 
     /**
-     * Total jumlah_hari dari pengajuan cuti yang masih PENDING untuk
-     * kombinasi (karyawan, jenis cuti, tahun).
-     *
-     * Dipakai untuk menghitung "sisa efektif": pengajuan pending belum
-     * menyentuh KuotaCuti.terpakai, jadi sisa mentah di DB selalu terlihat
-     * lebih longgar daripada kenyataannya.
-     *
-     * $kecualiCutiId WAJIB diisi kalau pemanggilnya sedang menilai satu
-     * record pending tertentu (mis. tooltip approve, form edit) — kalau
-     * tidak, jumlah_hari record itu ikut terhitung dua kali.
+     * $semester default 0 ("tidak semesteran", kompatibel dengan pemanggil
+     * lama). Untuk jenis cuti semesteran, scope ke bulan-bulan semester itu
+     * saja — kalau tidak, pending semester 2 ikut kehitung waktu approve
+     * semester 1, dan sebaliknya.
      */
     public static function hariPendingUntuk(
         int $karyawanId,
         int $jenisCutiId,
         int $tahun,
-        ?int $kecualiCutiId = null
+        ?int $kecualiCutiId = null,
+        int $semester = 0
     ): int {
-        return (int) static::where('karyawan_id', $karyawanId)
+        $query = static::where('karyawan_id', $karyawanId)
             ->where('jenis_cuti_id', $jenisCutiId)
             ->where('status', 'pending')
             ->whereYear('tanggal_mulai', $tahun)
-            ->when($kecualiCutiId, fn ($q) => $q->where('id', '!=', $kecualiCutiId))
-            ->sum('jumlah_hari');
+            ->when($kecualiCutiId, fn ($q) => $q->where('id', '!=', $kecualiCutiId));
+
+        if ($semester > 0) {
+            [$bulanAwal, $bulanAkhir] = $semester === 1 ? [1, 6] : [7, 12];
+            $query->whereMonth('tanggal_mulai', '>=', $bulanAwal)
+                ->whereMonth('tanggal_mulai', '<=', $bulanAkhir);
+        }
+
+        return (int) $query->sum('jumlah_hari');
     }
 
     /**
@@ -78,24 +80,28 @@ class Cuti extends Model
     {
         if ($this->jenisCuti->potong_kuota) {
             DB::transaction(function () {
-                // Row dibuat kalau belum ada (sebelumnya: dilewati diam-diam).
+                $tahun = $this->tanggal_mulai->year;
+                $semester = $this->jenisCuti->semesterDari($this->tanggal_mulai);
+
                 KuotaCuti::pastikanUntuk(
                     $this->karyawan_id,
                     $this->jenis_cuti_id,
-                    $this->tanggal_mulai->year,
-                    $this->jenisCuti->default_kuota
+                    $tahun,
+                    $this->jenisCuti->default_kuota,
+                    $semester
                 );
 
-                // Row sekarang selalu ada, jadi firstOrFail. Lock tetap diperlukan.
                 $kuota = $this->karyawan->kuotaCutis()
                     ->where('jenis_cuti_id', $this->jenis_cuti_id)
-                    ->where('tahun', $this->tanggal_mulai->year)
+                    ->where('tahun', $tahun)
+                    ->where('semester', $semester)
                     ->lockForUpdate()
                     ->firstOrFail();
 
                 if ($kuota->terpakai + $this->jumlah_hari > $kuota->kuota) {
                     throw new KuotaCutiTidakCukupException(
-                        "Kuota {$this->jenisCuti->nama} tahun {$this->tanggal_mulai->year} tidak cukup. ".
+                        "Kuota {$this->jenisCuti->nama} tahun {$tahun}".
+                        ($semester > 0 ? " semester {$semester}" : '')." tidak cukup. ".
                         "Sisa: {$kuota->sisa} hari, diajukan: {$this->jumlah_hari} hari."
                     );
                 }

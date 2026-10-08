@@ -24,25 +24,32 @@ class CutiController extends Controller
 
         $jenisCutiAktif = JenisCuti::where('is_active', true)->get();
 
-        $data = $jenisCutiAktif->map(function ($jenis) use ($karyawan, $tahun) {
-            $kuota = KuotaCuti::untuk($karyawan->id, $jenis->id, $tahun);
+        $data = collect();
 
-            return [
-                'jenis_cuti_id'  => $jenis->id,
-                'nama'           => $jenis->nama,
-                'potong_kuota'   => $jenis->potong_kuota,
-                'perlu_lampiran' => $jenis->perlu_lampiran,
-                'kuota'          => $kuota->kuota ?? $jenis->default_kuota,
-                'terpakai'       => $kuota->terpakai ?? 0,
-                'sisa'           => $kuota?->sisa ?? $jenis->default_kuota,
-            ];
-        });
+        foreach ($jenisCutiAktif as $jenis) {
+            $semesterList = $jenis->periode_kuota === JenisCuti::PERIODE_SEMESTERAN ? [1, 2] : [0];
+
+            foreach ($semesterList as $semester) {
+                $kuota = KuotaCuti::untuk($karyawan->id, $jenis->id, $tahun, $semester);
+
+                $data->push([
+                    'jenis_cuti_id'  => $jenis->id,
+                    'nama'           => $jenis->nama,
+                    'semester'       => $semester > 0 ? $semester : null,
+                    'potong_kuota'   => $jenis->potong_kuota,
+                    'perlu_lampiran' => $jenis->perlu_lampiran,
+                    'kuota'          => $kuota->kuota ?? $jenis->default_kuota,
+                    'terpakai'       => $kuota->terpakai ?? 0,
+                    'sisa'           => $kuota?->sisa ?? $jenis->default_kuota,
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
             'data'    => [
-                'tahun'  => $tahun,
-                'records' => $data,
+                'tahun'   => $tahun,
+                'records' => $data->values(),
             ],
         ]);
     }
@@ -88,6 +95,14 @@ class CutiController extends Controller
             ], 422);
         }
 
+        if ($jenisCuti->periode_kuota === JenisCuti::PERIODE_SEMESTERAN
+            && $jenisCuti->semesterDari($tanggalMulai) !== $jenisCuti->semesterDari($tanggalSelesai)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Pengajuan \"{$jenisCuti->nama}\" tidak boleh melintasi pergantian semester. Ajukan terpisah untuk masing-masing semester.",
+            ], 422);
+        }
+
         $jumlahHari = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
 
         $bentrok = $karyawan->cutis()
@@ -125,21 +140,27 @@ class CutiController extends Controller
         // pending — bukan terhadap cuti yang sudah terpakai sepanjang tahun.
         // Lihat todo.md (digabung ke pertimbangan KuotaCuti semesteran).
         if ($jenisCuti->potong_kuota) {
-            $sisaTercatat = KuotaCuti::sisaUntuk($karyawan->id, $jenisCuti->id, $tanggalMulai->year)
+            $semester = $jenisCuti->semesterDari($tanggalMulai);
+
+            $sisaTercatat = KuotaCuti::sisaUntuk($karyawan->id, $jenisCuti->id, $tanggalMulai->year, $semester)
                 ?? $jenisCuti->default_kuota;
 
             $hariPendingLain = Cuti::hariPendingUntuk(
                 $karyawan->id,
                 $jenisCuti->id,
-                $tanggalMulai->year
+                $tanggalMulai->year,
+                null,
+                $semester
             );
 
             $sisaKuota = $sisaTercatat - $hariPendingLain;
 
             if ($jumlahHari > $sisaKuota) {
+                $labelPeriode = $semester > 0 ? "semester {$semester} tahun {$tanggalMulai->year}" : "tahun {$tanggalMulai->year}";
+
                 return response()->json([
                     'success' => false,
-                    'message' => "Sisa kuota {$jenisCuti->nama} Anda tahun {$tanggalMulai->year} tinggal {$sisaKuota} hari (memperhitungkan pengajuan pending lain), tidak cukup untuk {$jumlahHari} hari yang diajukan.",
+                    'message' => "Sisa kuota {$jenisCuti->nama} Anda {$labelPeriode} tinggal {$sisaKuota} hari (memperhitungkan pengajuan pending lain), tidak cukup untuk {$jumlahHari} hari yang diajukan.",
                     'data'    => ['sisa_kuota' => $sisaKuota],
                 ], 422);
             }

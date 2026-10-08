@@ -164,22 +164,23 @@ class CutisTable
         }
 
         $tahun = $record->tanggal_mulai->year;
+        $semester = $record->jenisCuti->semesterDari($record->tanggal_mulai);
 
-        // null = belum ada row. Sejak fase 42, row dibuat otomatis saat approve
-        // dengan kuota = default_kuota, jadi sisa dihitung dengan asumsi itu.
-        $sisa = KuotaCuti::sisaUntuk($record->karyawan_id, $record->jenis_cuti_id, $tahun)
+        $sisa = KuotaCuti::sisaUntuk($record->karyawan_id, $record->jenis_cuti_id, $tahun, $semester)
             ?? $record->jenisCuti->default_kuota;
 
         $pending = Cuti::hariPendingUntuk(
             $record->karyawan_id,
             $record->jenis_cuti_id,
             $tahun,
-            $record->id
+            $record->id,
+            $semester
         );
 
         return [
             'keadaan' => $sisa >= $record->jumlah_hari ? 'aman' : 'kurang',
             'tahun' => $tahun,
+            'semester' => $semester,
             'sisa' => $sisa,
             'pending' => $pending,
             'efektif' => $sisa - $pending,

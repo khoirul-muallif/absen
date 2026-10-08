@@ -18,10 +18,9 @@ Fokus berikutnya:
 - **(C) Lanjut ke frontend.** Backend sekarang jauh lebih solid daripada saat
   frontend di-freeze di fase 5.
 
-Catatan: keputusan bisnis yang masih menggantung (enum 'sakit', KuotaCuti
-semesteran, alur Izin, override TukarJadwal, `is_cuti_bersama`, grace period
-pengingat) butuh masukan dari pihak RS, bukan kerja teknis — bisa ditanyakan
-paralel dengan apa pun yang dipilih.
+Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
+TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
+teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
@@ -44,80 +43,17 @@ paralel dengan apa pun yang dipilih.
 
 ## Kebutuhan masukan dari pihak RS
 
-- [ ] **Grace period 15 menit di pengingat masuk** — deadline pengingat
-      masuk = jam masuk + toleransi_menit + 15 menit. Itu berarti karyawan
-      shift 07:30 baru diingatkan pukul 08:00 (dengan toleransi 15). Perlu
-      dikonfirmasi apakah lapis kedua ini memang diinginkan. Kalau tidak,
-      hapus `+ 15` dari `PengingatBelumAbsen` dan ubah test batasnya.
-
-- [ ] **Keputusan enum `absensi.status = 'sakit'`** — muncul di dropdown form
-      & filter tabel seolah fitur yang hidup, padahal tidak ada
-      modul/controller yang pernah menghasilkannya. Pilihan: (a) entri manual
-      admin yang sah, (b) digabung ke alur Cuti sebagai jenis cuti sakit,
-      (c) dead value, sembunyikan dari UI.
-      Pertanyaan yang menentukan: di rekap bulanan (GET /api/absensi/rekap),
-      apakah "sakit" perlu tampil sebagai baris sendiri, atau cukup masuk
-      hitungan cuti? Endpoint itu SUDAH menghitungnya terpisah — jadi kalau
-      jawabannya "cukup masuk cuti", barisnya di rekap juga perlu dihapus.
-
-- [ ] **KuotaCuti: dukung periode per 6 bulan + tutup celah "row belum ada"**
-      — dua kebutuhan yang digabung karena menyentuh keputusan yang sama:
-      apakah row KuotaCuti boleh terus-menerus tidak ada.
-
-      (a) Periode semesteran. Sekarang kuota selalu per tahun kalender penuh.
-      Kemungkinan butuh kolom `periode_kuota` di jenis_cutis, dan KuotaCuti
-      butuh identifikasi periode dalam tahun yang sama (kolom `semester`, atau
-      ganti ke `periode_mulai`/`periode_selesai` eksplisit) — pilihan ini
-      pengaruh besar ke unique constraint & migration data existing.
-      Titik query yang harus direvisi tinggal 3 setelah sentralisasi fase 26:
-      `KuotaCuti::untuk()`/`sisaUntuk()`, `Cuti::hariPendingUntuk()`, dan
-      `Cuti::afterApprove()`.
-      Perlu dijawab: per-JenisCuti atau global? Untuk jenis cuti BARU yang
-      memang semesteran, atau Cuti Tahunan yang SUDAH ADA diubah?
-
-      (b) ~~Celah akumulatif saat row KuotaCuti belum ada~~ — **DITUTUP fase 42.**
-      `KuotaCuti::pastikanUntuk()` membuat row otomatis saat approve dengan
-      `kuota = default_kuota`, dan `afterApprove()` tidak lagi melewatkan
-      pemeriksaan saat row belum ada. Lihat CHANGELOG fase 42.
-
-- [ ] **Izin: rethink alur approval + endpoint jam_kembali** — izin keluar
-      sementara itu darurat/insidental, tidak realistis menunggu approval
-      admin dulu. Draft: auto-approved saat diajukan, endpoint baru untuk
-      karyawan mengisi jam_kembali sendiri, plus riwayat siapa/kapan
-      mengubahnya. Perlu dicek apakah approval masih relevan untuk review
-      retroaktif.
+- [ ] **Izin: rethink alur approval + endpoint jam_kembali** — keputusan RS
+      (8 Okt 2026): auto-approved saat diajukan, tidak perlu approval admin.
+      Endpoint baru untuk karyawan mengisi jam_kembali sendiri + riwayat
+      siapa/kapan mengubahnya BELUM dikerjakan.
       Catatan fase 25: karena alasan struktural ini, `EditAction` di
       IzinsTable/ViewIzin SENGAJA tidak dibatasi ke status pending — supaya
       jam_kembali masih bisa diisi manual sampai endpoint khusus dikerjakan.
 
 - [ ] **TukarJadwal: admin butuh override saat status `menunggu_rekan` macet**
-      — kalau rekan tidak kunjung merespons (lupa, cuti, resign), admin tidak
-      punya cara membatalkan atau memaksa lanjut lewat Filament; pengajuan
-      macet permanen. Draft: action "Batalkan" khusus status menunggu_rekan,
-      atau expiry otomatis lewat scheduler. Perlu diputuskan apakah pembatalan
-      butuh baris catatan/log terpisah.
-      - TukarJadwal yang melibatkan hari libur rotasi — **DITELUSURI.** Dua
-        temuan: (1) label dropdown Jadwal di TukarJadwalForm error untuk
-        baris libur (shift_id null) — FIXED, sekarang tampil "(Libur)".
-        (2) BUG LEBIH SERIUS, tidak spesifik rotasi-libur: approveAndSwap()
-        tidak pernah menandai sumber=manual pada Jadwal hasil tukar/pindah,
-        jadi bisa tertimpa diam-diam oleh jadwal:generate-rotasi
-        --overwrite-generate. FIXED — menerapkan kebijakan sumber=manual
-        yang sudah ada sejak fase 15/28, bukan keputusan baru. Dikunci test
-        di TukarJadwalResourceTest.
-
-- [ ] **Cuti/Dinas approved di hari libur pola rotasi — potong kuota atau
-      tidak?** 
-      — ditemukan saat verifikasi simulasi rotasi berlibur (lihat
-      Simulasi & data). Karyawan rotasi yang mengajukan cuti mencakup hari
-      yang memang liburnya (sesuai pola) tetap kena potong kuota penuh,
-      berbeda dari karyawan umum (generator skip non-hari_kerja, jadi tidak
-      pernah "buang" kuota di hari libur). Perilaku saat ini didokumentasikan
-      di CutiTest sebagai regression guard, bukan rekomendasi. Pertanyaan
-      yang menentukan: apakah hari libur pola rotasi harus dikecualikan dari
-      hitungan jumlah_hari cuti, mirip cara umum dikecualikan lewat
-      hari_kerja shift?
-
+      — keputusan RS (8 Okt 2026): tombol manual "Batalkan", admin-only
+      (bukan expiry otomatis lewat scheduler). BELUM dikerjakan.
 ## Simulasi & data
 
 - [x] ~~Simulasi karyawan rotasi yang punya langkah LIBUR di polanya~~ —
@@ -130,11 +66,11 @@ paralel dengan apa pun yang dipilih.
         sebelumnya dapat pesan "Hubungi admin" (sama seperti anomali tanpa
         Jadwal sama sekali). Sekarang pesannya jelas: "Hari ini jadwal Anda
         libur, tidak perlu absen masuk." Dikunci test di AbsensiControllerTest.
-      - Cuti/Dinas approved menimpa Jadwal libur rotasi & tetap memotong
-        kuota penuh untuk hari itu — **belum diperbaiki, keputusan bisnis
-        belum ada**. Didokumentasikan sebagai regression guard di CutiTest
-        ("DOKUMENTASI: ..."), mengikuti pola is_cuti_bersama fase 29. Masuk
-        ke "Kebutuhan masukan dari pihak RS" di bawah.
+        - Cuti/Dinas approved menimpa Jadwal libur rotasi & tetap memotong
+        kuota penuh untuk hari itu — **DIKONFIRMASI RS (8 Okt 2026): perilaku
+        ini disengaja**, bukan bug. Tetap didokumentasikan sebagai regression
+        guard di CutiTest ("DOKUMENTASI: ..."), mengikuti pola is_cuti_bersama
+        fase 29 — tapi sekarang statusnya final, bukan menunggu jawaban.
       - TukarJadwal yang melibatkan hari libur rotasi — belum ditelusuri,
         masih terkait keterbatasan fase 11.
       - Jalur pengingat dan RekapHarian untuk rotasi berlibur sudah dicakup

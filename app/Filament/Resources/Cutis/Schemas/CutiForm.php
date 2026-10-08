@@ -60,15 +60,18 @@ class CutiForm
                                     return 'Jenis cuti ini tidak memotong kuota.';
                                 }
 
-                                $tahun = $tanggalMulai ? \Carbon\Carbon::parse($tanggalMulai)->year : now()->year;
+                                $tanggalAcuan = $tanggalMulai ? \Carbon\Carbon::parse($tanggalMulai) : now();
+                                $tahun = $tanggalAcuan->year;
+                                $semester = $jenisCuti->semesterDari($tanggalAcuan);
+                                $labelPeriode = $semester > 0 ? "tahun {$tahun} semester {$semester}" : "tahun {$tahun}";
 
-                                $kuota = KuotaCuti::untuk($karyawanId, $jenisCutiId, $tahun);
+                                $kuota = KuotaCuti::untuk($karyawanId, $jenisCutiId, $tahun, $semester);
 
-                               if (! $kuota) {
-                                    $jumlahHariPending = Cuti::hariPendingUntuk($karyawanId, $jenisCutiId, $tahun);
+                                if (! $kuota) {
+                                    $jumlahHariPending = Cuti::hariPendingUntuk($karyawanId, $jenisCutiId, $tahun, null, $semester);
 
                                     return new HtmlString(
-                                        "Belum ada data kuota untuk tahun {$tahun}, jadi dipakai kuota default "
+                                        "Belum ada data kuota untuk {$labelPeriode}, jadi dipakai kuota default "
                                         ."jenis cuti ini: <b>{$jenisCuti->default_kuota} hari</b>. Row kuota akan "
                                         .'dibuat otomatis saat pengajuan ini disetujui, dan kuotanya tetap diperiksa — '
                                         .'tidak ada pengecualian lagi.'
@@ -76,18 +79,10 @@ class CutiForm
                                     );
                                 }
 
-                                // Record sendiri dikecualikan supaya jumlah_hari-nya
-                                // tidak terhitung dua kali saat form edit.
-                                $pending = Cuti::hariPendingUntuk(
-                                    $karyawanId,
-                                    $jenisCutiId,
-                                    $tahun,
-                                    $record?->id
-                                );
-
+                                $pending = Cuti::hariPendingUntuk($karyawanId, $jenisCutiId, $tahun, $record?->id, $semester);
                                 $efektif = $kuota->sisa - $pending;
 
-                                $ringkas = "Kuota {$tahun}: <b>{$kuota->kuota}</b> · Terpakai: <b>{$kuota->terpakai}</b>"
+                                $ringkas = "Kuota {$labelPeriode}: <b>{$kuota->kuota}</b> · Terpakai: <b>{$kuota->terpakai}</b>"
                                     ." · Sisa: <b>{$kuota->sisa}</b>";
 
                                 if ($pending > 0) {
@@ -142,21 +137,23 @@ class CutiForm
 
                                         if ($jenisCutiId) {
                                             $jenisCuti = JenisCuti::find($jenisCutiId);
+
+                                            if ($jenisCuti?->periode_kuota === JenisCuti::PERIODE_SEMESTERAN
+                                                && $jenisCuti->semesterDari($tanggalMulai) !== $jenisCuti->semesterDari($tanggalSelesai)) {
+                                                $fail('Rentang cuti tidak boleh melintasi pergantian semester untuk jenis cuti ini. Buat pengajuan terpisah untuk masing-masing semester.');
+                                                return;
+                                            }
+
                                             if ($jenisCuti?->potong_kuota) {
                                                 $jumlahHari = $tanggalMulai->diffInDays($tanggalSelesai) + 1;
+                                                $semester = $jenisCuti->semesterDari($tanggalMulai);
 
-                                                // null = belum ada row KuotaCuti sama sekali. Sejak fase 42, baris tanpa
-                                                // row dianggap punya sisa = default_kuota jenis cuti (bukan "tidak
-                                                // terbatas"), karena row akan dibuat otomatis saat approve dan tetap
-                                                // diperiksa (Cuti::afterApprove() -> KuotaCuti::pastikanUntuk()).
-                                                $sisa = KuotaCuti::sisaUntuk(
-                                                    $karyawanId,
-                                                    $jenisCutiId,
-                                                    $tanggalMulai->year
-                                                ) ?? $jenisCuti->default_kuota;
+                                                $sisa = KuotaCuti::sisaUntuk($karyawanId, $jenisCutiId, $tanggalMulai->year, $semester)
+                                                    ?? $jenisCuti->default_kuota;
 
                                                 if ($jumlahHari > $sisa) {
-                                                    $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota tahun {$tanggalMulai->year} (sisa: {$sisa}).");
+                                                    $labelPeriode = $semester > 0 ? "semester {$semester} tahun {$tanggalMulai->year}" : "tahun {$tanggalMulai->year}";
+                                                    $fail("Jumlah hari ({$jumlahHari}) melebihi sisa kuota {$labelPeriode} (sisa: {$sisa}).");
                                                 }
                                             }
                                         }

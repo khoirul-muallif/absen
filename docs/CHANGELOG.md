@@ -5,6 +5,73 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+
+## fase 46: KuotaCuti semesteran untuk Cuti Tahunan
+
+Keputusan RS: kuota Cuti Tahunan dipecah per semester (bukan per tahun
+kalender penuh), khusus jenis cuti ini — jenis cuti lain tetap tahunan.
+Default_kuota 12 hari/tahun dibagi rata jadi 6/6 per semester. Sisa semester
+1 yang tidak terpakai HANGUS saat masuk semester 2 — bukan carry-over.
+
+### Skema
+
+- `jenis_cutis.periode_kuota` enum(tahunan/semesteran), default tahunan.
+- `kuota_cutis.semester` tinyint, default **0** (bukan nullable) — sentinel
+  "tidak semesteran". Sengaja bukan NULL: MySQL tidak menganggap dua NULL
+  sama di unique index, jadi kalau kolom ini nullable, constraint
+  `(karyawan_id, jenis_cuti_id, tahun, semester)` bisa tembus diam-diam
+  untuk jenis cuti tahunan.
+- Index composite lama di-drop SETELAH yang baru dibuat, bukan sebelumnya —
+  urutan terbalik gagal dengan error 1553 (`karyawan_id` butuh index yang
+  menaunginya terus-menerus selama ada FK ke `karyawan`, InnoDB requirement).
+- `JenisCuti::semesterDari(Carbon $tanggal): int` — bulan 1-6 = semester 1,
+  7-12 = semester 2; return 0 untuk jenis cuti yang `periode_kuota`-nya
+  tahunan (konsisten dengan sentinel `KuotaCuti.semester`).
+
+### Dampak ke `default_kuota`
+
+`default_kuota` sekarang konsisten berarti "kuota per baris periode" —
+untuk jenis tahunan itu kuota setahun, untuk jenis semesteran itu kuota per
+semester. Cuti Tahunan di seeder berubah dari 12 ke **6**. Tidak perlu logika
+bagi-2 di mana pun.
+
+### Titik yang disentuh
+
+- `KuotaCuti::untuk()`/`sisaUntuk()`/`pastikanUntuk()` — tambah parameter
+  `$semester = 0`, backward compatible untuk semua pemanggil jenis cuti
+  tahunan (tidak perlu ubah signature call lama).
+- `Cuti::hariPendingUntuk()` — tambah `$semester = 0`, scope ke bulan-bulan
+  semester itu saja kalau diisi. `Cuti::afterApprove()` — hitung semester
+  dari `JenisCuti::semesterDari()`, teruskan ke `pastikanUntuk()` & lock
+  query.
+- `CutiForm.php` (Filament) & `CutiController::ajukan()` (API) — dua-duanya
+  dapat validasi cross-semester (sejajar dengan cek lintas-tahun yang sudah
+  ada sejak fase 23) DAN cek kuota yang semester-aware. Sebelumnya sempat
+  kelewat di API — form Filament duluan yang diperbaiki, baru ketahuan API
+  belum disentuh saat scan test `--filter=Cuti` tidak menunjukkan satupun
+  test yang menyentuh kolom semester.
+- `CutisTable::infoKuota()` (warna tombol approve) — semester-aware.
+- `CutiController::kuota()` — **perubahan bentuk response**: jenis cuti
+  semesteran sekarang muncul sebagai 2 baris (`semester: 1` dan `semester: 2`)
+  bukan 1 baris, field `semester` baru (null untuk jenis tahunan). Aman
+  diubah sekarang karena modul Cuti belum pernah diimplementasikan di
+  frontend Flutter sama sekali (lihat todo.md "Ditunda — Sinkronisasi
+  Frontend") — tapi WAJIB diperhitungkan saat mulai sinkronisasi FE nanti.
+
+### Catatan proses
+
+Scan `--filter=Cuti` sempat lolos 100% (100 test) padahal tidak satu pun
+menyentuh kolom semester — persis pola "0 salah dari populasi yang semuanya
+cacat" di fase 26: hijau karena tidak diuji, bukan karena diverifikasi benar.
+4 test model + 4 test API baru ditulis khusus untuk menutup celah itu
+sebelum commit.
+
+Test baru: `KuotaCutiSemesterTest` (4 test model-level), 
+`CutiControllerSemesterTest` (4 test API-level, termasuk assert bentuk
+response `kuota()` yang berubah).
+
+Full suite: **525 test passing (1563 assertions)** — naik dari 517.
+
 ## fase 45: keputusan RS — migrasi 'sakit' ke alur Cuti, konfirmasi kuota rotasi
 
 Dua keputusan RS yang sebelumnya menggantung (lihat Known Gap) sekarang final.

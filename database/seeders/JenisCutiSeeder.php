@@ -13,7 +13,8 @@ class JenisCutiSeeder extends Seeder
             [
                 'nama' => 'Cuti Tahunan',
                 'is_tahunan' => true,
-                'default_kuota' => 12,
+                'periode_kuota' => 'semesteran',
+                'default_kuota' => 6,
                 'perlu_lampiran' => false,
                 'potong_kuota' => true,
                 'is_active' => true,
@@ -23,6 +24,7 @@ class JenisCutiSeeder extends Seeder
             [
                 'nama' => 'Cuti Sakit',
                 'is_tahunan' => false,
+                'periode_kuota' => 'tahunan',
                 'default_kuota' => 0,
                 'perlu_lampiran' => true,
                 'potong_kuota' => false,
@@ -33,6 +35,7 @@ class JenisCutiSeeder extends Seeder
             [
                 'nama' => 'Cuti Melahirkan',
                 'is_tahunan' => false,
+                'periode_kuota' => 'tahunan',
                 'default_kuota' => 90,
                 'perlu_lampiran' => true,
                 'potong_kuota' => false,
@@ -43,6 +46,7 @@ class JenisCutiSeeder extends Seeder
             [
                 'nama' => 'Cuti Menikah',
                 'is_tahunan' => false,
+                'periode_kuota' => 'tahunan',
                 'default_kuota' => 3,
                 'perlu_lampiran' => false,
                 'potong_kuota' => false,

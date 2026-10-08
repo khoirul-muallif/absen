@@ -14,7 +14,7 @@ class KuotaCuti extends Model
     use HasFactory;
 
     protected $fillable = [
-        'karyawan_id', 'jenis_cuti_id', 'tahun', 'kuota', 'terpakai',
+        'karyawan_id', 'jenis_cuti_id', 'tahun', 'semester', 'kuota', 'terpakai',
     ];
 
     public function karyawan(): BelongsTo
@@ -33,55 +33,46 @@ class KuotaCuti extends Model
     }
 
     /**
-     * Finder terpusat untuk kombinasi (karyawan, jenis cuti, tahun).
+     * Finder terpusat. $semester default 0 ("tidak semesteran") — pemanggil
+     * untuk jenis cuti tahunan tidak perlu berubah sama sekali. Pemanggil
+     * untuk jenis cuti semesteran WAJIB hitung semesternya sendiri lewat
+     * JenisCuti::semesterDari() dan kirim ke sini.
      *
-     * Return null kalau row-nya memang belum pernah dibuat. Pemanggil WAJIB
-     * membedakan null dari 0 — lihat sisaUntuk() di bawah.
+     * Return null kalau row belum pernah dibuat — lihat sisaUntuk().
      *
-     * CATATAN: jangan dipakai di dalam alur approve (Cuti::afterApprove()).
-     * Di sana row-nya harus diambil dengan lockForUpdate() di dalam transaksi
-     * (kebijakan race condition fase 22); memanggil finder ini justru
-     * menghilangkan lock-nya.
+     * CATATAN: jangan dipakai di dalam Cuti::afterApprove(); di sana row
+     * diambil dengan lockForUpdate() di dalam transaksi (fase 22).
      */
-    public static function untuk(int $karyawanId, int $jenisCutiId, int $tahun): ?self
+    public static function untuk(int $karyawanId, int $jenisCutiId, int $tahun, int $semester = 0): ?self
     {
         return static::where('karyawan_id', $karyawanId)
             ->where('jenis_cuti_id', $jenisCutiId)
             ->where('tahun', $tahun)
+            ->where('semester', $semester)
             ->first();
     }
 
     /**
-     * Sisa kuota (kuota - terpakai) untuk kombinasi tersebut.
-     *
-     * Sengaja return ?int, BUKAN int:
-     *   null = belum ada row KuotaCuti sama sekali -> TIDAK ADA DASAR UNTUK
-     *          MENOLAK (kebijakan fase 22). Bukan berarti sisanya nol.
-     *   0    = row-nya ada, dan kuotanya memang benar-benar habis.
-     *
-     * Menyamakan keduanya jadi 0 sudah pernah jadi bug dua kali (CutiForm
-     * fase 25, CutisTable fase 26) — tipe nullable ini yang memaksa tiap
-     * pemanggil memilih secara eksplisit.
+     * Sengaja return ?int, BUKAN int — null = belum ada row = tidak ada
+     * dasar untuk menolak (kebijakan fase 22). 0 = row ada, kuota habis.
      */
-    public static function sisaUntuk(int $karyawanId, int $jenisCutiId, int $tahun): ?int
+    public static function sisaUntuk(int $karyawanId, int $jenisCutiId, int $tahun, int $semester = 0): ?int
     {
-        return static::untuk($karyawanId, $jenisCutiId, $tahun)?->sisa;
+        return static::untuk($karyawanId, $jenisCutiId, $tahun, $semester)?->sisa;
     }
 
     /**
-     * Pastikan row KuotaCuti ada untuk kombinasi ini. Dipanggil HANYA dari
-     * Cuti::afterApprove(), di dalam transaksi, sebelum lockForUpdate().
-     *
-     * insertOrIgnore: kalau row sudah ada, tidak diubah. Aman dipanggil dua
-     * approve yang berjalan bersamaan, karena unique(karyawan_id, jenis_cuti_id,
-     * tahun) yang menangani duplikatnya.
+     * Dipanggil HANYA dari Cuti::afterApprove(), di dalam transaksi, sebelum
+     * lockForUpdate(). insertOrIgnore aman dari race condition karena unique
+     * (karyawan_id, jenis_cuti_id, tahun, semester) yang menangani duplikat.
      */
-    public static function pastikanUntuk(int $karyawanId, int $jenisCutiId, int $tahun, int $defaultKuota): void
+    public static function pastikanUntuk(int $karyawanId, int $jenisCutiId, int $tahun, int $defaultKuota, int $semester = 0): void
     {
         DB::table('kuota_cutis')->insertOrIgnore([
             'karyawan_id'   => $karyawanId,
             'jenis_cuti_id' => $jenisCutiId,
             'tahun'         => $tahun,
+            'semester'      => $semester,
             'kuota'         => $defaultKuota,
             'terpakai'      => 0,
         ]);
