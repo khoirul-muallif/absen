@@ -471,3 +471,95 @@ it('menolak batalkan admin kalau status sudah bukan menunggu_rekan', function ()
 
     expect($tukarJadwal->fresh()->status)->toBe('menunggu_admin'); // tidak berubah
 });
+
+it('opsiJadwal mengecualikan jadwal berjenis cuti dan dinas, tapi tetap menampilkan libur', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalKerja = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id, 'shift_id' => $shift->id,
+        'tanggal' => '2026-11-01', 'jenis' => 'reguler',
+    ]);
+    $jadwalLibur = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id, 'shift_id' => null,
+        'tanggal' => '2026-11-02', 'jenis' => 'libur',
+    ]);
+    $jadwalCuti = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id, 'shift_id' => null,
+        'tanggal' => '2026-11-03', 'jenis' => 'cuti',
+    ]);
+    $jadwalDinas = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id, 'shift_id' => null,
+        'tanggal' => '2026-11-04', 'jenis' => 'dinas',
+    ]);
+
+    $opsi = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'opsiJadwal'))
+        ->invoke(null, $karyawan->id);
+
+    expect($opsi)->toHaveCount(2)
+        ->and($opsi)->toHaveKey($jadwalKerja->id)
+        ->and($opsi)->toHaveKey($jadwalLibur->id)
+        ->and($opsi)->not->toHaveKey($jadwalCuti->id)
+        ->and($opsi)->not->toHaveKey($jadwalDinas->id);
+});
+
+it('bisa menukar jadwal libur milik satu karyawan dengan jadwal kerja rekan', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    $tujuan  = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'tanggal' => today()->addDays(3), 'jenis' => 'libur',
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5), 'jenis' => 'piket',
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'tukar',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalAsal->id,
+            'karyawan_tujuan_filter' => $tujuan->id,
+            'jadwal_tujuan_id' => $jadwalTujuan->id,
+            'alasan' => 'Tes tukar libur dengan kerja',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $record = TukarJadwal::where('jadwal_id', $jadwalAsal->id)->first();
+    expect($record)->not->toBeNull()
+        ->and($record->shift_asal_id)->toBeNull(); // snapshot shift libur = null
+});
+
+it('bisa memindahkan jadwal libur milik sendiri ke tanggal lain', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalLibur = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'tanggal' => today()->addDays(2), 'jenis' => 'libur',
+    ]);
+
+    $tanggalBaru = today()->addDays(10);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'pindah',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalLibur->id,
+            'tanggal_baru' => $tanggalBaru->toDateString(),
+            'alasan' => 'Tes pindah libur sendiri',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $record = TukarJadwal::where('jadwal_id', $jadwalLibur->id)->first();
+    expect($record)->not->toBeNull()
+        ->and($record->tanggal_baru->toDateString())->toBe($tanggalBaru->toDateString());
+});

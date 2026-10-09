@@ -5,6 +5,73 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 50: TukarJadwal × hari libur rotasi — ditelusuri dan ditutup
+
+Item terakhir dari todo.md "Simulasi & data" yang belum pernah ditelusuri
+sejak fase 11.
+
+### BUG DITEMUKAN & DIPERBAIKI: `opsiJadwal()` tidak memfilter jenis sama sekali
+
+Dropdown pemilihan Jadwal di `TukarJadwalForm` menawarkan SEMUA baris Jadwal
+milik karyawan — termasuk yang `jenis='cuti'`/`'dinas'` hasil sinkronisasi
+dari approval Cuti/Dinas. Untuk mode **tukar**, kebetulan tertutup oleh cek
+`karyawanCutiDinasApproved()` di rule `jadwal_tujuan_id`. Tapi untuk mode
+**pindah**, field itu `visible(false)`/non-`dehydrated` — rule-nya tidak
+pernah dievaluasi, jadi TIDAK ADA guard apa pun yang mencegah admin memilih
+baris cuti/dinas lalu memindahkan tanggalnya. Ini kontradiksi langsung
+dengan kebijakan "baris hasil sinkronisasi dikunci dari modul lain" yang
+sudah ditegakkan di `JadwalForm` sejak fase 21/28.
+
+Fix: `opsiJadwal()` sekarang memfilter `whereNotIn('jenis', [JENIS_CUTI,
+JENIS_DINAS])`. Jadwal berjenis `libur` SENGAJA TETAP ditampilkan (lihat
+keputusan di bawah).
+
+### KEPUTUSAN RS: hari libur (pola rotasi maupun HariLibur) BOLEH jadi objek Tukar/Pindah Jadwal
+
+Dua skenario yang sebelumnya tidak punya keputusan bisnis sama sekali:
+
+- **Mode tukar, satu sisi libur** — karyawan A (libur) menukar dengan B
+  (kerja): A jadi kerja mengambil shift B, B jadi libur mengambil slot A.
+  Diizinkan sepenuhnya; tidak ada guard tambahan.
+- **Mode pindah, memindah hari libur sendiri** — karyawan rotasi memindah
+  baris liburnya ke tanggal lain. Diizinkan.
+
+**Keterbatasan yang diterima, BUKAN diperbaiki:** memindah (bukan menukar)
+baris Jadwal milik karyawan rotasi meng-`UPDATE` tanggal di tempat (bukan
+membuat baris baru + hapus lama), sehingga tanggal asal menjadi tidak punya
+baris Jadwal sama sekali. Untuk rotasi, itu berarti ter-flag "Jadwal Hilang"
+di Rekap Harian sampai `jadwal:generate-rotasi` dijalankan ulang untuk bulan
+itu. Bukan false alarm — generator memang perlu dijalankan ulang untuk
+mengisi posisi siklus yang benar di tanggal itu — tapi butuh tindak lanjut
+manual karena generator belum terjadwal otomatis (item terpisah di todo.md).
+
+**KEPUTUSAN: diterima sebagai known limitation, TIDAK ditutup dengan
+mengisi ulang baris di tanggal asal secara otomatis.** Alternatif itu
+dipertimbangkan dan ditolak: tidak ada nilai "benar" yang bisa diisi tanpa
+menduplikasi logic `posisiSiklusPada()`/`langkahKe()`/override libur
+nasional dari `GenerateJadwalRotasi` ke dalam `TukarJadwal` — persis kelas
+masalah single-source-of-truth yang sudah berulang kali ditutup di tempat
+lain (`KuotaCuti::sisaUntuk()` fase 26, `Shift::jamMasukString()` fase
+14/27), bukan untuk dibuka baru di sini. Keterbatasan ini juga bukan
+spesifik soal libur — memindah baris Jadwal kerja biasa milik rotasi
+punya konsekuensi struktural yang sama; kemungkinan ini yang sebagian
+dimaksud catatan lama fase 11 soal keterbatasan tukar-beda-tanggal.
+
+Mitigasi: `tanggal_baru` di form sekarang menampilkan peringatan eksplisit
+khusus untuk karyawan rotasi, menyebut nama command generator-nya (admin
+panel ini dioperasikan developer/IT internal, bukan staf SDM awam — beda
+konteks dari larangan "jangan sebut command CLI" di JadwalForm/HariLiburForm
+yang memang dibaca admin non-teknis).
+
+### Test
+
+3 test baru: `opsiJadwal()` mengecualikan cuti/dinas tapi tetap menampilkan
+libur, tukar libur-dengan-kerja berhasil, pindah libur milik sendiri
+berhasil.
+
+Full suite: 44/44 untuk filter TukarJadwal (154 assertions). Full suite
+project belum dikonfirmasi — jalankan `php artisan test` sebelum push.
+
 ## fase 49: SimulasiMassalSeeder — simulasi data besar untuk verifikasi volume
 
 Item dari todo.md "(B) Simulasi & data dummy yang realistis" — rotasi

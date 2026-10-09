@@ -153,6 +153,27 @@ class TukarJadwalForm
                     ->visible(fn (Get $get) => $get('mode') === 'pindah')
                     ->required(fn (Get $get) => $get('mode') === 'pindah')
                     ->dehydrated(fn (Get $get) => $get('mode') === 'pindah')
+                    ->helperText(function (Get $get) {
+                        $jadwal = Jadwal::with('karyawan')->find($get('jadwal_id'));
+
+                        // Khusus karyawan rotasi: memindah baris Jadwal berarti
+                        // meng-update tanggalnya di tempat (bukan buat baris baru +
+                        // hapus lama), jadi tanggal asal jadi tidak punya baris sama
+                        // sekali. Untuk rotasi itu berarti ter-flag "Jadwal Hilang" di
+                        // Rekap Harian sampai jadwal:generate-rotasi dijalankan ulang
+                        // untuk bulan itu (self-healing, generator akan mengisi ulang
+                        // posisi siklus yang benar) — bukan false alarm, tapi butuh
+                        // tindak lanjut manual karena generator belum terjadwal
+                        // otomatis. Tidak berlaku untuk karyawan umum: hari kosong
+                        // memang normal bagi mereka, tidak di-flag apa pun.
+                        if ($jadwal?->karyawan?->isRotasi()) {
+                            return '⚠️ Karyawan rotasi: tanggal asal akan kosong setelah dipindah dan '
+                                . 'ditandai "Jadwal Hilang" di Rekap Harian sampai jadwal:generate-rotasi '
+                                . 'dijalankan ulang untuk bulan ini.';
+                        }
+
+                        return null;
+                    })
                     ->rule(function (Get $get) {
                         return function (string $attribute, $value, \Closure $fail) use ($get) {
                             $jadwalId = $get('jadwal_id');
@@ -197,6 +218,16 @@ class TukarJadwalForm
 
         return Jadwal::with('shift')
             ->where('karyawan_id', $karyawanId)
+            // Baris hasil sinkronisasi Cuti/Dinas approved dikunci dari modul
+            // lain sejak fase 21/28 (JadwalForm) — TukarJadwal harus konsisten.
+            // Tanpa filter ini, mode "pindah" bisa memindahkan tanggal baris
+            // cuti/dinas tanpa guard sama sekali (cek karyawanCutiDinasApproved()
+            // di jadwal_tujuan_id tidak pernah dievaluasi untuk mode ini —
+            // field itu non-visible/non-dehydrated saat mode=pindah).
+            //
+            // Jadwal berjenis 'libur' SENGAJA TETAP ditampilkan — boleh jadi
+            // objek tukar/pindah (keputusan RS, fase 50).
+            ->whereNotIn('jenis', [Jadwal::JENIS_CUTI, Jadwal::JENIS_DINAS])
             ->orderBy('tanggal')
             ->get()
             ->mapWithKeys(fn (Jadwal $jadwal) => [

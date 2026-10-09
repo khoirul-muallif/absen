@@ -60,8 +60,13 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
         ini disengaja**, bukan bug. Tetap didokumentasikan sebagai regression
         guard di CutiTest ("DOKUMENTASI: ..."), mengikuti pola is_cuti_bersama
         fase 29 — tapi sekarang statusnya final, bukan menunggu jawaban.
-      - TukarJadwal yang melibatkan hari libur rotasi — belum ditelusuri,
-        masih terkait keterbatasan fase 11.
+      - TukarJadwal × hari libur rotasi — **SELESAI ditelusuri (fase 50).**
+        Bug opsiJadwal() tidak memfilter jenis cuti/dinas untuk mode pindah:
+        DITUTUP. Hari libur boleh jadi objek tukar/pindah: DIKONFIRMASI RS.
+        Keterbatasan "Jadwal Hilang" transient saat memindah Jadwal rotasi:
+        diterima sebagai known limitation (self-healing via generate-rotasi),
+        mitigasi berupa peringatan eksplisit di form.
+
       - Jalur pengingat dan RekapHarian untuk rotasi berlibur sudah dicakup
         test di fase 39. Yang tersisa hanya `AbsensiController::masuk()` untuk
         Jadwal dengan `shift_id` null, yang belum diuji.
