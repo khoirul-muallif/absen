@@ -402,3 +402,72 @@ it('approveAndSwap menandai kedua Jadwal sumber=manual, tidak tertimpa generator
         ->and($jadwalB->fresh()->sumber)->toBe('manual');
 });
 
+it('tombol batalkan menunggu rekan hanya muncul untuk status menunggu_rekan', function () {
+    $menungguRekan = TukarJadwal::factory()
+        ->modeTukar()
+        ->create(['status' => 'menunggu_rekan']);
+
+    $menungguAdmin = TukarJadwal::factory()
+        ->modePindah()
+        ->create(['status' => 'menunggu_admin']);
+
+    livewire(ListTukarJadwals::class)
+        ->assertTableActionVisible('batalkanMenungguRekan', $menungguRekan)
+        ->assertTableActionHidden('batalkanMenungguRekan', $menungguAdmin);
+});
+
+it('admin bisa membatalkan pengajuan menunggu_rekan lewat tabel Filament', function () {
+    $tukarJadwal = TukarJadwal::factory()
+        ->modeTukar()
+        ->create(['status' => 'menunggu_rekan']);
+
+    livewire(ListTukarJadwals::class)
+        ->callTableAction('batalkanMenungguRekan', $tukarJadwal, data: [
+            'catatan' => 'rekan resign, pengajuan tidak relevan lagi',
+        ])
+        ->assertHasNoTableActionErrors();
+
+    $tukarJadwal->refresh();
+    expect($tukarJadwal->status)->toBe('rejected')
+        ->and($tukarJadwal->catatan_approval)->toContain('rekan resign, pengajuan tidak relevan lagi');
+});
+
+
+it('admin bisa membatalkan pengajuan yang macet di menunggu_rekan', function () {
+    $admin = \App\Models\User::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create();
+    $jadwalTujuan = Jadwal::factory()->create();
+
+    $tukarJadwal = TukarJadwal::factory()
+        ->modeTukar($jadwalTujuan->id)
+        ->create([
+            'jadwal_id' => $jadwalAsal->id,
+            'status' => 'menunggu_rekan',
+        ]);
+
+    $tukarJadwal->batalkanOlehAdmin($admin, 'rekan tidak merespons 2 minggu');
+
+    $tukarJadwal->refresh();
+    expect($tukarJadwal->status)->toBe('rejected')
+        ->and($tukarJadwal->approved_by)->toBe($admin->id)
+        ->and($tukarJadwal->catatan_approval)->toContain('rekan tidak merespons 2 minggu');
+
+    // Jadwal kedua karyawan TIDAK berubah sama sekali — menunggu_rekan murni
+    // status flag, tidak ada reservasi yang perlu di-rollback.
+    expect($jadwalAsal->fresh()->karyawan_id)->toBe($jadwalAsal->karyawan_id)
+        ->and($jadwalTujuan->fresh()->karyawan_id)->toBe($jadwalTujuan->karyawan_id);
+});
+
+it('menolak batalkan admin kalau status sudah bukan menunggu_rekan', function () {
+    $admin = \App\Models\User::factory()->create();
+
+    $tukarJadwal = TukarJadwal::factory()
+        ->modePindah()
+        ->create(['status' => 'menunggu_admin']);
+
+    expect(fn () => $tukarJadwal->batalkanOlehAdmin($admin, 'test'))
+        ->toThrow(\Exception::class);
+
+    expect($tukarJadwal->fresh()->status)->toBe('menunggu_admin'); // tidak berubah
+});

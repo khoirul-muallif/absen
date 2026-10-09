@@ -197,4 +197,31 @@ class TukarJadwal extends Model
             ->whereDate('tanggal_selesai', '>=', $tanggal)
             ->exists();
     }
+    /**
+     * Dipanggil ADMIN LEWAT FILAMENT SAJA (tidak ada endpoint API untuk ini —
+     * keputusan RS 8 Okt 2026: admin-only) untuk membatalkan pengajuan yang
+     * macet di menunggu_rekan karena rekan tujuan tidak kunjung merespons.
+     *
+     * Status diarahkan ke 'rejected' (bukan enum baru) — tidak ada reservasi
+     * Jadwal yang perlu di-rollback, karena menunggu_rekan murni status flag:
+     * jadwal pengaju & rekan tujuan tetap utuh sampai approveAndSwap() benar2
+     * dijalankan. "Kuncian" anti-rebutan di TukarJadwalController::ajukan()
+     * otomatis lepas begitu status keluar dari menunggu_rekan/menunggu_admin.
+     */
+    public function batalkanOlehAdmin(User $admin, string $catatan): bool
+    {
+        if ($this->status !== 'menunggu_rekan') {
+            throw new \Exception(
+                'Hanya pengajuan berstatus menunggu_rekan yang bisa dibatalkan lewat tombol ini. '
+                . 'Pengajuan yang sudah menunggu_admin bisa ditolak lewat tombol Tolak biasa.'
+            );
+        }
+
+        return $this->update([
+            'status' => 'rejected',
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+            'catatan_approval' => "[Dibatalkan admin — rekan tidak merespons] {$catatan}",
+        ]);
+    }
 }

@@ -6,6 +6,64 @@
 
 ---
 
+## fase 48: TukarJadwal — admin bisa membatalkan pengajuan macet di menunggu_rekan
+
+Keputusan RS (8 Okt 2026, item terakhir dari 6 keputusan yang menggantung):
+tombol manual "Batalkan", admin-only (bukan expiry otomatis lewat
+scheduler).
+
+### Desain
+
+`menunggu_rekan` murni status flag — tidak ada reservasi ke tabel `Jadwal`
+sama sekali. Baris jadwal pengaju & rekan tujuan tetap utuh di tangan
+masing-masing sampai `approveAndSwap()` benar-benar dijalankan; "kuncian"
+anti-rebutan di `TukarJadwalController::ajukan()` cuma query status, jadi
+otomatis lepas begitu status berubah. Konsekuensinya: pembatalan ini aman
+tanpa rollback apa pun.
+
+Status akhirnya diarahkan ke `rejected` yang sudah ada di enum — TIDAK
+menambah nilai enum baru (mis. `dibatalkan`) untuk satu tombol admin.
+Dibedakan dari reject biasa lewat prefix eksplisit di `catatan_approval`
+("[Dibatalkan admin — rekan tidak merespons] ..."), jadi tetap terbaca
+jelas di histori siapa (`approved_by`), kapan (`approved_at`), kenapa.
+
+`TukarJadwal::batalkanOlehAdmin()` menolak kalau status bukan
+`menunggu_rekan` — pengajuan yang sudah `menunggu_admin` tetap lewat
+tombol Tolak biasa, bukan tombol ini.
+
+Tidak ada perubahan di `TukarJadwalController.php` (API) sama sekali —
+keputusan RS eksplisit admin-only, dan Filament panel sudah terisolasi
+dari karyawan, jadi syaratnya otomatis terpenuhi tanpa guard tambahan.
+
+### Test
+
+4 test baru: 2 model-level (`batalkanOlehAdmin()` sukses + ditolak kalau
+status salah), 2 Filament (tombol visible/hidden sesuai status, klik
+tombol beneran lewat `livewire()->callTableAction()`).
+
+Full suite: ditunggu hasil `php artisan test` penuh.
+
+---
+
+## RINGKASAN: 6 keputusan RS (8 Okt 2026) — semua dieksekusi
+
+Fase 45-48 menuntaskan seluruh backlog "Kebutuhan masukan dari pihak RS"
+yang terakumulasi sejak fase 19-43:
+
+1. Grace period 15 menit di pengingat masuk — dipertahankan, tidak ada
+   perubahan kode.
+2. Enum `absensi.status='sakit'` → jenis cuti "Sakit" lewat alur Cuti biasa
+   (fase 45). Opsi `'sakit'` dicabut dari form admin & rekap API.
+3. KuotaCuti semesteran khusus Cuti Tahunan (fase 46). Kolom
+   `semester`/`periode_kuota` baru, sisa semester 1 hangus di semester 2.
+4. Izin auto-approved, endpoint self-service `jam_kembali` (fase 47).
+5. TukarJadwal: tombol "Batalkan" admin-only untuk status `menunggu_rekan`
+   yang macet (fase 48).
+6. Cuti/Dinas approved di hari libur pola rotasi tetap potong kuota penuh —
+   dikonfirmasi disengaja, bukan bug (dokumentasi, tidak ada perubahan kode).
+
+Test bertambah dari 517 (awal fase 45) menjadi [isi dari hasil full suite].
+
 ## fase 47: Izin auto-approved, endpoint jam_kembali self-service
 
 Keputusan RS (8 Okt 2026): izin keluar sementara itu darurat/insidental,

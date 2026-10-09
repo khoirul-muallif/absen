@@ -105,6 +105,27 @@ class TukarJadwalsTable
                                 ->success()
                                 ->send();
                         }),
+                    Action::make('batalkanMenungguRekan')
+                        ->label('Batalkan (rekan tidak respons)')
+                        ->icon('heroicon-o-no-symbol')
+                        ->color('danger')
+                        ->visible(fn ($record) => $record->butuhResponRekan())
+                        ->requiresConfirmation()
+                        ->modalDescription('Pengajuan ini macet menunggu respon rekan tujuan. Membatalkannya akan menandainya sebagai rejected — jadwal kedua karyawan tidak berubah sama sekali (tidak ada yang perlu dikembalikan).')
+                        ->schema([
+                            Textarea::make('catatan')
+                                ->label('Alasan pembatalan')
+                                ->required()
+                                ->helperText('Mis. "rekan sedang cuti panjang" atau "sudah ditanya langsung, tidak jadi tukar".'),
+                        ])
+                        ->action(function ($record, array $data) {
+                            $record->batalkanOlehAdmin(auth()->user(), $data['catatan']);
+
+                            Notification::make()
+                                ->title('Pengajuan dibatalkan')
+                                ->success()
+                                ->send();
+                        }),
                     Action::make('reject')
                         ->label('Tolak')
                         ->icon('heroicon-o-x-mark')

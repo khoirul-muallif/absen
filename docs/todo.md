@@ -43,17 +43,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Kebutuhan masukan dari pihak RS
 
-- [ ] **Izin: rethink alur approval + endpoint jam_kembali** — keputusan RS
-      (8 Okt 2026): auto-approved saat diajukan, tidak perlu approval admin.
-      Endpoint baru untuk karyawan mengisi jam_kembali sendiri + riwayat
-      siapa/kapan mengubahnya BELUM dikerjakan.
-      Catatan fase 25: karena alasan struktural ini, `EditAction` di
-      IzinsTable/ViewIzin SENGAJA tidak dibatasi ke status pending — supaya
-      jam_kembali masih bisa diisi manual sampai endpoint khusus dikerjakan.
-
-- [ ] **TukarJadwal: admin butuh override saat status `menunggu_rekan` macet**
-      — keputusan RS (8 Okt 2026): tombol manual "Batalkan", admin-only
-      (bukan expiry otomatis lewat scheduler). BELUM dikerjakan.
 ## Simulasi & data
 
 - [x] ~~Simulasi karyawan rotasi yang punya langkah LIBUR di polanya~~ —
