@@ -16,7 +16,11 @@ class AbsensiSimulasiSeeder extends Seeder
         $shift = Shift::where('instansi_id', $karyawan->instansi_id)
             ->where('nama_shift', 'umum')
             ->firstOrFail();
-        $qr = QrInstansi::first();
+
+        // Di-scope ke instansi karyawan — sebelumnya QrInstansi::first() bisa
+        // narik QR milik instansi lain kalau suatu saat ada >1 instansi.
+        // Nullable kalau belum ada QR sama sekali untuk instansi ini.
+        $qr = QrInstansi::where('instansi_id', $karyawan->instansi_id)->first();
 
         // Pastikan shift dalam mode akumulasi buat simulasi ini
         $shift->update([
@@ -40,27 +44,38 @@ class AbsensiSimulasiSeeder extends Seeder
         foreach ($simulasiTelat as $hariLalu => $menitTelat) {
             $tanggal = today()->subDays($hariLalu);
 
+            // Reset akumulasi tiap ganti bulan. Dicek DI LUAR skip hari libur
+            // supaya pelacakan bulan tetap akurat lintas hari libur — tapi
+            // TIDAK ikut menambah $akumulasi untuk hari yang di-skip (lihat
+            // guard adalahHariKerja() di bawah, sekarang dicek PALING AWAL).
             if ($bulanAktif !== $tanggal->format('Y-m')) {
                 $bulanAktif = $tanggal->format('Y-m');
-                $akumulasi  = 0; // akumulasi dimulai ulang tiap bulan
+                $akumulasi  = 0;
             }
-            $waktuMasuk = $tanggal->copy()
-                ->setTimeFromTimeString($shift->jam_masuk->format('H:i:s'))
-                ->addMinutes($menitTelat);
-            $akumulasi += $menitTelat;
-            $status = $shift->tentukanStatus($waktuMasuk); // selalu berdasar hari itu
-            $melebihi = $shift->sudahMelebihiToleransiBulanan($akumulasi);
 
+            // Guard ini WAJIB di awal — sebelumnya di bawah perhitungan
+            // akumulasi, jadi menit telat hari libur sempat ikut nambah
+            // $akumulasi walau row Absensi-nya sendiri tidak pernah dibuat.
+            // Angka akumulasi yang ditampilkan jadi lebih besar dari yang
+            // sebenarnya akan dihasilkan AbsensiController::masuk() (yang
+            // menjumlah dari DB, bukan dari variabel lokal ini).
             if (! $shift->adalahHariKerja($tanggal)) {
                 $this->command->warn("Lewati {$tanggal->toDateString()}: bukan hari kerja shift.");
                 continue;
             }
-            
+
+            $waktuMasuk = $tanggal->copy()
+                ->setTimeFromTimeString($shift->jamMasukString())
+                ->addMinutes($menitTelat);
+            $akumulasi += $menitTelat;
+            $status = $shift->tentukanStatus($waktuMasuk);
+            $melebihi = $shift->sudahMelebihiToleransiBulanan($akumulasi);
+
             Absensi::updateOrCreate(
                 ['karyawan_id' => $karyawan->id, 'tanggal' => $tanggal->toDateString()],
                 [
                     'shift_id' => $shift->id,
-                    'qr_instansi_id' => $qr->id,
+                    'qr_instansi_id' => $qr?->id,
                     'waktu_masuk' => $waktuMasuk,
                     'menit_terlambat' => $menitTelat,
                     'melebihi_toleransi_bulanan' => $melebihi,

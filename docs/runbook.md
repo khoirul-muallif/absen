@@ -22,6 +22,11 @@ Get-ChildItem -Recurse -Depth 2 | Where-Object { $_.FullName -notmatch "node_mod
 
 git stash pop
 ```
+## 🧪 Simulasi massal (data besar buat nemuin bug di volume)
+php artisan db:seed --class=SimulasiMassalSeeder
+# 150 karyawan dummy (umum+rotasi), 3 bulan, cuti/dinas acak, absensi acak.
+# Seeded (reproducible), insert chunked. ~1-2 menit jalan. Jalankan SETELAH
+# migrate:fresh --seed biasa, bukan bagian dari DatabaseSeeder.
 
 ## 📅 Generator jadwal
 ```

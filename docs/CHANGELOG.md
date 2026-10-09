@@ -5,6 +5,62 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 49: SimulasiMassalSeeder — simulasi data besar untuk verifikasi volume
+
+Item dari todo.md "(B) Simulasi & data dummy yang realistis" — rotasi
+ber-libur sendiri (satu karyawan) sudah ada sejak fase 43, tapi belum pernah
+ada verifikasi di skala besar dengan kombinasi modul yang saling berinteraksi.
+
+### `SimulasiMassalSeeder` baru
+
+Seeder terpisah (BUKAN bagian `DatabaseSeeder`, dijalankan manual) yang
+generate 150 karyawan dummy (105 umum, 45 rotasi), 3 bulan ke belakang,
+dengan alur: karyawan baru → generate Jadwal lewat `jadwal:generate-bulanan`/
+`jadwal:generate-rotasi` yang asli (bukan reimplementasi) → inject Cuti/
+Dinas approved acak → simulasi Absensi acak (85% hadir normal, 20% dari itu
+terlambat, 5% sengaja dilewati sebagai "lupa absen") → audit otomatis di
+akhir (`karyawan:cek-tipe-jadwal`, `absensi:audit-menit-terlambat`).
+
+Seeded (`fake()->seed()`) — hasilnya reproducible, bukan beda-beda tiap
+`migrate:fresh --seed`. Insert Absensi pakai `DB::table()->insert()` chunked
+500 baris, bukan `Absensi::create()` per baris — overhead event Eloquent
+signifikan di volume ribuan baris.
+
+### Verifikasi manual pasca-seed (query SQL + command), semua BERSIH
+
+- Cuti/Dinas approved pada karyawan rotasi: 10/10 baris Jadwal dalam rentang
+  cuti berhasil ketimpa `jenis='cuti'`, `shift_id=NULL` — termasuk rentang
+  multi-hari yang mencakup hari libur pola rotasi. Mengkonfirmasi keputusan
+  RS #6 (potong kuota penuh) kelihatan benar di data, bukan cuma di kode.
+- `KuotaCuti.semester`: 15/15 baris sesuai bulan pengajuan (≤Juni=1, >Juni=2)
+  — termasuk kasus Agustus (semester 2) yang sempat jadi area rawan salah
+  hitung.
+- Tidak ada duplikat row `kuota_cutis` per (karyawan, jenis, tahun, semester)
+  — unique constraint fase 46 kerja dengan benar.
+- Tidak ada Absensi `alpha` palsu untuk karyawan rotasi di hari yang
+  Jadwal-nya `libur` menurut pola.
+- `absensi:rekap-harian` end-to-end: 7 karyawan yang sengaja "dilewati" oleh
+  seeder (simulasi lupa absen) berhasil ter-mark alpha dengan benar lewat
+  command ini, termasuk 1 karyawan rotasi (shift piket).
+- `absensi:audit-menit-terlambat`: 0 salah dari 7182 baris Absensi.
+
+### Temuan (bukan bug baru, known gap lama ketangkep otomatis)
+
+Audit `karyawan:cek-tipe-jadwal` di akhir seeder menandai Dedi/Siti/Rina
+sebagai "tipe umum tapi tidak punya KaryawanShift" — ini known gap yang
+sudah tercatat sejak CHANGELOG fase 43 (migration backfill `tipe_jadwal`
+fase 13 jalan sebelum `KaryawanSeeder` mengisi data, defaultnya jatuh ke
+'umum'). Tidak relevan untuk simulasi ini, tapi mengkonfirmasi command audit
+otomatis di akhir seeder efektif menangkap drift data tanpa perlu
+instrumentasi tambahan.
+
+### Belum ditelusuri
+
+TukarJadwal × hari libur rotasi tetap belum tersentuh simulasi ini — seeder
+tidak membuat pengajuan TukarJadwal sama sekali. Masih item terbuka.
+
+Full suite tidak berubah (seeder dev tools, tidak ada test otomatis untuk
+seeder simulasi, sama seperti `AbsensiSimulasiSeeder`).
 
 ## fase 48: TukarJadwal — admin bisa membatalkan pengajuan macet di menunggu_rekan
 

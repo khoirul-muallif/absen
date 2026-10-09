@@ -66,6 +66,14 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
         test di fase 39. Yang tersisa hanya `AbsensiController::masuk()` untuk
         Jadwal dengan `shift_id` null, yang belum diuji.
 
+- [x] **Simulasi massal 150 karyawan × 3 bulan** — SELESAI. `SimulasiMassalSeeder`
+      baru (lihat CHANGELOG fase 49). Verifikasi manual: sinkronisasi cuti
+      rotasi, semester KuotaCuti, alpha hari libur rotasi, rekap-harian
+      end-to-end — semua bersih di volume besar.
+- [ ] **TukarJadwal × hari libur rotasi** — masih belum ditelusuri. Seeder
+      simulasi massal (fase 49) tidak membuat pengajuan TukarJadwal sama
+      sekali, jadi tidak membantu area ini. Masih terkait keterbatasan fase 11.
+      
 - [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
       production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
       tidak pernah tersimpan sejak fase 9, jadi SEMUA baris lama salah di
