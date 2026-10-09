@@ -5,6 +5,51 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 51: KaryawanSeeder tipe_jadwal bug + PengingatBelumAbsenPulang dikunci test
+
+### BUG DITEMUKAN & DIPERBAIKI: Dedi/Siti/Rina tidak pernah di-set tipe_jadwal='rotasi'
+
+Ditemukan saat verifikasi item todo.md "Bug aktif" — user curiga `KaryawanSeeder`
+jadi akar masalah "karyawan rotasi tapi tercatat umum" yang sebelumnya
+disalahkan ke timing migration backfill (CHANGELOG fase 43). Narasi lama itu
+KELIRU: pada `migrate:fresh --seed`, migration backfill jalan di tabel
+`karyawan` yang masih kosong, jadi tidak berpengaruh ke data seeder sama
+sekali. Penyebab asli: `buatKaryawan()` tidak pernah menerima/menyimpan
+`tipe_jadwal`, dan loop karyawan rotasi (Dedi/Siti/Rina) tidak pernah
+eksplisit meng-update kolom itu — beda dari Yono (ditambahkan belakangan di
+fase 43) yang eksplisit `->update(['tipe_jadwal' => TIPE_ROTASI])`.
+
+Fix: tambah `$karyawan->update(['tipe_jadwal' => Karyawan::TIPE_ROTASI])`
+di loop karyawan rotasi. Known Gap #1 lama di PROJECT_CONTEXT.md (soal
+backfill vs production) dan catatan "temuan sampingan" di status fase 49
+sama-sama perlu dikoreksi — bukan keterbatasan backfill, melainkan bug
+seeder yang baru ditutup di sini.
+
+### `PengingatBelumAbsenPulang` × Jadwal T+1 — dikonfirmasi benar, dikunci test
+
+Item todo.md "pengingat pulang rotasi yang Jadwal T+1-nya beda" diselidiki.
+Kesimpulan: command ini TIDAK PERNAH melihat tabel `Jadwal` sama sekali —
+deadline pulang murni dihitung dari `Absensi.shift_id` (snapshot shift yang
+benar-benar dipakai saat clock-in) dan `Absensi.tanggal`. Ini desain yang
+BENAR, bukan bug: deadline pulang adalah komitmen fisik terhadap shift yang
+sedang dijalani, tidak terkait apa yang dijadwalkan untuk hari berikutnya.
+Menghitung ulang deadline dari Jadwal T+1 justru akan SALAH — shift malam
+bisa gagal terdeteksi deadline-nya kalau Jadwal T+1 beda jenis atau libur.
+
+2 test baru mengunci independensi ini secara eksplisit (Jadwal T+1 diberi
+shift berbeda, dan Jadwal T+1 diberi libur) — supaya kalau nanti ada yang
+"merapikan" dengan menambah lookup ke Jadwal, test ini menangkapnya sebagai
+regresi.
+
+Full suite: [isi dari php artisan test setelah fix seeder].
+
+### Verifikasi
+
+`karyawan:cek-tipe-jadwal` setelah `migrate:fresh --seed`: **"Semua
+konsisten, gak ada masalah ditemukan"** — sebelumnya selalu melaporkan 3
+anomali (Dedi/Siti/Rina). Dijalankan ulang setelah `SimulasiMassalSeeder`
+(150 karyawan tambahan): tetap bersih.
+
 ## fase 50: TukarJadwal × hari libur rotasi — ditelusuri dan ditutup
 
 Item terakhir dari todo.md "Simulasi & data" yang belum pernah ditelusuri

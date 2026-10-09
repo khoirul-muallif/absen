@@ -91,6 +91,16 @@ class KaryawanSeeder extends Seeder
 
         foreach ($karyawanRotasi as $index => $data) {
             $karyawan = $this->buatKaryawan($instansi, $data, null, $jenisCutiTahunan);
+
+            // BUG DITEMUKAN fase 51: tipe_jadwal tidak pernah di-set eksplisit di
+            // sini, jatuh ke default kolom 'umum'. Narasi lama di CHANGELOG fase 43
+            // yang menyalahkan timing migration backfill vs seeder itu KELIRU —
+            // pada migrate:fresh --seed, backfill migration jalan di tabel karyawan
+            // yang masih kosong, jadi tidak berpengaruh apa pun ke seeder. Penyebab
+            // aslinya di sini: tidak ada assignment tipe_jadwal untuk Dedi/Siti/Rina,
+            // beda dari Yono (di bawah) yang eksplisit di-update.
+            $karyawan->update(['tipe_jadwal' => Karyawan::TIPE_ROTASI]);
+
             $daftarKaryawanRotasi[] = $karyawan;
         }
 

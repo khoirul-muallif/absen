@@ -24,22 +24,10 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
-- [ ] **AbsensiSimulasiSeeder: lookup shift tanpa instansi, akumulasi lintas
-      bulan, dan absensi di hari libur mingguan** — invarian
-      `DATE(waktu_masuk) == tanggal` sudah benar di kode saat ini (fase 27),
-      sekarang dikunci test. Tiga hal di atas belum diperbaiki.
-
 - [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
       di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).
       Tinggal memastikan tidak ada jalur lain yang menghasilkan jadwal di
       luar masa berlaku assignment.
-
-- [ ] **Pengingat pulang untuk rotasi yang Jadwal-nya berganti hari di tengah
-      shift** — shift malam dan pencarian absensi dua hari sudah diuji (fase 40).
-      Yang belum: kasus rotasi yang Jadwal hari T+1-nya berbeda dari hari T,
-      sehingga deadline pulang yang dihitung dari `absensi.shift_id` bisa tidak
-      sama dengan shift Jadwal hari ini. Perlu test dan keputusan mana yang
-      jadi sumber deadline.
 
 ## Kebutuhan masukan dari pihak RS
 

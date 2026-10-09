@@ -145,3 +145,49 @@ it('karyawan nonaktif tidak mendapat notifikasi', function () {
 
     expect($this->karyawan->notifications()->count())->toBe(0);
 });
+
+it('deadline pulang shift malam TIDAK terpengaruh Jadwal T+1 yang berbeda shift', function () {
+    // Karyawan rotasi, shift malam T (22:00-07:00), absen masuk normal.
+    // Jadwal untuk T+1 SENGAJA dikasih shift lain (piket pagi) — deadline
+    // pulang harus tetap dihitung dari Absensi.shift_id (snapshot shift
+    // yang beneran dipakai), BUKAN ikut shift Jadwal T+1. Command ini sama
+    // sekali tidak melihat tabel Jadwal; ini test yang mengunci desain itu
+    // supaya tidak "dirapikan" jadi lookup Jadwal yang justru salah.
+    $absensi = absensiTanpaPulang($this->karyawan, $this->shiftMalam, '2026-10-06', '21:55:00');
+
+    \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id'    => $this->shiftPagi->id,
+        'tanggal'     => '2026-10-07',
+        'jenis'       => 'piket',
+    ]);
+
+    // T+1 jam 07:20 — lewat deadline shift malam (07:00 + 15 menit)
+    $this->travelTo(Carbon::parse('2026-10-07 07:20:00'));
+    Artisan::call('absensi:pengingat-belum-pulang');
+
+    $notif = $this->karyawan->notifications()->first();
+    expect($this->karyawan->notifications()->count())->toBe(1)
+        ->and($notif->data['pesan'])->toContain('Pulang: 07:00') // deadline shift MALAM, bukan shift pagi Jadwal T+1
+        ->and($notif->data['absensi_id'])->toBe($absensi->id);
+});
+
+it('deadline pulang shift malam TIDAK terpengaruh Jadwal T+1 yang berisi libur', function () {
+    // Variasi lebih ekstrem: Jadwal T+1 bukan cuma beda shift, tapi LIBUR
+    // (shift_id null). Kalau ada jalur yang somehow ikut melihat Jadwal,
+    // ini kasus yang paling rawan menghasilkan error atau silent-skip.
+    $absensi = absensiTanpaPulang($this->karyawan, $this->shiftMalam, '2026-10-06', '21:55:00');
+
+    \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'shift_id'    => null,
+        'tanggal'     => '2026-10-07',
+        'jenis'       => 'libur',
+    ]);
+
+    $this->travelTo(Carbon::parse('2026-10-07 07:20:00'));
+    Artisan::call('absensi:pengingat-belum-pulang');
+
+    expect($this->karyawan->notifications()->count())->toBe(1)
+        ->and($this->karyawan->notifications()->first()->data['absensi_id'])->toBe($absensi->id);
+});
