@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 
 class QrInstansi extends Model
 {
@@ -110,5 +114,26 @@ class QrInstansi extends Model
         } while (self::where('kode_qr', $kode)->exists());
 
         return $kode;
+    }
+    
+    /**
+     * Gambar QR sebagai SVG inline.
+     *
+     * Isinya kode_qr mentah, persis yang divalidasi AbsensiController::masuk().
+     * Sengaja SVG: tajam di ukuran cetak apa pun dan tidak butuh ekstensi
+     * Imagick/GD. Deklarasi <?xml ...?> dibuang supaya aman ditanam inline.
+     */
+    public function svg(int $ukuran = 300): string
+    {
+        $writer = new Writer(
+            new ImageRenderer(new RendererStyle($ukuran, 2), new SvgImageBackEnd())
+        );
+
+        return trim(preg_replace('/^<\?xml.*?\?>\s*/s', '', $writer->writeString($this->kode_qr)));
+    }
+
+    public function urlCetak(): string
+    {
+        return route('qr-instansi.cetak', $this);
     }
 }

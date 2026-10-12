@@ -16,6 +16,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Actions\Action;
 
 class QrInstansisTable
 {
@@ -107,6 +108,10 @@ class QrInstansisTable
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make(),
+                    Action::make('cetak')
+                        ->label('Cetak QR')
+                        ->icon('heroicon-o-printer')
+                        ->url(fn (QrInstansi $record): string => $record->urlCetak(), shouldOpenInNewTab: true),
                     EditAction::make(),
 
                     // absensi.qr_instansi_id memakai ON DELETE RESTRICT, jadi

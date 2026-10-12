@@ -22,6 +22,11 @@ class ViewQrInstansi extends ViewRecord
                 ->color('gray')
                 ->url(fn () => QrInstansiResource::getUrl('index')),
 
+            Action::make('cetak')
+                ->label('Cetak QR')
+                ->icon('heroicon-o-printer')
+                ->url(fn (QrInstansi $record): string => $record->urlCetak(), shouldOpenInNewTab: true),
+                
             EditAction::make(),
 
             DeleteAction::make()

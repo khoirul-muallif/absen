@@ -6,6 +6,7 @@ use App\Models\QrInstansi;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class QrInstansiInfolist
 {
@@ -29,11 +30,24 @@ class QrInstansiInfolist
                                 'Nonaktif'    => 'danger',
                                 default       => 'gray',
                             }),
+                        TextEntry::make('gambar_qr')
+                            ->label('Gambar QR')
+                            ->state(fn (QrInstansi $record): HtmlString => new HtmlString(
+                                // Latar putih tetap, supaya QR tetap terbaca di dark mode.
+                                '<div style="width:220px;background:#fff;padding:8px;border-radius:6px">'
+                                .$record->svg(220).'</div>'
+                            ))
+                            ->html()
+                            ->helperText(fn (QrInstansi $record): string => $record->isValid()
+                                ? 'Pakai tombol Cetak di kanan atas untuk halaman siap tempel.'
+                                : 'QR ini sedang tidak berlaku — jangan dicetak untuk ditempel.')
+                            ->columnSpanFull(),
+
                         TextEntry::make('kode_qr')
                             ->label('Kode QR')
                             ->copyable()
                             ->copyMessage('Kode QR disalin!')
-                            ->helperText('Kode inilah yang di-encode ke gambar QR dan dipindai aplikasi karyawan. Gambar QR-nya sendiri belum dibuat di sini — salin kode ini ke generator QR untuk mencetaknya.')
+                            ->helperText('Teks yang di-encode ke gambar QR di atas.')
                             ->columnSpanFull(),
                     ]),
 

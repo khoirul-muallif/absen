@@ -82,11 +82,12 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## UX yang tersisa
 
-- [ ] **Gambar QR tidak pernah ditampilkan** — menu bernama "QR Instansi" cuma
-      memberi string 32 karakter yang harus disalin ke generator eksternal
-      untuk dicetak (fase 36). Butuh paket tambahan (`simple-qrcode` atau
-      sejenis). Sekalian pikirkan halaman cetak yang siap tempel: QR + nama
-      instansi + keterangan lokasi, ukuran A5/A4.
+- [ ] **Keterangan lokasi di halaman cetak QR** — kolom nullable
+      `keterangan_lokasi` di `qr_instansi` (mis. "Pintu masuk utama IGD"),
+      supaya QR yang dicetak untuk beberapa pintu bisa dibedakan. Butuh
+      `make:migration` + update `SCHEMA.md`.
+- [ ] **`composer audit`** — 25 advisory di 6 paket terdeteksi saat install
+      bacon-qr-code. Tinjau sebelum deploy pertama.
 
 - [ ] **Teks di admin panel masih bahasa programmer** — beberapa peringatan
       menyebut nama command CLI sebagai solusi, padahal admin RS tidak punya

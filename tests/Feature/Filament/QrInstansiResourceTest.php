@@ -237,3 +237,81 @@ it('ViewAction muncul di tabel', function () {
     livewire(ListQrInstansis::class)
         ->assertTableActionVisible('view', $qr);
 });
+// ── Gambar QR & halaman cetak ────────────────────────────────────────────
+
+it('svg() menghasilkan SVG inline tanpa deklarasi xml', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    expect($qr->svg())->toContain('<svg')
+        ->and($qr->svg())->not->toContain('<?xml');
+});
+
+it('svg() berbeda untuk kode berbeda (benar-benar meng-encode kode_qr)', function () {
+    $a = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id, 'kode_qr' => 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']);
+    $b = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id, 'kode_qr' => 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB']);
+
+    expect($a->svg())->not->toBe($b->svg());
+});
+
+it('halaman View menampilkan gambar QR', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ViewQrInstansi::class, ['record' => $qr->getRouteKey()])
+        ->assertSeeHtml('<svg')
+        ->assertActionVisible('cetak');
+});
+
+it('tombol Cetak di tabel mengarah ke halaman cetak di tab baru', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    livewire(ListQrInstansis::class)
+        ->assertTableActionHasUrl('cetak', route('qr-instansi.cetak', $qr), $qr)
+        ->assertTableActionShouldOpenUrlInNewTab('cetak', $qr);
+});
+
+it('halaman cetak menampilkan nama instansi dan QR, default A5', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $this->get(route('qr-instansi.cetak', $qr))
+        ->assertOk()
+        ->assertSee($this->instansi->nama)
+        ->assertSee('size: A5', false)
+        ->assertSee('<svg', false)
+        ->assertDontSee('TIDAK BERLAKU');
+});
+
+it('halaman cetak bisa diminta ukuran A4', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $this->get(route('qr-instansi.cetak', ['qrInstansi' => $qr, 'ukuran' => 'a4']))
+        ->assertSee('size: A4', false);
+});
+
+it('halaman cetak memperingatkan keras untuk QR kedaluwarsa', function () {
+    $qr = QrInstansi::factory()->create([
+        'instansi_id' => $this->instansi->id,
+        'is_active'   => true,
+        'expired_at'  => now()->subDay(),
+    ]);
+
+    $this->get(route('qr-instansi.cetak', $qr))
+        ->assertOk()
+        ->assertSee('TIDAK BERLAKU')
+        ->assertSee('Kedaluwarsa');
+});
+
+it('halaman cetak memperingatkan untuk QR nonaktif', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id, 'is_active' => false]);
+
+    $this->get(route('qr-instansi.cetak', $qr))
+        ->assertSee('TIDAK BERLAKU')
+        ->assertSee('Nonaktif');
+});
+
+it('halaman cetak ditolak untuk yang belum login', function () {
+    $qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    auth('web')->logout();
+
+    $this->get(route('qr-instansi.cetak', $qr))->assertForbidden();
+});

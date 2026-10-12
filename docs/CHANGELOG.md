@@ -5,6 +5,46 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 52: Gambar QR Instansi — ditampilkan, bisa dicetak
+
+Item terakhir dari review UX QrInstansiResource (fase 36): menu "QR Instansi"
+sebelumnya cuma memberi string 32 karakter yang harus disalin ke generator
+eksternal.
+
+### Desain
+
+- Paket `bacon/bacon-qr-code` (v3.1.1), renderer SVG murni PHP — tidak butuh
+  Imagick/GD, tajam di ukuran cetak apa pun. `simple-qrcode` sengaja tidak
+  dipakai karena hanya pembungkus paket yang sama.
+- `QrInstansi::svg()` jadi satu-satunya sumber gambar QR (infolist dan halaman
+  cetak sama-sama memanggilnya). Isi QR = `kode_qr` mentah, persis yang
+  divalidasi `AbsensiController::masuk()` — frontend nanti cukup membaca
+  string-nya tanpa parsing.
+- Halaman cetak (`QrInstansiCetakController`, route
+  `qr-instansi.cetak`): QR besar + nama instansi, `@page` A5 default, A4 lewat
+  `?ukuran=a4`. Hanya untuk admin (guard `web`; tamu 403).
+- QR yang Kedaluwarsa/Nonaktif tetap bisa dibuka, tapi halaman cetaknya memuat
+  banner merah "TIDAK BERLAKU — JANGAN DITEMPEL" yang IKUT TERCETAK (bukan
+  disembunyikan saat print), supaya QR mati tidak tertempel tanpa ketahuan.
+- Infolist menampilkan gambar QR di atas latar putih tetap (terbaca di dark
+  mode); helper text lama ("gambar QR belum dibuat di sini") dihapus.
+- Tombol "Cetak QR" di tabel (ActionGroup) dan header halaman View, buka tab baru.
+
+### Test
+
+9 test baru di `QrInstansiResourceTest` (svg inline, svg berbeda untuk kode
+berbeda, View menampilkan SVG, tombol cetak + URL + tab baru, cetak A5/A4,
+peringatan kedaluwarsa & nonaktif, guest ditolak). QrInstansi: 17 → 26 test.
+Full suite: [isi dari `php artisan test`].
+
+### Belum dikerjakan
+
+- Kolom keterangan lokasi ("Pintu masuk utama IGD") di halaman cetak — butuh
+  migration, ditunda menunggu keputusan.
+- Test hanya membuktikan SVG berubah mengikuti kode, bukan bahwa QR terbaca
+  pemindai. Verifikasi pindai fisik dilakukan manual.
+- `composer audit` melaporkan 25 advisory di 6 paket (bukan dari paket baru).
+
 ## fase 51: KaryawanSeeder tipe_jadwal bug + PengingatBelumAbsenPulang dikunci test
 
 ### BUG DITEMUKAN & DIPERBAIKI: Dedi/Siti/Rina tidak pernah di-set tipe_jadwal='rotasi'
