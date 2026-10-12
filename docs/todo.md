@@ -4,77 +4,27 @@
 > file ini tetep pendek dan gampang di-scan. Detail alasan/histori tetap di
 > CHANGELOG.md, bukan di sini.
 
-## Prioritas — belum ditetapkan
+## Prioritas
 
-**Review UX 17 Filament Resource SELESAI** (fase 25–36). Test 229 → 457.
-Pengingat & RekapHarian selesai ditest: suite 472 test hijau.
-Detail & ringkasan pola bug yang berulang ada di CHANGELOG.
+**Sedang dikerjakan:** Laporan Presensi (export Excel) — Filament Page baru
+dengan 3 tab: Harian (per-shift), Rekap Bulanan (per-karyawan), Rekap
+Pelanggaran. Mulai dari Harian dulu. PDF menyusul setelah Excel beres.
 
-Fokus berikutnya:
+**Berikutnya:** lanjut ke frontend (Flutter, freeze sejak fase 5) — backend
+sekarang jauh lebih solid. Cek dulu breaking change format API sebelum
+nambah modul baru (lihat bagian "Ditunda — Sinkronisasi Frontend").
 
-- **(B) Simulasi & data dummy yang realistis.** Rotasi ber-libur belum pernah
-  dicoba sama sekali, dan itu memblokir verifikasi beberapa item di (A).
+## Sebelum Deploy Production
 
-- **(C) Lanjut ke frontend.** Backend sekarang jauh lebih solid daripada saat
-  frontend di-freeze di fase 5.
-
-Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
-TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
-teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
-
-## Bug aktif yang sudah teridentifikasi
-
-
-## Kebutuhan masukan dari pihak RS
-
-## Simulasi & data
-
-- [x] ~~Simulasi karyawan rotasi yang punya langkah LIBUR di polanya~~ —
-      **SELESAI.** `PolaRotasiSeeder` baru (pola "Rotasi 5 Kerja 2 Libur",
-      unit Rawat Inap, `berlaku_saat_libur_nasional=false`) + karyawan Yono
-      Pratama di-assign lewat `KaryawanPolaRotasi`. Jadwal digenerate manual
-      via `jadwal:generate-rotasi`, terverifikasi siklus 7 hari berulang
-      benar. Dua temuan dari verifikasi ini:
-      - `AbsensiController::masuk()`: FIXED — rotasi dengan Jadwal libur
-        sebelumnya dapat pesan "Hubungi admin" (sama seperti anomali tanpa
-        Jadwal sama sekali). Sekarang pesannya jelas: "Hari ini jadwal Anda
-        libur, tidak perlu absen masuk." Dikunci test di AbsensiControllerTest.
-        - Cuti/Dinas approved menimpa Jadwal libur rotasi & tetap memotong
-        kuota penuh untuk hari itu — **DIKONFIRMASI RS (8 Okt 2026): perilaku
-        ini disengaja**, bukan bug. Tetap didokumentasikan sebagai regression
-        guard di CutiTest ("DOKUMENTASI: ..."), mengikuti pola is_cuti_bersama
-        fase 29 — tapi sekarang statusnya final, bukan menunggu jawaban.
-      - TukarJadwal × hari libur rotasi — **SELESAI ditelusuri (fase 50).**
-        Bug opsiJadwal() tidak memfilter jenis cuti/dinas untuk mode pindah:
-        DITUTUP. Hari libur boleh jadi objek tukar/pindah: DIKONFIRMASI RS.
-        Keterbatasan "Jadwal Hilang" transient saat memindah Jadwal rotasi:
-        diterima sebagai known limitation (self-healing via generate-rotasi),
-        mitigasi berupa peringatan eksplisit di form.
-
-      - Jalur pengingat dan RekapHarian untuk rotasi berlibur sudah dicakup
-        test di fase 39. Yang tersisa hanya `AbsensiController::masuk()` untuk
-        Jadwal dengan `shift_id` null, yang belum diuji.
-
-- [x] **Simulasi massal 150 karyawan × 3 bulan** — SELESAI. `SimulasiMassalSeeder`
-      baru (lihat CHANGELOG fase 49). Verifikasi manual: sinkronisasi cuti
-      rotasi, semester KuotaCuti, alpha hari libur rotasi, rekap-harian
-      end-to-end — semua bersih di volume besar.
-- [ ] **TukarJadwal × hari libur rotasi** — masih belum ditelusuri. Seeder
-      simulasi massal (fase 49) tidak membuat pengajuan TukarJadwal sama
-      sekali, jadi tidak membantu area ini. Masih terkait keterbatasan fase 11.
-      
-- [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
-      production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
+- [ ] **Jalankan `absensi:audit-menit-terlambat --fix`** kalau nanti ada data
+      production dari sebelum fase 27 — kolom `melebihi_toleransi_bulanan`
       tidak pernah tersimpan sejak fase 9, jadi SEMUA baris lama salah di
-      kolom itu. Tidak relevan sekarang (belum ada production), tapi jangan
-      sampai terlewat saat deploy pertama.
-
+      kolom itu.
 - [ ] **`absensi:audit-menit-terlambat` belum punya test otomatis** —
       kemampuan deteksi & jalur `--fix` sudah dibuktikan manual sekali, tapi
-      tidak meninggalkan jejak di suite. Yang paling rawan dan tidak terjaga:
-      replay akumulasi bulanan lintas chunk (state dibawa lewat reference).
-
-- [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
+      tidak meninggalkan jejak di suite. Yang paling rawan: replay akumulasi
+      bulanan lintas chunk (state dibawa lewat reference).
+- [ ] Verifikasi `tipe_jadwal` di data production asli.
 
 ## UX yang tersisa
 
@@ -86,21 +36,16 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       helper text yang menyebut nama menu DAN grup pasangannya secara
       eksplisit. Sisa: keputusan apakah kedua menu disatukan lagi dalam satu
       grup.
-
 - [ ] **Anchor preview siklus belum bisa dipilih di halaman Pola Rotasi** —
       preview 14 hari di sana selalu menganggap siklus dimulai HARI INI,
       padahal anchor sebenarnya `tanggal_mulai` per karyawan. Di halaman Shift
       Karyawan Rotasi sudah benar (fase 33). Ide: dropdown "lihat sebagai
       karyawan X" di infolist Pola Rotasi — perhitungannya sudah siap,
       `PolaRotasi::hitungPreviewSiklus()` menerima parameter `$mulai`.
-
 - [ ] **Ikon reorder di Repeater Pola Rotasi** — 3 ikon (↕️⬆️⬇️) yang
-      fungsinya mirip-mirip. Bawaan Filament, jadi opsinya antara mengatur
-      ulang lewat konfigurasi Repeater atau menerima apa adanya. Perlu
-      dilihat langsung di browser dulu.
-      Sekalian worth dites ke user asli (admin awam, bukan developer),
-      termasuk apakah preview siklus yang baru benar-benar membantu.
-
+      fungsinya mirip-mirip. Bawaan Filament, opsinya antara mengatur ulang
+      lewat konfigurasi Repeater atau menerima apa adanya. Perlu dilihat
+      langsung di browser dulu.
 - [ ] **Format jam di respons Izin & Lembur belum seragam** — `jam_keluar`/
       `jam_kembali` (Izin) dan `jam_mulai`/`jam_selesai` (Lembur) dikirim apa
       adanya dari DB sebagai `"08:00:00"`, sementara respons lain memakai
@@ -117,6 +62,7 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
 
 ## Ditunda — Sinkronisasi Frontend
+
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
 notifikasi, riwayat sudah ada). Sengaja belum disentuh selama backend masih
 sering berubah — hindari kerja dobel.
