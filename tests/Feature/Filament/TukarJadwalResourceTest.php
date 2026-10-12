@@ -2,6 +2,7 @@
 
 use App\Filament\Resources\TukarJadwals\Pages\CreateTukarJadwal;
 use App\Filament\Resources\TukarJadwals\Pages\ListTukarJadwals;
+use App\Models\Instansi;
 use App\Models\Jadwal;
 use App\Models\Karyawan;
 use App\Models\Shift;
@@ -564,9 +565,3 @@ it('bisa memindahkan jadwal libur milik sendiri ke tanggal lain', function () {
         ->and($record->tanggal_baru->toDateString())->toBe($tanggalBaru->toDateString());
 });
 
-it('peringatan karyawan rotasi di tanggal_baru tidak menyebut command CLI', function () {
-    // Siapkan Jadwal milik karyawan tipe rotasi dan mode 'pindah' seperti test
-    // pindah yang sudah ada, lalu:
-    //   ->assertSee('minta admin sistem')
-    //   ->assertDontSee('jadwal:generate-rotasi')
-});
