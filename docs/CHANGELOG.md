@@ -5,6 +5,38 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 53: audit keamanan dependensi — composer audit bersih
+
+`composer audit` (dijalankan setelah install bacon-qr-code) melaporkan
+25 advisory di 6 paket: filament, guzzle, laravel/framework,
+league/commonmark, league/flysystem, livewire. Tidak ada dari paket dev
+dan tidak dari bacon-qr-code.
+
+### Penilaian keterjangkauan
+
+- Filament (5 advisory, 4 soal MFA): panel TIDAK memakai MFA
+  (`multiFactor` tidak ditemukan di PanelProvider), jadi tidak terjangkau.
+  Sisanya (kebocoran validitas password di login) tetap ditutup.
+- Guzzle, commonmark, flysystem, Laravel (XSS halaman debug), Livewire:
+  ditutup lewat update; tidak ada input Markdown dari pihak tak tepercaya.
+
+### Eksekusi (dua commit, tiap langkah diuji suite penuh)
+
+- A: filament 4.11.7 → 4.15.1, livewire, commonmark. 25 → 8 advisory.
+- B: laravel/framework 13.18 → 13.35, sanctum 4.3.3, flysystem 3.36,
+  guzzle 7.13 → 8.2 (mayor, transitif). 8 → 0 advisory.
+- Constraint `filament/filament: ~4.0` mencegah lompat ke v5.
+
+Hasil: `composer audit` bersih. Suite 547 test hijau (1632 assertions)
+setelah kedua langkah.
+
+### Catatan
+
+- QUICK_CONTEXT menyebut Filament v4.11.7; perlu diperbarui ke 4.15.1.
+- Guzzle 8 tidak tersentuh test (app tidak memanggil HTTP keluar); uji
+  khusus kalau nanti ada fitur `Http::` atau mailer berbasis API.
+- Jalankan `composer audit` lagi sebelum deploy pertama.
+
 ## fase 52: Gambar QR Instansi — ditampilkan, bisa dicetak
 
 Item terakhir dari review UX QrInstansiResource (fase 36): menu "QR Instansi"
@@ -35,7 +67,7 @@ eksternal.
 9 test baru di `QrInstansiResourceTest` (svg inline, svg berbeda untuk kode
 berbeda, View menampilkan SVG, tombol cetak + URL + tab baru, cetak A5/A4,
 peringatan kedaluwarsa & nonaktif, guest ditolak). QrInstansi: 17 → 26 test.
-Full suite: [isi dari `php artisan test`].
+Full suite: 547 test passing (1632 assertions).
 
 ### Belum dikerjakan
 

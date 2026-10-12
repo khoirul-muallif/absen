@@ -6,15 +6,14 @@
 > History per-fase & alasan keputusan lama ada di `CHANGELOG.md` — sebut/upload kalau nelusurin masalah lama, atau kalau butuh angka test/status paling akurat (entri paling atas = paling baru).
 > Task aktif ada di `todo.md` — tempel bareng file ini kalau mulai sesi kerja baru.
 
-**Update terakhir:** 15 September 2026
-
+**Update terakhir:** 12 Oktober 2026
 ## Ringkasan
 Aplikasi absensi karyawan — Laravel + Filament (admin panel) + REST API (Sanctum) untuk mobile app. Studi kasus: RSU Banyumanik 2. Fitur: absensi QR + geolocation + face snapshot, manajemen shift, cuti/izin/lembur/dinas dengan approval workflow, tukar jadwal, hari libur, toleransi keterlambatan (harian/akumulasi bulanan), karyawan umum vs rotasi + generator jadwal rotasi otomatis.
 
 **Status:** masih development, belum ada deployment/database production. Frontend (scan QR + GPS + face gesture) belum mulai. REST API Cuti/Izin/Lembur/Dinas sudah selesai. Fokus sekarang: evaluasi solidity & UX backend — audit lintas modul, race condition, validasi tanggal, konsistensi respons API, dan UX 5 modul approval + Jenis/Kuota Cuti sudah selesai. Sisa: review UX 10 Filament Resource lain. Detail progres per-fase: cek `CHANGELOG.md` entri teratas.
 
 ## Stack
-Laravel + Filament v4.11.7, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5 (DB testing terpisah `absensi_app_test`).
+Laravel + Filament v4.15.1, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5 (DB testing terpisah `absensi_app_test`).
 
 ## Preferensi Kerja
 - Scaffolding baru (model/migration/controller/factory/resource) **selalu** `php artisan make:*` — jangan tulis file manual.

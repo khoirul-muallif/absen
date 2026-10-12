@@ -17,7 +17,7 @@ Aplikasi absensi karyawan berbasis **Laravel + Filament (admin panel)** dengan *
 **Status project:** masih tahap development — belum ada deployment/database production. Frontend (scan QR + GPS + face gesture) masih rencana, belum mulai dikerjakan. Untuk progres/fase terbaru dan jumlah test saat ini, cek `CHANGELOG.md` (entri paling atas) — sengaja tidak diduplikasi angkanya di sini biar gak ada risiko dua file beda angka.
 
 ## Stack
-- Laravel + Filament v4.11.7 (admin panel)
+- Laravel + Filament v4.15.1 (admin panel)
 - MySQL 8.0 (Laragon, port 3308)
 - Laravel Sanctum (API token mobile app)
 - Scheduler (pengingat absen, rekap harian alpha)
