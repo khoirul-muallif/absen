@@ -24,10 +24,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
 
-- [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
-      di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).
-      Tinggal memastikan tidak ada jalur lain yang menghasilkan jadwal di
-      luar masa berlaku assignment.
 
 ## Kebutuhan masukan dari pihak RS
 

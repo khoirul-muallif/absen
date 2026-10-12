@@ -6,6 +6,59 @@
 
 ---
 
+## fase 55: verifikasi GenerateJadwalRotasi — berlakuPada() satu-satunya filter, tidak ada jalur lain
+
+Menutup item terakhir di todo.md "Bug aktif". Pertanyaannya bukan apakah
+hasil akhirnya benar (sudah dibuktikan `GenerateJadwalRotasiMasaBerlakuTest`
+fase 33), tapi apakah itu benar karena `berlakuPada()` dipanggil eksplisit,
+atau cuma kebetulan lewat jalur lain (mis. query SQL assignment-level) yang
+bisa diam-diam berubah tanpa ketahuan.
+
+### Hasil baca source
+
+`GenerateJadwalRotasi::handle()` cuma punya satu jalur generate: loop
+`while` per-tanggal di dalam `foreach` per-assignment. `berlakuPada($tanggal)`
+dipanggil persis di awal badan loop, sebelum `posisiSiklusPada()`:
+
+```php
+if (! $assignment->berlakuPada($tanggal)) {
+    $tanggal->addDay();
+    continue;
+}
+...
+$posisi = $assignment->posisiSiklusPada($tanggal);
+```
+
+`posisiSiklusPada()` tidak pernah dipanggil untuk tanggal yang `berlakuPada()`-
+nya `false`. Query `KaryawanPolaRotasi` di awal `handle()` (filter
+`tanggal_mulai <= akhirBulan` dst) cuma menyaring di level assignment/bulan
+untuk efisiensi query — bukan pengganti cek per-hari, dan tidak membuat
+`berlakuPada()` jadi redundan.
+
+Tidak ada jalur generate lain untuk karyawan rotasi — TukarJadwal (fase 44,
+50) cuma memodifikasi baris Jadwal yang sudah ada, tidak pernah membuat baris
+baru dari pola rotasi.
+
+### Verifikasi manual (non-destruktif)
+```
+php artisan jadwal:generate-rotasi 11 2026 --unit="Rawat Inap"
+→ Jadwal dibuat/diupdate: 1380 | Dilewati: 0
+
+php artisan jadwal:generate-rotasi 10 2026 --unit="Rawat Inap"
+→ Jadwal dibuat/diupdate: 0 | Dilewati: 1426
+```
+
+Run kedua (bulan yang jadwalnya sudah pernah digenerate sebelumnya, tanpa
+`--overwrite-generate`) sekalian mengkonfirmasi idempotensi: tidak ada baris
+yang tertimpa ulang.
+
+**KEPUTUSAN:** tidak ada perubahan kode. Item ditutup sebagai verifikasi,
+bukan bugfix.
+
+Tidak ada test baru — `GenerateJadwalRotasiMasaBerlakuTest` (fase 33) sudah
+cukup mengunci perilaku ini di level hasil; verifikasi sesi ini murni
+pembacaan source untuk memastikan mekanismenya, bukan kebetulan.
+
 ## fase 54: teks admin panel bebas nama command CLI
 
 Menutup item todo.md "Teks di admin panel masih bahasa programmer".
