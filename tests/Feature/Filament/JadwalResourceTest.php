@@ -375,3 +375,26 @@ it('filter sumber memisahkan baris manual dari generate', function () {
         ->assertCanSeeTableRecords([$manual])
         ->assertCanNotSeeTableRecords([$generate]);
 });
+
+it('View jadwal tidak menyebut flag CLI di penjelasan sumber', function (string $sumber) {
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id, 'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-20', 'jenis' => 'reguler', 'sumber' => $sumber,
+    ]);
+
+    livewire(ViewJadwal::class, ['record' => $jadwal->getRouteKey()])
+        ->assertDontSee('--overwrite-generate')
+        ->assertDontSee('jadwal:generate');
+})->with(['manual', 'generate']);
+it('tabel jadwal tidak menyebut flag CLI di tooltip sumber', function () {
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $this->karyawan->id, 'shift_id' => $this->shift->id,
+        'tanggal' => '2026-10-21', 'jenis' => 'reguler', 'sumber' => 'generate',
+    ]);
+
+    livewire(ListJadwals::class)
+        ->assertTableColumnExists('sumber', function ($column) {
+            return ! str_contains((string) $column->getTooltip(), 'jadwal:generate')
+                && ! str_contains((string) $column->getTooltip(), '--overwrite');
+        }, $jadwal);
+});

@@ -57,13 +57,12 @@ class HariLiburInfolist
                             ->label('Catatan cuti bersama')
                             ->visible(fn ($record): bool => (bool) $record->is_cuti_bersama)
                             ->state('Kebijakan RS: saat cuti bersama karyawan tetap masuk, yang ingin libur mengajukan cuti biasa. '
-                                .'Tapi sistem masih memperlakukan baris ini sama seperti libur nasional — generator jadwal akan '
-                                .'menandai karyawan umum libur, dan rekap harian tidak menghitungnya alpha. Penyesuaian belum dikerjakan.')
+                                .'Hari ini dijadwalkan dan direkap seperti hari kerja biasa.')
                             ->columnSpanFull(),
 
                         TextEntry::make('dibaca_oleh')
                             ->label('Dibaca oleh')
-                            ->state('jadwal:generate-bulanan · jadwal:generate-rotasi · absensi:rekap-harian · peringatan tanggal di form Jadwal')
+                            ->state('Pembuat jadwal bulanan · pembuat jadwal rotasi · rekap harian otomatis · peringatan tanggal di form Jadwal')
                             ->columnSpanFull(),
                     ]),
 

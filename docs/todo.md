@@ -82,22 +82,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## UX yang tersisa
 
-- [ ] **Keterangan lokasi di halaman cetak QR** — kolom nullable
-      `keterangan_lokasi` di `qr_instansi` (mis. "Pintu masuk utama IGD"),
-      supaya QR yang dicetak untuk beberapa pintu bisa dibedakan. Butuh
-      `make:migration` + update `SCHEMA.md`.
-- [ ] **`composer audit`** — 25 advisory di 6 paket terdeteksi saat install
-      bacon-qr-code. Tinjau sebelum deploy pertama.
-
-- [ ] **Teks di admin panel masih bahasa programmer** — beberapa peringatan
-      menyebut nama command CLI sebagai solusi, padahal admin RS tidak punya
-      akses terminal. Tersisa di 3 tempat (HariLiburForm, JadwalInfolist,
-      HariLiburInfolist); JadwalForm sudah diperbaiki di fase 30.
-      Perbaikan lengkapnya: tombol aksi di Filament yang memanggil generator
-      lewat `Artisan::call()`, dengan konfirmasi dan ringkasan hasil.
-      Pertanyaan yang menentukan: siapa yang mengoperasikan panel ini
-      sehari-hari — staf SDM awam, atau ada IT internal RS?
-
 - [ ] **"Shift Karyawan Umum" & "Shift Karyawan Rotasi" tidak lagi
       bersebelahan di menu** — fase 15 sengaja menaruh keduanya berdampingan
       supaya jelas ini pasangan untuk 2 tipe_jadwal; reorganisasi sidebar

@@ -78,9 +78,9 @@ class HariLiburForm
 
                         return new HtmlString(
                             "⚠️ Sudah ada <b>{$jumlah}</b> jadwal kerja (bukan libur) di tanggal ini. "
-                            .'Menyimpan hari libur <b>tidak</b> mengubahnya otomatis. Jalankan ulang '
-                            .'<code>jadwal:generate-bulanan</code> / <code>jadwal:generate-rotasi --overwrite-generate</code>, '
-                            .'atau ubah baris Jadwal-nya manual. Baris ber-<i>sumber</i> manual tetap tidak akan tertimpa.'
+                            .'Menyimpan hari libur <b>tidak</b> mengubahnya otomatis. Ubah baris di menu <i>Jadwal</i>, '
+                            .'atau minta admin sistem membuat ulang jadwal bulan ini. '
+                            .'Baris ber-<i>sumber</i> manual tidak akan tertimpa pembuatan ulang.'
                         );
                     })
                     ->columnSpanFull(),

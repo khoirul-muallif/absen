@@ -58,8 +58,8 @@ class JadwalInfolist
                         TextEntry::make('efek_generate_ulang')
                             ->label('Kalau generator dijalankan ulang')
                             ->state(fn ($record): string => $record->sumber === 'manual'
-                                ? 'Baris ini DILINDUNGI — tidak akan ditimpa, bahkan oleh --overwrite-generate.'
-                                : 'Baris ini BOLEH ditimpa oleh jadwal:generate-rotasi --overwrite-generate.'),
+                                ? 'Baris ini DILINDUNGI — tidak akan ditimpa saat jadwal dibuat ulang otomatis.'
+                                : 'Baris ini BOLEH ditimpa kalau admin sistem membuat ulang jadwal bulan ini. Ubah "Sumber" jadi Manual untuk melindunginya.'),
 
                         TextEntry::make('asal_data')
                             ->label('Asal data')

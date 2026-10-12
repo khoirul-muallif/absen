@@ -60,11 +60,17 @@ class JadwalsTable
                 // `jadwal:generate-rotasi --overwrite-generate` dijalankan.
                 TextColumn::make('sumber')
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'manual' ? 'primary' : 'gray')
-                    ->formatStateUsing(fn (string $state): string => $state === 'manual' ? 'Manual' : 'Generate')
-                    ->tooltip(fn (string $state): string => $state === 'manual'
-                        ? 'Dilindungi dari generate ulang.'
-                        : 'Boleh ditimpa oleh jadwal:generate-rotasi --overwrite-generate.')
+                    ->color(fn (?string $state): string => $state === 'manual' ? 'primary' : 'gray')
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'manual' => 'Manual',
+                        'generate' => 'Generate',
+                        default => 'Belum diketahui',
+                    })
+                    ->tooltip(fn (?string $state): string => match ($state) {
+                        'manual' => 'Dilindungi dari pembuatan ulang jadwal.',
+                        'generate' => 'Boleh ditimpa kalau admin sistem membuat ulang jadwal bulan ini.',
+                        default => 'Sumber jadwal belum tercatat.',
+                    })
                     ->sortable(),
                 TextColumn::make('keterangan')
                     ->limit(30)

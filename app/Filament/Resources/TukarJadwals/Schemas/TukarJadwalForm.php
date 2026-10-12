@@ -168,8 +168,8 @@ class TukarJadwalForm
                         // memang normal bagi mereka, tidak di-flag apa pun.
                         if ($jadwal?->karyawan?->isRotasi()) {
                             return '⚠️ Karyawan rotasi: tanggal asal akan kosong setelah dipindah dan '
-                                . 'ditandai "Jadwal Hilang" di Rekap Harian sampai jadwal:generate-rotasi '
-                                . 'dijalankan ulang untuk bulan ini.';
+                                . 'ditandai "Jadwal Hilang" di Rekap Harian. Minta admin sistem membuat ulang '
+                                . 'jadwal rotasi bulan ini supaya tanggal itu terisi lagi.';
                         }
 
                         return null;

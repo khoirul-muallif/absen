@@ -5,6 +5,95 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 54: teks admin panel bebas nama command CLI + tooltip sumber Jadwal tidak crash
+
+Menutup item todo.md "Teks di admin panel masih bahasa programmer" (sisa 3
+tempat dari fase 30/29/28) dan satu tempat tambahan yang ketemu sepanjang
+penyisiran (JadwalsTable, TukarJadwalForm). Menegakkan larangan di
+QUICK_CONTEXT: teks yang dibaca admin lewat Filament tidak boleh
+menyodorkan `php artisan ...` sebagai solusi.
+
+### Teks yang diganti ke bahasa hasil
+
+- `HariLiburForm`, `HariLiburInfolist`, `JadwalInfolist`: peringatan dampak
+  ke jadwal yang sudah digenerate tidak lagi menyebut nama command. Sekarang
+  berbunyi seperti "jadwal yang sudah dibuat tidak ikut berubah, ubah lewat
+  menu Jadwal atau minta admin sistem membuat ulang". Nama command tetap
+  hidup di `runbook.md`.
+- `JadwalsTable`: tooltip kolom `sumber` tidak lagi menyebut
+  `jadwal:generate-rotasi --overwrite-generate`.
+- `TukarJadwalForm`: peringatan karyawan rotasi di field `tanggal_baru`
+  tidak lagi menyebut nama command generator.
+
+### KEPUTUSAN: membalik keputusan fase 50
+
+Fase 50 sengaja membiarkan peringatan `tanggal_baru` menyebut nama command,
+dengan alasan panel dioperasikan IT internal. Itu dibalik di sini: admin RS
+diperlakukan sebagai staf yang tidak punya akses terminal, konsisten dengan
+semua tempat lain. Mitigasinya tetap sama (admin diberi tahu bahwa tanggal
+asal akan "Jadwal Hilang" sampai jadwal bulan itu dibuat ulang), hanya
+bahasanya yang berubah dan rujukan ke "admin sistem" menggantikan nama
+command. Jawaban atas pertanyaan di todo.md ("siapa operator panel?") jadi
+final: asumsikan staf awam. [konfirmasi kalau memang sudah dipastikan ke RS]
+
+Ide tombol aksi Filament yang memanggil generator lewat `Artisan::call()`
+(dengan konfirmasi dan ringkasan hasil) ikut dihapus dari todo.md bersama
+item induknya, jadi sekarang tidak ada lagi catatan soal itu. [kalau ide itu
+masih mau dipertahankan sebagai backlog, kembalikan sebagai item tersendiri]
+
+### BUG: tooltip `sumber` di JadwalsTable crash saat state null
+
+Closure `color()`, `formatStateUsing()`, dan `tooltip()` di kolom `sumber`
+bertipe `fn (string $state)`. Saat Filament mengevaluasi dengan state null,
+hasilnya `TypeError: Argument #1 ($state) must be of type string, null
+given`. Ketahuan oleh test baru yang menguji tooltip tabel (test yang
+sama yang memverifikasi tidak ada nama command di tooltip).
+
+Fix: ketiganya jadi `?string`, dan label/tooltip memakai `match` dengan
+cabang default ("Belum diketahui" / "Sumber jadwal belum tercatat.") alih-
+alih mengasumsikan "bukan manual = generate". Cabang `else` implisit itu
+sendiri berbahaya: nilai tak dikenal atau null ikut tampil sebagai
+"Generate" dan diberi tooltip "boleh ditimpa", padahal tidak ada dasarnya.
+
+Penyebab state null di test: [isi, mis. record dibuat tanpa kolom sumber /
+evaluasi tooltip tanpa record]. [Kalau kolom `sumber` NOT NULL di DB, catat
+bahwa null hanya muncul di jalur evaluasi, bukan di data nyata.]
+
+### Test
+
+- `HariLiburResourceTest`: halaman View dan peringatan form tidak menyebut
+  nama command CLI; catatan cuti bersama di View mengikuti kebijakan
+  terkini (fase 38). 12 → 15 test.
+- `JadwalResourceTest`: View menyebut penjelasan `sumber` tanpa flag CLI
+  (dua varian), tooltip tabel tanpa flag CLI. 19 → 22 test.
+- `TukarJadwalResourceTest`: peringatan rotasi di `tanggal_baru` tidak
+  menyebut nama command. [status: lihat catatan risky di bawah]
+
+Full suite: 547 → **553 passed, 1 risky (1647 assertions)**.
+
+### Catatan
+
+- 1 test berstatus risky (`it peringatan karyawan rotasi di tanggal_baru
+  tidak menyebut...` di TukarJadwalResourceTest): berjalan tanpa assertion
+  sehingga hijaunya tidak membuktikan apa pun. [isi: sudah diperbaiki di
+  commit ini / ditunda, perlu ditutup sebelum fase berikutnya]. Pola yang
+  sama dengan `assertStatus(422)` doang di QUICK_CONTEXT.
+- Test hanya membuktikan nama command TIDAK muncul, bukan bahwa kalimat
+  penggantinya mudah dipahami admin awam (kelas celah yang sama seperti
+  fase 29). Verifikasi terbaik tetap membuka form-nya di browser.
+- todo.md: tiga item dihapus di commit ini. "Teks di admin panel masih
+  bahasa programmer" selesai (lihat atas). "composer audit" sudah ditangani
+  fase 53 (tinggal jalankan ulang sebelum deploy pertama, sudah tercatat
+  di sana). "Keterangan lokasi di halaman cetak QR" ikut terhapus
+  - todo.md: tiga item dihapus di commit ini. "Teks di admin panel masih
+  bahasa programmer" selesai (lihat atas). "composer audit" sudah ditangani
+  fase 53 (tinggal jalankan ulang sebelum deploy pertama, sudah tercatat
+  di sana). "Keterangan lokasi di halaman cetak QR" **DIBATALKAN**: lokasi
+  fisik instansi sudah tercatat di tabel `instansi` (alamat, latitude/
+  longitude, radius_meter), jadi kolom `keterangan_lokasi` baru di
+  `qr_instansi` menduplikasi informasi yang sudah ada. Tidak ada migration
+  dan SCHEMA.md tidak berubah.
+
 ## fase 53: audit keamanan dependensi — composer audit bersih
 
 `composer audit` (dijalankan setelah install bacon-qr-code) melaporkan

@@ -238,3 +238,32 @@ it('filter rentang tanggal membatasi baris yang tampil', function () {
         ->assertCanSeeTableRecords([$diDalam])
         ->assertCanNotSeeTableRecords([$diLuar]);
 });
+it('halaman View hari libur tidak menyebut nama command CLI', function () {
+    $hariLibur = HariLibur::factory()->create(['instansi_id' => $this->instansi->id, 'tanggal' => '2026-08-19']);
+
+    livewire(ViewHariLibur::class, ['record' => $hariLibur->getRouteKey()])
+        ->assertDontSee('jadwal:generate')
+        ->assertDontSee('absensi:rekap')
+        ->assertDontSee('--overwrite');
+});
+
+it('peringatan di form hari libur tidak menyebut command CLI', function () {
+    $karyawan = \App\Models\Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    \App\Models\Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id, 'tanggal' => '2026-08-20', 'jenis' => 'reguler',
+    ]);
+
+    livewire(CreateHariLibur::class)
+        ->fillForm(['instansi_id' => $this->instansi->id, 'tanggal' => '2026-08-20'])
+        ->assertSee('minta admin sistem')
+        ->assertDontSee('jadwal:generate')
+        ->assertDontSee('--overwrite');
+});
+
+it('catatan cuti bersama di View sesuai kebijakan terkini (bukan klaim usang)', function () {
+    $hariLibur = HariLibur::factory()->cutiBersama()->create(['instansi_id' => $this->instansi->id, 'tanggal' => '2026-12-27']);
+
+    livewire(ViewHariLibur::class, ['record' => $hariLibur->getRouteKey()])
+        ->assertDontSee('Penyesuaian belum dikerjakan')
+        ->assertSee('tetap masuk');
+});
