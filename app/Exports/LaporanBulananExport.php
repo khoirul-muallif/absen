@@ -111,29 +111,6 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
         ];
     }
 
-    public function map($baris): array
-    {
-        static $no = 0;
-        $no++;
-
-        $k = $baris['karyawan'];
-
-        return [
-            $no,
-            $k->nip,
-            $k->nama,
-            $k->unit_kerja,
-            $k->instansi->nama ?? '-',
-            $baris['total_hadir'],
-            $baris['terlambat'],
-            $baris['alpha'],
-            $baris['izin'],
-            $baris['cuti'],
-            $baris['dinas'],
-            $baris['melebihi_toleransi'] ? 'Ya' : 'Tidak',
-        ];
-    }
-
     public function columnWidths(): array
     {
         return [
@@ -151,6 +128,23 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '16A34A']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ],
+        ];
+    }
+    public function map($row): array
+    {
+        return [
+            $this->nomor++,
+            $row['karyawan']->nip,
+            $row['karyawan']->nama,
+            $row['karyawan']->unit_kerja,
+            $row['karyawan']->instansi->nama ?? '-',
+            $row['total_hadir'],
+            $row['terlambat'],
+            $row['alpha'],      // jangan: $row['alpha'] ?: ''
+            $row['izin'],
+            $row['cuti'],
+            $row['dinas'],
+            $row['melebihi_toleransi'] ? 'Ya' : 'Tidak',
         ];
     }
 }

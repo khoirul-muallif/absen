@@ -1,13 +1,16 @@
 <x-filament-panels::page>
-    <form wire:submit.prevent="exportExcel">
+    <div>
         {{ $this->form }}
 
-        <div class="mt-4">
-            <x-filament::button type="submit">
+        <div class="mt-4 flex gap-2">
+            <x-filament::button wire:click="exportExcel">
                 Export Excel
             </x-filament::button>
+            <x-filament::button wire:click="exportPdf" color="gray">
+                Export PDF
+            </x-filament::button>
         </div>
-    </form>
+    </div>
 
     <div class="mt-6 overflow-x-auto">
         <table class="w-full text-sm">

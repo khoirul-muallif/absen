@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Exports\LaporanPelanggaranExport;
 use App\Models\Instansi;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -88,6 +89,24 @@ class RekapPelanggaranPresensi extends Page implements HasForms
         return Excel::download(
             new LaporanPelanggaranExport((int) $state['bulan'], (int) $state['tahun'], $state['instansi_id'] ?? null),
             "rekap-pelanggaran-{$state['tahun']}-{$state['bulan']}.xlsx"
+        );
+    }
+
+    public function exportPdf()
+    {
+        $state = $this->form->getState();
+        $instansi = ($state['instansi_id'] ?? null) ? Instansi::find($state['instansi_id']) : null;
+
+        $pdf = Pdf::loadView('pdf.rekap-pelanggaran', [
+            'rows' => $this->getRows(),
+            'bulan' => (int) $state['bulan'],
+            'tahun' => (int) $state['tahun'],
+            'instansi' => $instansi,
+        ])->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            "rekap-pelanggaran-{$state['tahun']}-{$state['bulan']}.pdf"
         );
     }
 }

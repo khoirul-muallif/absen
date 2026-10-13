@@ -6,6 +6,7 @@ use App\Exports\LaporanHarianExport;
 use App\Models\Absensi;
 use App\Models\Shift;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -90,6 +91,23 @@ class LaporanPresensi extends Page implements HasForms
         return Excel::download(
             new LaporanHarianExport($tanggal, $state['shift_id'] ?? null),
             'laporan-harian-'.$tanggal->format('Y-m-d').'.xlsx'
+        );
+    }
+    public function exportPdf()
+    {
+        $state = $this->form->getState();
+        $tanggal = Carbon::parse($state['tanggal']);
+        $shift = ($state['shift_id'] ?? null) ? Shift::find($state['shift_id']) : null;
+
+        $pdf = Pdf::loadView('pdf.laporan-harian', [
+            'rows' => $this->getRows(),
+            'tanggal' => $tanggal,
+            'shift' => $shift,
+        ])->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'laporan-harian-'.$tanggal->format('Y-m-d').'.pdf'
         );
     }
 }
