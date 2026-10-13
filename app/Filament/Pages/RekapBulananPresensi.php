@@ -21,7 +21,7 @@ class RekapBulananPresensi extends Page implements HasForms
     use InteractsWithForms;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
-    protected static string|UnitEnum|null $navigationGroup = 'Presensi';
+    protected static string|UnitEnum|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Rekap Bulanan';
     protected static ?int $navigationSort = 2;
     protected string $view = 'filament.pages.rekap-bulanan-presensi';

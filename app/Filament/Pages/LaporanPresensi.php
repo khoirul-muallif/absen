@@ -24,7 +24,7 @@ class LaporanPresensi extends Page implements HasForms
     use InteractsWithForms;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentChartBar;
-    protected static string|UnitEnum|null $navigationGroup = 'Presensi';
+    protected static string|UnitEnum|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Presensi';
     protected string $view = 'filament.pages.laporan-presensi';
 
