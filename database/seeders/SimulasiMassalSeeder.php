@@ -19,18 +19,18 @@ use Illuminate\Support\Facades\DB;
 
 class SimulasiMassalSeeder extends Seeder
 {
-    // ── Konfigurasi — ubah di sini sebelum run, konsisten dengan gaya
-    // AbsensiSimulasiSeeder (plain, tanpa opsi Artisan) ──
     protected int $jumlahKaryawanBaru = 150;
-    protected float $porsiRotasi = 0.3; // sisanya umum
-    protected int $jumlahBulanKeBelakang = 3; // termasuk bulan berjalan
+    protected float $porsiRotasi = 0.8; // ~120 rotasi tersebar ke unit 24/7, sisanya umum
+    protected int $jumlahBulanKeBelakang = 3;
+
+    protected array $unitRotasi = ['Rawat Inap', 'IGD', 'ICU'];
+    protected array $timRotasi = ['Pagi', 'Siang', 'Malam']; // harus match nama tim di PolaRotasiSeeder
 
     protected float $peluangAlpha = 0.05;
-    protected float $peluangTerlambat = 0.20; // dari yang bukan alpha
+    protected float $peluangTerlambat = 0.20;
     protected float $porsiKaryawanDapatCuti = 0.10;
     protected float $porsiKaryawanDapatDinas = 0.05;
 
-    // Seed tetap — hasilnya reproducible, tidak beda tiap migrate:fresh --seed
     protected int $seedAcak = 12345;
 
     public function run(): void
@@ -41,8 +41,24 @@ class SimulasiMassalSeeder extends Seeder
         $instansi = Instansi::firstOrFail();
         $admin = User::firstOrFail();
         $shiftUmum = Shift::where('instansi_id', $instansi->id)->where('nama_shift', 'umum')->firstOrFail();
-        $polaRotasi = PolaRotasi::where('instansi_id', $instansi->id)->where('nama_pola', 'Rotasi 5 Kerja 2 Libur')->firstOrFail();
         $jenisCutiTahunan = JenisCuti::where('nama', 'Cuti Tahunan')->firstOrFail();
+
+        // $polaPerUnitTim['Rawat Inap']['Pagi'] = PolaRotasi, dst.
+        $semuaPola = PolaRotasi::whereIn('unit_kerja', $this->unitRotasi)->get();
+        $polaPerUnitTim = [];
+        foreach ($this->unitRotasi as $unit) {
+            foreach ($this->timRotasi as $tim) {
+                $pola = $semuaPola->first(
+                    fn (PolaRotasi $p) => $p->unit_kerja === $unit && $p->nama_pola === "Tim {$tim} - 5 Kerja 2 Libur"
+                );
+
+                if (! $pola) {
+                    throw new \RuntimeException("PolaRotasi \"Tim {$tim}\" untuk unit \"{$unit}\" belum ada -- jalankan PolaRotasiSeeder dulu.");
+                }
+
+                $polaPerUnitTim[$unit][$tim] = $pola;
+            }
+        }
 
         $awalWindow = today()->subMonths($this->jumlahBulanKeBelakang - 1)->startOfMonth();
         $akhirWindow = today();
@@ -58,11 +74,6 @@ class SimulasiMassalSeeder extends Seeder
             ->count($jumlahUmum)
             ->create(['instansi_id' => $instansi->id]);
 
-        $karyawanRotasiBaru = Karyawan::factory()
-            ->rotasi()
-            ->count($jumlahRotasi)
-            ->create(['instansi_id' => $instansi->id, 'unit_kerja' => 'Rawat Inap']);
-
         foreach ($karyawanUmumBaru as $k) {
             $k->karyawanShift()->create([
                 'shift_id' => $shiftUmum->id,
@@ -71,15 +82,50 @@ class SimulasiMassalSeeder extends Seeder
             ]);
         }
 
-        foreach ($karyawanRotasiBaru as $k) {
-            $k->karyawanPolaRotasis()->create([
-                'pola_rotasi_id' => $polaRotasi->id,
-                'tanggal_mulai' => $awalWindow,
-                'tanggal_berakhir' => null,
-            ]);
+        // Sebar rotasi: rata ke tiap unit, lalu dalam tiap unit rata lagi ke
+        // 3 tim shift. Tiap karyawan di-assign ke SATU pola (tim shift
+        // tetap), dengan tanggal_mulai di-offset menyebar ke seluruh 7
+        // posisi siklus (index % panjangSiklus) -- supaya hari libur
+        // sesama anggota tim tidak pernah barengan semua, shift tetap ada
+        // yang isi tiap hari.
+        $karyawanRotasiBaru = collect();
+        $jumlahPerUnit = intdiv($jumlahRotasi, count($this->unitRotasi));
+        $sisaRotasi = $jumlahRotasi;
+
+        foreach ($this->unitRotasi as $i => $unit) {
+            $jumlahUnitIni = ($i === count($this->unitRotasi) - 1) ? $sisaRotasi : $jumlahPerUnit;
+            $sisaRotasi -= $jumlahUnitIni;
+
+            $jumlahPerTim = intdiv($jumlahUnitIni, count($this->timRotasi));
+            $sisaUnitIni = $jumlahUnitIni;
+
+            foreach ($this->timRotasi as $j => $tim) {
+                $jumlahTimIni = ($j === count($this->timRotasi) - 1) ? $sisaUnitIni : $jumlahPerTim;
+                $sisaUnitIni -= $jumlahTimIni;
+
+                $pola = $polaPerUnitTim[$unit][$tim];
+                $panjangSiklus = $pola->panjangSiklus();
+
+                $karyawanTimIni = Karyawan::factory()
+                    ->rotasi()
+                    ->count($jumlahTimIni)
+                    ->create(['instansi_id' => $instansi->id, 'unit_kerja' => $unit]);
+
+                foreach ($karyawanTimIni as $index => $k) {
+                    $k->karyawanPolaRotasis()->create([
+                        'pola_rotasi_id' => $pola->id,
+                        'tanggal_mulai' => $awalWindow->copy()->subDays($index % $panjangSiklus),
+                        'tanggal_berakhir' => null,
+                    ]);
+                }
+
+                $karyawanRotasiBaru = $karyawanRotasiBaru->concat($karyawanTimIni);
+            }
         }
 
-        $this->command->info("Karyawan baru: {$jumlahUmum} umum, {$jumlahRotasi} rotasi.");
+        $this->command->info("Karyawan baru: {$jumlahUmum} umum, {$jumlahRotasi} rotasi (".
+            $karyawanRotasiBaru->countBy('unit_kerja')->map(fn ($n, $u) => "{$u}: {$n}")->implode(', ')
+        .").");
 
         // ── 2. Generate Jadwal lewat command resmi, bulan per bulan ──
         $periodeBulan = [];
@@ -118,8 +164,7 @@ class SimulasiMassalSeeder extends Seeder
                 $cuti->approve($admin);
                 $cutiBerhasil++;
             } catch (\Throwable $e) {
-                // Kuota kebetulan habis untuk kombinasi ini — dibiarkan pending.
-                // Realistis: tidak semua pengajuan ujungnya approved.
+                //
             }
         }
 
@@ -160,7 +205,7 @@ class SimulasiMassalSeeder extends Seeder
         foreach ($jadwalUntukDiabsen as $jadwal) {
             if (fake()->randomFloat(2, 0, 1) < $this->peluangAlpha) {
                 $totalAlpha++;
-                continue; // sengaja tidak dibuat row — biar RekapHarian punya kerjaan
+                continue;
             }
 
             $shift = $shiftCache[$jadwal->shift_id];

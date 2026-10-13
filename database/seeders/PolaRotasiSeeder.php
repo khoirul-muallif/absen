@@ -16,30 +16,52 @@ class PolaRotasiSeeder extends Seeder
             ->get()
             ->keyBy('nama_shift');
 
-        // Pola 5 hari kerja + 2 hari libur, unit non-24 jam (Rawat Inap biasa).
-        // Berbeda dari rotasi Dedi/Siti/Rina (nonstop 15 hari tanpa satu pun
-        // langkah libur) — jalur "karyawan rotasi sedang libur" belum pernah
-        // dilewati sama sekali sebelum pola ini ada (lihat todo.md).
+        // Tim bershift TETAP (bukan muter pagi->siang->malam per orang).
+        // Kenapa: pola lama (1 tim muter 3 jenis shift lewat offset
+        // tanggal_mulai antar grup) TERBUKTI tidak bisa menjamin shift malam
+        // selalu terisi -- malam cuma 1 dari 7 posisi siklus, jadi dengan
+        // offset berapapun selama grupnya < 7, selalu ada hari di mana tidak
+        // ada satupun grup yang jatuh di posisi malam. Lihat insiden 7 Okt
+        // 2026 (2 shift kosong) di todo.md / status report.
         //
-        // berlaku_saat_libur_nasional = false (sengaja beda dari IGD/ICU):
-        // di hari libur nasional, generator MEMAKSA libur meski posisi
-        // siklusnya seharusnya kerja. Ini jalur override yang juga belum
-        // pernah ada data ujinya — yang sudah ada baru jalur IGD (true).
-        PolaRotasi::create([
-            'instansi_id' => $instansi->id,
-            'unit_kerja'  => 'Rawat Inap',
-            'nama_pola'   => 'Rotasi 5 Kerja 2 Libur',
-            'langkah'     => [
-                ['shift_id' => $shift['pagi']->id, 'libur' => false],
-                ['shift_id' => $shift['siang']->id, 'libur' => false],
-                ['shift_id' => $shift['malam']->id, 'libur' => false],
-                ['shift_id' => $shift['pagi']->id, 'libur' => false],
-                ['shift_id' => $shift['siang']->id, 'libur' => false],
-                ['shift_id' => null, 'libur' => true],
-                ['shift_id' => null, 'libur' => true],
-            ],
-            'berlaku_saat_libur_nasional' => false,
-            'is_active' => true,
-        ]);
+        // Desain baru: tiap tim shift-nya tetap, cuma kerja/libur yang
+        // diputar 5-2. Coverage harian dijamin bukan dari struktur pola ini,
+        // tapi dari OFFSET INDIVIDUAL tiap karyawan dalam tim (lihat
+        // SimulasiMassalSeeder) -- selama anggota tim offsetnya menyebar ke
+        // beberapa posisi siklus berbeda, tidak mungkin semua anggota libur
+        // bareng di hari yang sama.
+        $timShift = [
+            'Pagi' => $shift['pagi'],
+            'Siang' => $shift['siang'],
+            'Malam' => $shift['malam'],
+        ];
+
+        $unitRotasi = [
+            ['unit_kerja' => 'Rawat Inap', 'berlaku_saat_libur_nasional' => false],
+            ['unit_kerja' => 'IGD', 'berlaku_saat_libur_nasional' => true],
+            ['unit_kerja' => 'ICU', 'berlaku_saat_libur_nasional' => true],
+        ];
+
+        foreach ($unitRotasi as $unit) {
+            foreach ($timShift as $namaTim => $shiftTim) {
+                $langkah = [
+                    ...array_fill(0, 5, ['shift_id' => $shiftTim->id, 'libur' => false]),
+                    ...array_fill(0, 2, ['shift_id' => null, 'libur' => true]),
+                ];
+
+                PolaRotasi::updateOrCreate(
+                    [
+                        'instansi_id' => $instansi->id,
+                        'unit_kerja' => $unit['unit_kerja'],
+                        'nama_pola' => "Tim {$namaTim} - 5 Kerja 2 Libur",
+                    ],
+                    [
+                        'langkah' => $langkah,
+                        'berlaku_saat_libur_nasional' => $unit['berlaku_saat_libur_nasional'],
+                        'is_active' => true,
+                    ]
+                );
+            }
+        }
     }
 }
