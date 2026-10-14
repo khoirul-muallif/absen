@@ -15,13 +15,23 @@ use Illuminate\Support\Facades\Storage;
 
 class AbsensiController extends Controller
 {
-    /**
-     * GET /api/absensi/status
-     */
     public function status(Request $request): JsonResponse
     {
         $karyawan = $request->user();
-        $absensi  = $karyawan->absensi()->whereDate('tanggal', today())->first();
+
+        // Prioritaskan sesi yang masih terbuka (termasuk shift malam yang
+        // masuk kemarin tapi belum absen pulang) — supaya home screen tahu
+        // harus diarahkan ke absen pulang, bukan dikira belum absen masuk.
+        $absensi = $karyawan->absensi()
+            ->whereNotNull('waktu_masuk')
+            ->whereNull('waktu_pulang')
+            ->whereBetween('tanggal', [today()->subDay(), today()])
+            ->orderByDesc('tanggal')
+            ->first();
+
+        // Tidak ada sesi terbuka — pakai baris hari ini apa adanya (termasuk
+        // kalau sudah lengkap masuk+pulang hari ini, atau belum absen sama sekali).
+        $absensi ??= $karyawan->absensi()->whereDate('tanggal', today())->first();
 
         return response()->json([
             'success' => true,
@@ -50,6 +60,22 @@ class AbsensiController extends Controller
         ]);
 
         $karyawan = $request->user()->load('instansi');
+
+        // 0. Tolak kalau masih ada sesi kemarin yang belum di-pulang-kan
+        //    (shift malam yang belum absen pulang) — cegah bikin baris baru
+        //    untuk hari ini padahal sesi sebelumnya masih menggantung.
+        $sesiTerbuka = $karyawan->absensi()
+            ->whereNotNull('waktu_masuk')
+            ->whereNull('waktu_pulang')
+            ->whereDate('tanggal', today()->subDay())
+            ->first();
+
+        if ($sesiTerbuka) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda masih memiliki sesi absen kemarin yang belum di-pulang-kan. Lakukan absen pulang terlebih dahulu.',
+            ], 422);
+        }
 
         // 1. Cek apakah hari ini sudah tercatat dinas/cuti (approved)
         $absensiHariIni = $karyawan->absensi()->whereDate('tanggal', today())->first();
