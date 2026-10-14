@@ -7,8 +7,10 @@
 ## Prioritas — belum ditetapkan
 
 **Review UX 17 Filament Resource SELESAI** (fase 25–36). **Laporan Presensi
-SELESAI** (fase 56: Harian/Bulanan/Pelanggaran, Excel+PDF). **Simulasi rotasi
-24/7 realistis SELESAI** (fase 56: tim per shift, bukan 1 tim muter 3 shift).
+SELESAI** (fase 56: Harian/Bulanan/Pelanggaran, Excel+PDF). **Simulasi
+rotasi 24/7 realistis SELESAI** (fase 56: tim per shift, bukan 1 tim muter
+3 shift). **Refactor tampilan 3 halaman Laporan Presensi jadi card Filament
+SELESAI** (fase 56 lanjutan, commit `584d2e8`).
 
 Fokus berikutnya:
 
@@ -103,6 +105,14 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       di class** (dipakai sebagai `$this->nomor++` tanpa `protected int $nomor = 0;`)
       — dynamic property, berisiko deprecation warning PHP 8.2+. Ditemukan
       fase 56, belum sempat diperbaiki di kode (ketutup prioritas bug lain).
+- [ ] **Terapkan `navigationGroup = 'Laporan'` ke `RekapBulananPresensi.php` &
+      `RekapPelanggaranPresensi.php`** — `LaporanPresensi.php` sudah diganti
+      dari `'Presensi'` ke `'Laporan'` supaya 3 halaman laporan tergroup jadi
+      satu; dua page lain belum menyusul.
+- [ ] **Pasang ulang 3 file blade Laporan Presensi yang sudah di-restyle**
+      (card Filament + badge berwarna, fase 56 lanjutan) dan pastikan
+      `laporan-presensi.blade.php` jalan tanpa ParseError setelah fix bug
+      `@php`-dalam-`@foreach` (lihat CHANGELOG).
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,

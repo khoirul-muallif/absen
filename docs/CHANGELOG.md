@@ -5,7 +5,161 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+# CHANGELOG — absensi-app versi 2
 
+> History detail per-fase. **Jangan upload file ini ke chat baru** — cukup dibuka lokal, atau minta Claude baca kalau lagi butuh nelusurin keputusan/bug lama. Ringkasan status terkini ada di `PROJECT_CONTEXT.md`.
+
+> Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
+
+---
+
+## fase 56: Laporan Presensi (Excel & PDF) + redesign simulasi rotasi 24/7
+
+Tiga pekerjaan dalam rentang dua hari: fitur laporan baru, perbaikan seeder
+simulasi yang terbukti punya bug matematis di desain rotasinya, dan
+refactor tampilan ketiga halaman laporan (fase 56 lanjutan). Commit: `bd13eba`,
+`7a11043`, `d0a1c02`, `584d2e8` (catatan: pesan commit `584d2e8` salah ketik
+"fase 55 lanjutan" — seharusnya "fase 56 lanjutan").
+
+### Fitur baru: Laporan Presensi — 3 laporan, Excel + PDF
+
+Item baru dari brainstorming (bukan dari todo.md) — backend selama ini belum
+punya cara admin melihat rekap presensi tanpa query manual.
+
+- **Laporan Harian**: siapa saja yang presensi di tanggal tertentu, termasuk
+  alpha. Filter tanggal + shift (filter literal `shift_id` — "Opsi B": cuti/
+  dinas/alpha-tanpa-shift sengaja tidak ikut saat filter shift aktif,
+  keputusan eksplisit dibanding alternatif "shift yang seharusnya" via
+  lookup assignment).
+- **Rekap Bulanan**: ringkasan per karyawan (hadir/terlambat/alpha/izin/
+  cuti/dinas/melebihi toleransi bulanan), filter bulan+tahun+instansi.
+- **Rekap Pelanggaran**: alpha+terlambat, diurutkan descending berdasarkan
+  skor pelanggaran — bukan alfabetis, keputusan eksplisit supaya yang paling
+  bermasalah tampil duluan.
+
+Tiga halaman Filament baru (bukan 1 halaman gabungan — opsi yang dipilih
+supaya tiap laporan punya filter sendiri yang relevan), dikelompokkan di
+navigationGroup `'Laporan'`. Dependency baru: `maatwebsite/excel`,
+`barryvdh/laravel-dompdf`.
+
+**Pola arsitektur:** tiap Export class (`LaporanHarianExport`,
+`LaporanBulananExport`, `LaporanPelanggaranExport`) punya method statis
+`agregasi()` sebagai satu-satunya sumber kebenaran query — dipakai bersama
+oleh preview on-screen di halaman Filament (`getRows()`) DAN oleh export
+Excel/PDF. `LaporanPelanggaranExport::agregasi()` memanggil
+`LaporanBulananExport::agregasi()` alih-alih menduplikasi query groupBy,
+lalu menambah `total_menit_terlambat` dan sort ulang.
+
+### Tiga bug Livewire/Blade yang ditemukan saat implementasi PDF
+
+Semuanya spesifik ke interaksi Livewire action × Blade compiler, bukan bug
+logika aplikasi:
+
+1. **Exception renderer Laravel ketimpa.** Livewire's `ExtendBlade`
+   mengintersep SEMUA compile Blade selama request Livewire aktif — termasuk
+   template exception internal Laravel. Error asli jadi ketutup ParseError
+   sekunder di `markdown.blade.php`. Pelajaran: untuk error di dalam
+   `wire:click`, selalu cek `storage/logs/laravel.log` langsung, jangan
+   percaya halaman error di browser.
+2. **`@forelse`/`@foreach` + `@php` bersarang rusak saat dikompilasi.**
+   Precompiler Livewire merusak `@php...@endphp` yang nested di dalam loop
+   (membiarkan `@php` pembuka tidak terkonversi sementara `@endphp` jadi
+   `?>` kosong) — menghasilkan PHP tidak valid meski source-nya benar.
+   Fix: hindari `@forelse` (pakai `@if/@else/@foreach/@endforeach/@endif`)
+   dan hindari `@php...@endphp` bersarang di loop — ganti dengan ekspresi
+   Blade inline (mis. `match(true){...}` langsung di atribut komponen),
+   bukan variabel yang di-assign lewat `@php` dulu. **Kambuh kedua kalinya**:
+   pertama kali di 3 view PDF (dompdf), lalu lagi di
+   `laporan-presensi.blade.php` (view Livewire native) saat refactor
+   tampilan (fase 56 lanjutan) — jadi bug ini bukan spesifik ke dompdf,
+   melainkan ke SEMUA Blade yang dirender dalam konteks request Livewire
+   aktif, apapun tujuannya.
+3. **Respons biner dompdf bikin Livewire gagal JSON-encode.**
+   `Pdf::loadView(...)->download(...)` balikin `Response` biner mentah;
+   Livewire coba JSON-encode-nya untuk respons AJAX-nya →
+   `InvalidArgumentException: Malformed UTF-8 characters`. Fix:
+   `response()->streamDownload(fn () => print($pdf->output()), $filename)`
+   — `StreamedResponse` yang memang didukung eksplisit oleh Livewire untuk
+   file download, beda dari `maatwebsite/excel` yang aman karena balikin
+   `BinaryFileResponse`.
+
+### Investigasi "data laporan janggal" — dua laporan positif-palsu
+
+Setelah fitur jadi, user melaporkan Excel Rekap Bulanan/Pelanggaran
+"janggal" di kolom Alpha/Izin/Cuti/Dinas. Investigasi (tinker, raw query)
+membuktikan kode `agregasi()`/`map()` 100% benar — nilai 0 yang dihitung
+memang nilai asli, bukan bug. Dua temuan:
+
+- **Zero tampil blank di Excel**: bukan bug kode. Kemungkinan besar setting
+  lokal Excel user ("Show a zero in cells that have zero value" nonaktif di
+  File → Options → Advanced), karena pola blank-nya konsisten di semua file
+  export yang berbeda dan semua kolom numerik, persis gejala setting
+  aplikasi, bukan file.
+- **"Melebihi Toleransi Bulanan" selalu Tidak**: bukan bug. Semua shift
+  (umum/pagi/siang/malam) masih `mode_toleransi='harian'`, belum ada yang
+  `'akumulasi_bulanan'` — `Shift::sudahMelebihiToleransiBulanan()` memang
+  didesain selalu `false` di luar mode itu. Dikonfirmasi dengan mengubah
+  satu shift ke `akumulasi_bulanan` + `audit-menit-terlambat --fix`, hasil
+  langsung berubah sesuai ekspektasi (263 baris terkoreksi, angka akumulasi
+  masuk akal).
+
+### BUG DITEMUKAN & DIPERBAIKI: desain rotasi simulasi tidak bisa menjamin shift malam terisi
+
+Permintaan user untuk simulasi rotasi 24/7 lebih realistis (banyak unit,
+banyak karyawan) awalnya diimplementasikan sebagai: 1 `PolaRotasi` per unit
+yang muter pagi→siang→malam→pagi→siang→libur→libur (siklus 7 hari), dengan
+3 "grup" karyawan di-offset `tanggal_mulai`-nya buat saling melengkapi.
+
+**Terbukti salah secara matematis**, ditemukan lewat laporan user: Laporan
+Harian 7 Oktober 2026 menunjukkan 2 shift kosong total (pagi & malam). Akar
+masalah: shift malam cuma menempati 1 dari 7 posisi siklus. Dengan offset
+berapapun selama jumlah grup < 7, pasti ada hari di mana TIDAK ADA grup yang
+jatuh di posisi malam — bukan kebetulan tanggal 7 Oktober, melainkan 6 dari
+7 hari dalam siklus akan selalu kehilangan minimal satu jenis shift.
+
+**Redesign:** bukan 1 tim yang muter 3 jenis shift, tapi 3 tim per unit
+(Tim Pagi/Siang/Malam) dengan shift TETAP — cuma kerja/libur yang diputar
+5-2. Coverage harian dijamin dari offset individual tiap karyawan dalam tim
+(menyebar ke seluruh posisi siklus 0..6), bukan dari struktur pola rotasi.
+Ini desain yang dipakai RS sungguhan (tim per shift, bukan 1 tim bergilir).
+
+- `PolaRotasiSeeder`: generate 9 `PolaRotasi` (3 unit × 3 tim), idempotent
+  lewat `updateOrCreate`.
+- `SimulasiMassalSeeder`: 150 karyawan (30 umum, 120 rotasi tersebar rata ke
+  3 unit [Rawat Inap/IGD/ICU] × 3 tim shift), `porsiRotasi` naik dari 0.3 ke
+  0.8 supaya representatif untuk skenario RS 24/7. Tiap karyawan dalam tim
+  di-offset `tanggal_mulai`-nya `index % panjangSiklus` hari — menyebar ke 7
+  posisi siklus, bukan cuma 3.
+- `KaryawanSeeder`: referensi nama pola untuk karyawan contoh (Yono Pratama)
+  disesuaikan dari `'Rotasi 5 Kerja 2 Libur'` (sudah tidak ada) ke
+  `'Tim Pagi - 5 Kerja 2 Libur'` unit Rawat Inap.
+
+### Refactor tampilan: 3 halaman laporan dari tabel polos jadi card Filament (fase 56 lanjutan)
+
+Ketiga `resources/views/filament/pages/*-presensi.blade.php` awalnya cuma
+`<table>` Tailwind polos tanpa mengikuti gaya visual Filament. Diperbaiki:
+dibungkus `<x-filament::section>` (card dengan heading + description jumlah
+baris), header tabel pakai gaya standar Filament (uppercase, tracking-wide,
+bg abu-abu), nilai status/pelanggaran (Tepat Waktu/Terlambat/Alpha/Melebihi
+Toleransi/Belum Presensi Pulang) pakai `<x-filament::badge>` berwarna alih-
+alih teks polos, tombol export dikasih icon + warna (hijau Excel, outline
+merah PDF).
+
+Sempat menabrak bug `@php` bersarang di poin 2 di atas (lihat catatan
+"kambuh kedua kalinya") — `laporan-presensi.blade.php` sempat menaruh
+`@php $warna = match(...); @endphp` di dalam `@foreach` untuk menentukan
+warna badge status; diperbaiki jadi `match(true){...}` inline langsung di
+atribut `:color`.
+
+### Catatan
+
+- Pembagian karyawan rata 40/40/40 antar unit dan rata antar 3 tim per unit
+  — belum proporsional terhadap kebutuhan staf riil RS (mis. Rawat Inap
+  biasanya butuh lebih banyak staf daripada ICU). Belum ada keputusan RS
+  soal ini, dibiarkan rata dulu.
+- Seeder ini (`SimulasiMassalSeeder`) tetap dev-only, dijalankan manual,
+  bukan bagian `DatabaseSeeder` — konsisten dengan keputusan fase 49.
+  
 ## fase 56: Laporan Presensi (Excel & PDF) + redesign simulasi rotasi 24/7
 
 Dua pekerjaan terpisah dalam satu sesi: fitur laporan baru, dan perbaikan
