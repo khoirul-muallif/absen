@@ -106,6 +106,21 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Endpoint GET /api/jadwal belum ada — blocker modul TukarJadwal frontend**
+      `TukarJadwalController::ajukan()` butuh `jadwal_id` (jadwal sendiri) dan
+      `jadwal_tujuan_id` (jadwal rekan, mode tukar), tapi gak ada endpoint buat
+      nampilin pilihan jadwal ke user — dicek di routes/api.php, gak ada rute
+      `jadwal` sama sekali. Perlu 2 endpoint baru:
+      - `GET /api/jadwal/saya` — jadwal milik sendiri dalam rentang tanggal,
+        gak ada keputusan bisnis yang nyangkut.
+      - `GET /api/jadwal/rekan?tanggal=...` — jadwal rekan yang bisa dituju.
+        BUTUH KEPUTUSAN: scope-nya dibatasi apa — sebatas unit_kerja yang
+        sama, sebatas instansi yang sama, atau gak dibatasi sama sekali?
+        Tanpa batasan, satu karyawan bisa lihat jadwal semua karyawan di
+        instansi lewat endpoint ini.
+      Ditemukan saat bangun frontend TukarJadwal (15 Okt 2026, lihat
+      CHANGELOG-fr.md fase terkait).
+
 - [ ] Frontend scan QR + GPS + face gesture (html5-qrcode, Geolocation API,
       face-api.js/MediaPipe) — masih rencana
 - [ ] Scheduler otomatis untuk jadwal:generate-bulanan (masih manual)
