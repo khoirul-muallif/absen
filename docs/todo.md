@@ -23,6 +23,17 @@ TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
+- [ ] **Lembur tidak bisa lintas tengah malam — kontradiksi keputusan desain
+      lama** — `LemburController::ajukan()` validasi `'jam_selesai' =>
+      'required|date_format:H:i|after:jam_mulai'`, yang MENOLAK jam_selesai <
+      jam_mulai (lembur lintas tengah malam). Tapi ada keputusan arsitektur
+      tercatat ("Lembur can span midnight as a single record; only
+      zero-duration is rejected") yang bilang sebaliknya. Ditemukan saat
+      audit source LemburController.php vs FE (15 Okt 2026). Perlu
+      ditelusuri: validasi `after:jam_mulai` ini bug/ketinggalan update, atau
+      keputusannya memang sudah berubah dan belum di-reflect ke dokumentasi.
+      FE (`absensi_frontapp`, fase 13) untuk sekarang ikut validasi backend
+      yang berlaku (tolak submit kalau jam_selesai <= jam_mulai).
 
 - [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
       di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).
