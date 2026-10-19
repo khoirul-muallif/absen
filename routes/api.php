@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\LemburController;
 use App\Http\Controllers\Api\CutiController;
 use App\Http\Controllers\Api\DinasController;
 use App\Http\Controllers\Api\TukarJadwalController;
+use App\Http\Controllers\Api\JadwalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -79,6 +80,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',        [DinasController::class, 'riwayat']);
         Route::post('/',       [DinasController::class, 'ajukan']);
         Route::delete('{id}',  [DinasController::class, 'batalkan']);
+    });
+        // Jadwal
+    Route::prefix('jadwal')->group(function () {
+        Route::get('saya',  [JadwalController::class, 'saya']);
+        Route::get('rekan', [JadwalController::class, 'rekan']);
     });
 
     // Tukar Jadwal
