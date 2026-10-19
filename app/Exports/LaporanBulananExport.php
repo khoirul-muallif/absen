@@ -17,7 +17,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths
 {
-     protected int $nomor = 0;
+    protected int $nomor = 0;
 
     public function __construct(
         protected int $bulan,

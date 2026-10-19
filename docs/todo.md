@@ -98,18 +98,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
-- [ ] **Property `$nomor` di `LaporanBulananExport::map()` tidak dideklarasikan
-      di class** (dipakai sebagai `$this->nomor++` tanpa `protected int $nomor = 0;`)
-      — dynamic property, berisiko deprecation warning PHP 8.2+. Ditemukan
-      fase 56, belum sempat diperbaiki di kode (ketutup prioritas bug lain).
-- [ ] **Terapkan `navigationGroup = 'Laporan'` ke `RekapBulananPresensi.php` &
-      `RekapPelanggaranPresensi.php`** — `LaporanPresensi.php` sudah diganti
-      dari `'Presensi'` ke `'Laporan'` supaya 3 halaman laporan tergroup jadi
-      satu; dua page lain belum menyusul.
-- [ ] **Pasang ulang 3 file blade Laporan Presensi yang sudah di-restyle**
-      (card Filament + badge berwarna, fase 56 lanjutan) dan pastikan
-      `laporan-presensi.blade.php` jalan tanpa ParseError setelah fix bug
-      `@php`-dalam-`@foreach` (lihat CHANGELOG).
 
 ## Ditunda — Sinkronisasi Frontend
 Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
