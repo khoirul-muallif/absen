@@ -50,11 +50,7 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       kolom itu. Tidak relevan sekarang (belum ada production), tapi jangan
       sampai terlewat saat deploy pertama.
 
-- [ ] **`absensi:audit-menit-terlambat` belum punya test otomatis** —
-      kemampuan deteksi & jalur `--fix` sudah dibuktikan manual beberapa kali
-      (termasuk di fase 56), tapi tidak meninggalkan jejak di suite. Yang
-      paling rawan dan tidak terjaga: replay akumulasi bulanan lintas chunk
-      (state dibawa lewat reference).
+
 
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
 

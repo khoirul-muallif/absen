@@ -12,6 +12,30 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+
+## fase 61: regression test untuk absensi:audit-menit-terlambat
+
+Commit `bd0398c`. Menutup item todo.md "absensi:audit-menit-terlambat
+belum punya test otomatis" — kemampuan deteksi & jalur --fix sudah
+terbukti manual beberapa kali (termasuk 263 baris terkoreksi di fase
+56), tapi tidak pernah meninggalkan jejak di suite.
+
+### Test
+
+7 test baru (`tests/Feature/Console/AuditMenitTerlambatTest.php`):
+dry-run tidak mengubah data, `--fix` membetulkan `menit_terlambat` &
+`melebihi_toleransi_bulanan`, akumulasi bulanan lewat toleransi + reset
+saat ganti bulan, baris tanpa `shift_id` tidak ikut dihitung, filter
+`--instansi`, idempotensi (run kedua: 0 salah), dan — yang paling
+rawan — akumulasi bulanan tepat di batas `chunk(500)`: baris ke-500 vs
+ke-501 sengaja diposisikan lewat 499 baris pengisi, supaya kalau state
+akumulasi (`$akumulasi`/`$karyawanIdSaatIni`/`$bulanSaatIni`, dibawa
+lewat reference lintas pemanggilan chunk) ter-reset keliru di batas
+itu, test ini menangkapnya. Test ini cuma 0.45s, tidak perlu
+dioptimasi ke raw insert.
+
+Full suite: **583 test passing (1731 assertions)** — naik dari 576.
+
 ## fase 60: seragamkan format jam Izin & Lembur jadi H:i di respons API
 
 Commit `eefe73a`. Menutup item todo.md "Format jam di respons Izin &
