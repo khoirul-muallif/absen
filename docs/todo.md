@@ -50,8 +50,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       kolom itu. Tidak relevan sekarang (belum ada production), tapi jangan
       sampai terlewat saat deploy pertama.
 
-
-
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
 
 ## item yang saya temukan tapi sengaja nggak difix sekarang
@@ -88,11 +86,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       Sekalian worth dites ke user asli (admin awam, bukan developer),
       termasuk apakah preview siklus yang baru benar-benar membantu.
 
-- [ ] **Format jam di respons Izin & Lembur belum seragam** — `jam_keluar`/
-      `jam_kembali` (Izin) dan `jam_mulai`/`jam_selesai` (Lembur) dikirim apa
-      adanya dari DB sebagai `"08:00:00"`, sementara respons lain memakai
-      `H:i`. Bukan bug, cuma tidak seragam. Hati-hati: menambahkan
-      `->format()` di sana SALAH karena nilainya bukan Carbon.
 
 ## Fitur & infrastruktur
 
