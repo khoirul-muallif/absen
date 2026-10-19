@@ -26,6 +26,7 @@ class JadwalController extends Controller
 
         $jadwals = Jadwal::where('karyawan_id', $karyawan->id)
             ->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai])
+            ->whereNotIn('jenis', [Jadwal::JENIS_CUTI, Jadwal::JENIS_DINAS])
             ->with('shift')
             ->orderBy('tanggal')
             ->get();
@@ -68,6 +69,7 @@ class JadwalController extends Controller
                     ->where('is_active', true);
             })
             ->whereDate('tanggal', $request->tanggal)
+            ->whereNotIn('jenis', [Jadwal::JENIS_CUTI, Jadwal::JENIS_DINAS])
             ->with(['shift', 'karyawan'])
             ->orderBy('karyawan_id')
             ->get();
