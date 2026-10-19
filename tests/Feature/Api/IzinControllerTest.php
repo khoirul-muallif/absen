@@ -193,3 +193,18 @@ test('404 kalau mengisi jam_kembali izin milik karyawan lain', function () {
 
     $response->assertStatus(404);
 });
+
+test('isiJamKembali: menolak jam_kembali yang sama persis dengan jam_keluar (boundary H:i vs H:i:s)', function () {
+    $izin = Izin::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jam_keluar'  => '10:00',
+        'jam_kembali' => null,
+    ]);
+
+    $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
+        'jam_kembali' => '10:00',
+    ]);
+
+    $response->assertStatus(422);
+    expect($izin->fresh()->jam_kembali)->toBeNull();
+});

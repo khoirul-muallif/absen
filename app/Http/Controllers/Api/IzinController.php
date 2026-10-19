@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Izin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class IzinController extends Controller
 {
@@ -87,7 +88,7 @@ class IzinController extends Controller
             'jam_kembali' => 'required|date_format:H:i',
         ]);
 
-        if ($request->jam_kembali <= $izin->jam_keluar) {
+        if (Carbon::parse($request->jam_kembali)->lessThanOrEqualTo(Carbon::parse($izin->jam_keluar))) {
             return response()->json([
                 'success' => false,
                 'message' => 'Jam kembali harus setelah jam keluar.',
