@@ -33,15 +33,30 @@ test('menolak pengajuan tanpa alasan', function () {
     $response->assertStatus(422);
 });
 
-test('menolak jam_selesai sebelum jam_mulai', function () {
+test('bisa mengajukan lembur lintas tengah malam', function () {
     $response = $this->postJson('/api/lembur', [
         'tanggal'     => '2026-08-01',
-        'jam_mulai'   => '20:00',
+        'jam_mulai'   => '22:00',
+        'jam_selesai' => '02:00',
+        'alasan'      => 'Jaga malam proyek urgent',
+    ]);
+
+    $response->assertStatus(201)
+        ->assertJson(['success' => true]);
+
+    expect(Lembur::where('karyawan_id', $this->karyawan->id)->where('status', 'pending')->exists())->toBeTrue();
+});
+
+test('menolak durasi nol (jam_selesai sama dengan jam_mulai)', function () {
+    $response = $this->postJson('/api/lembur', [
+        'tanggal'     => '2026-08-01',
+        'jam_mulai'   => '17:00',
         'jam_selesai' => '17:00',
         'alasan'      => 'Tes',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors('jam_selesai');
 });
 
 test('riwayat hanya menampilkan lembur milik karyawan yang login', function () {

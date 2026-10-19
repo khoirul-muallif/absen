@@ -12,6 +12,58 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 59: fix LemburController API — lintas tengah malam tertolak padahal seharusnya diizinkan
+
+Menutup item todo yang sejak fase 13 (FE, commit `a1132e6`) dicatat
+sebagai "belum diselesaikan mana yang benar — validasi after:jam_mulai
+ini bug/ketinggalan update, atau keputusannya memang sudah berubah".
+
+### BUG DITEMUKAN & DIPERBAIKI: dua sumber kebenaran menyimpang sejak fase 25
+
+`LemburForm.php` (Filament) sudah benar sejak fase 25 — komentar
+CHANGELOG fase 25 eksplisit mencatat keputusan bisnis "lembur boleh
+lintas tengah malam... karena sifat lembur per-shift, beda dari cuti
+yang per-hari-kalender. Yang tetap ditolak: durasi nol." Tapi
+`LemburController::ajukan()` (API) tidak pernah ikut diperbaiki —
+masih `'jam_selesai' => 'required|date_format:H:i|after:jam_mulai'`,
+yang menolak SEMUA jam_selesai <= jam_mulai, termasuk kasus lintas
+tengah malam yang sah.
+
+Baru ketahuan nyata saat audit FE (fase 13 absensi_frontapp, 15 Okt
+2026) membandingkan LemburController.php asli dengan asumsi form FE —
+bukan dari test backend manapun, karena LemburControllerTest.php lama
+justru MENGUNCI perilaku salah ini ("menolak jam_selesai sebelum
+jam_mulai" sebagai hasil yang diharapkan).
+
+### Fix
+
+Rule `jam_selesai` diganti closure yang hanya menolak durasi nol
+(`jam_selesai` sama persis dengan `jam_mulai`), logikanya disalin
+persis dari closure yang sudah ada di `LemburForm.php` (pakai
+`Carbon::equalTo`, bukan perbandingan string) — dua tempat ini sekarang
+identik secara logika, mengurangi risiko menyimpang lagi di masa
+depan (meski tetap duplikat kode, bukan diekstrak ke satu tempat;
+tidak ada shared validation layer antara FormRequest Filament dan
+request API di project ini).
+
+### Test
+
+`LemburControllerTest.php`: 1 test lama dihapus ("menolak jam_selesai
+sebelum jam_mulai" — mengunci bug), diganti 2 test ("bisa mengajukan
+lembur lintas tengah malam", "menolak durasi nol" dengan
+`assertJsonValidationErrors`, bukan cuma `assertStatus(422)` — pola
+fase 26).
+
+Full suite: **572 test passing (1693 assertions)** — naik dari 571.
+
+### Dampak ke frontend (belum dikerjakan)
+
+`absensi_frontapp` fase 13 (commit `a1132e6`) sengaja mengikuti
+validasi backend yang salah ini — form FE menolak submit kalau
+`jam_selesai <= jam_mulai`. Sekarang backend sudah benar, FE jadi
+LEBIH ketat dari yang seharusnya (menolak kasus sah lintas tengah
+malam sebelum sempat dikirim ke server). Perlu revert validasi
+client-side itu di sesi FE berikutnya. Dicatat di `todo-fr.md`.
 
 ## fase 58: Endpoint GET /api/jadwal/saya & /api/jadwal/rekan — blocker TukarJadwal frontend selesai
 

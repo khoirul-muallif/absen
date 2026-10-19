@@ -18,7 +18,15 @@ class LemburController extends Controller
         $request->validate([
             'tanggal'     => 'required|date',
             'jam_mulai'   => 'required|date_format:H:i',
-            'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
+            'jam_selesai' => [
+                'required',
+                'date_format:H:i',
+                function (string $attribute, $value, \Closure $fail) use ($request) {
+                    if (\Carbon\Carbon::parse($value)->equalTo(\Carbon\Carbon::parse($request->jam_mulai))) {
+                        $fail('Jam selesai tidak boleh sama dengan jam mulai (durasi lembur nol).');
+                    }
+                },
+            ],
             'alasan'      => 'required|string|max:1000',
         ]);
 
