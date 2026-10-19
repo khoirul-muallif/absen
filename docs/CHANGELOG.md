@@ -12,6 +12,57 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 60: seragamkan format jam Izin & Lembur jadi H:i di respons API
+
+Commit `eefe73a`. Menutup item todo.md "Format jam di respons Izin &
+Lembur belum seragam" — item paling ringan dari sisa daftar, tidak
+butuh keputusan desain.
+
+### Penyebab
+
+`jam_keluar`/`jam_kembali` (Izin) dan `jam_mulai`/`jam_selesai` (Lembur)
+tersimpan sebagai kolom TIME di DB dan tidak di-cast Carbon (beda dari
+`Shift::jam_masuk`/`jam_pulang`) — keluar dari DB sebagai string `H:i:s`
+mentah ("08:00:00") di `riwayat()`, beda dari field jam lain di API yang
+konsisten `H:i`.
+
+### Fix
+
+Accessor `jamKeluarString()`/`jamKembaliString()` di model `Izin`,
+`jamMulaiString()`/`jamSelesaiString()` di model `Lembur` — pola yang
+sama dengan `Shift::jamMasukString()`/`jamPulangString()` (fase 27).
+Parse eksplisit lewat `Carbon::parse()` karena nilainya string, bukan
+objek Carbon — memanggil `->format()` langsung di kolomnya akan fatal
+error (`Call to undefined method`), persis seperti yang ditulis sebagai
+peringatan di todo.md sebelum fix ini dikerjakan.
+
+`riwayat()` di kedua controller dan response `isiJamKembali()` di
+`IzinController` dipindah memakai accessor ini.
+
+**Sengaja TIDAK disentuh di commit ini:** validasi `jam_kembali <=
+jam_keluar` di `IzinController::isiJamKembali()` — ada perbandingan
+string `H:i` vs `H:i:s` yang rapuh di situ (lexicographic, kebetulan
+masih benar untuk kasus umum), tapi itu bug terpisah dari soal format
+response. Dicatat sebagai item baru di todo.md.
+
+### Catatan proses
+
+Typo `jjamSelesaiString()` (double-j) sempat lolos ke
+`LemburController.php` saat apply fix manual — ketahuan dari 3 test
+`LemburControllerTest` gagal 500 dengan pesan
+`Call to undefined method`, bukan dari assertion yang salah. Model-nya
+sendiri benar (`jamSelesaiString()`), cuma pemanggilnya yang salah
+ketik. Diperbaiki sebelum commit.
+
+### Test
+
+3 test regression baru (pola sama dengan test `jam_masuk` di
+`AbsensiControllerTest` fase 27): `IzinControllerTest` 2 (riwayat
+mengembalikan `H:i` bukan `H:i:s`, `jam_kembali` null tetap null bukan
+string), `LemburControllerTest` 1 (riwayat mengembalikan `H:i`).
+
+Full suite: **575 test passing (1700 assertions)** — naik dari 572.
+
 ## fase 59: fix LemburController API — lintas tengah malam tertolak padahal seharusnya diizinkan
 
 Menutup item todo yang sejak fase 13 (FE, commit `a1132e6`) dicatat

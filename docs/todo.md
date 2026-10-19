@@ -58,6 +58,15 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
 
+## item yang saya temukan tapi sengaja nggak difix sekarang
+
+- [ ] **Perbandingan `jam_kembali <= jam_keluar` di `IzinController::isiJamKembali()` rapuh** —
+      `$request->jam_kembali` formatnya H:i (dari input), `$izin->jam_keluar`
+      formatnya H:i:s (dari DB, kolom TIME tidak di-cast). Perbandingan string
+      lexicographic kebetulan masih benar untuk kasus umum, tapi harusnya pakai
+      Carbon::parse() di kedua sisi biar eksplisit dan nggak rapuh ke depannya.
+      Ditemukan saat kerjain item "format jam Izin & Lembur belum seragam".
+      
 ## UX yang tersisa
 
 - [ ] **"Shift Karyawan Umum" & "Shift Karyawan Rotasi" tidak lagi
