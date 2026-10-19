@@ -13,7 +13,7 @@
 
 ---
 
-## fase 61: regression test untuk absensi:audit-menit-terlambat
+## fase 62: regression test untuk absensi:audit-menit-terlambat
 
 Commit `bd0398c`. Menutup item todo.md "absensi:audit-menit-terlambat
 belum punya test otomatis" — kemampuan deteksi & jalur --fix sudah
@@ -35,6 +35,33 @@ itu, test ini menangkapnya. Test ini cuma 0.45s, tidak perlu
 dioptimasi ke raw insert.
 
 Full suite: **583 test passing (1731 assertions)** — naik dari 576.
+
+## fase 61: fix perbandingan jam_kembali rapuh di IzinController::isiJamKembali()
+
+Commit `54a5186`. Menutup item todo yang baru dicatat di fase 60
+(commit `73f2fa2`): perbandingan string `$request->jam_kembali` (H:i)
+`<=` `$izin->jam_keluar` (H:i:s, raw dari kolom TIME yang tidak
+di-cast) kebetulan selalu benar secara lexicographic — dua format itu
+selalu zero-padded di posisi jam & menit, dan untuk kasus sama persis,
+string H:i yang lebih pendek otomatis dianggap "lebih kecil" dari
+H:i:s yang jadi prefix-nya. Jadi bukan bug aktif, tapi benar karena
+kebetulan format, bukan karena eksplisit.
+
+### Fix
+
+Diganti `Carbon::parse()` di kedua sisi
+(`Carbon::parse($request->jam_kembali)->lessThanOrEqualTo(Carbon::parse($izin->jam_keluar))`).
+`jamKeluarString()`/`jamKembaliString()` di model (fase 60) tidak
+disentuh — titik rapuhnya murni di controller ini.
+
+### Test
+
+1 regression test baru di `IzinControllerTest`: `jam_kembali` sama
+persis dengan `jam_keluar` (boundary H:i vs H:i:s) ditolak — kasus ini
+yang sebelumnya juga kebetulan sudah benar lewat perbandingan string,
+sekarang terjaga eksplisit lewat Carbon, bukan kebetulan format.
+
+Full suite: **576 test passing (1702 assertions)** — naik dari 575.
 
 ## fase 60: seragamkan format jam Izin & Lembur jadi H:i di respons API
 
