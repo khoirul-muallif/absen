@@ -23,17 +23,7 @@ TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug aktif yang sudah teridentifikasi
-- [ ] **status() & masuk() shift malam T+1 belum punya test** — fix sudah
-      masuk (`b0dbee6`, fase 57), tapi commit-nya eksplisit belum
-      menambahkan test. Perlu: status() mendeteksi sesi terbuka kemarin,
-      status() fallback ke hari ini kalau tidak ada sesi terbuka, masuk()
-      menolak dengan 422 kalau sesi kemarin masih terbuka, masuk() tidak
-      menolak kasus normal (tidak ada sesi kemarin).
 
-- [ ] **Konfirmasi GenerateJadwalRotasi memakai berlakuPada()** — sudah
-      di-refactor di a8b4072 dan ada test (GenerateJadwalRotasiMasaBerlakuTest).
-      Tinggal memastikan tidak ada jalur lain yang menghasilkan jadwal di
-      luar masa berlaku assignment.
 
 ## Kebutuhan masukan dari pihak RS
 
