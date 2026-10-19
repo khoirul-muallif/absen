@@ -133,7 +133,142 @@ describe('pulang: shift malam & jendela dua hari', function () {
 });
 
 
+describe('status() & masuk(): sesi terbuka shift malam (fase 57)', function () {
+    beforeEach(function () {
+        Storage::fake('public');
 
+        $this->instansi = buatInstansiDenganTitik();
+        $this->karyawan = Karyawan::factory()->umum()->create(['instansi_id' => $this->instansi->id]);
+        $this->shiftMalam = Shift::factory()->create([
+            'instansi_id' => $this->instansi->id,
+            'nama_shift'  => 'Malam',
+            'jam_masuk'   => '22:00:00',
+            'jam_pulang'  => '07:00:00',
+        ]);
+        $this->qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+
+        loginSebagai($this->karyawan);
+    });
+
+    // ── status() ──────────────────────────────────────────────────────
+
+    it('status: mendeteksi sesi kemarin yang masih terbuka (shift malam belum pulang)', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => '2026-10-06',
+            'waktu_masuk'  => Carbon::parse('2026-10-06 21:55:00'),
+            'waktu_pulang' => null,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-10-07 07:05:00'));
+
+        $this->getJson('/api/absensi/status')
+            ->assertOk()
+            ->assertJsonPath('data.sudah_masuk', true)
+            ->assertJsonPath('data.sudah_pulang', false);
+    });
+
+    it('status: fallback ke baris hari ini kalau tidak ada sesi terbuka (sudah lengkap masuk+pulang)', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => today(),
+            'waktu_masuk'  => today()->setTime(7, 30),
+            'waktu_pulang' => today()->setTime(16, 0),
+        ]);
+
+        $this->getJson('/api/absensi/status')
+            ->assertOk()
+            ->assertJsonPath('data.sudah_masuk', true)
+            ->assertJsonPath('data.sudah_pulang', true);
+    });
+
+    it('status: tidak keliru pakai sesi terbuka yang sudah di luar jendela kemarin-hari ini', function () {
+        // Sesi terbuka 3 hari lalu — di luar jendela, tidak boleh dianggap "sedang berjalan"
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => today()->subDays(3),
+            'waktu_masuk'  => today()->subDays(3)->setTime(21, 55),
+            'waktu_pulang' => null,
+        ]);
+
+        $this->getJson('/api/absensi/status')
+            ->assertOk()
+            ->assertJsonPath('data.sudah_masuk', false)
+            ->assertJsonPath('data.sudah_pulang', false);
+    });
+
+    // ── masuk() guard ─────────────────────────────────────────────────
+
+    it('masuk: ditolak kalau masih ada sesi kemarin yang belum di-pulang-kan', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => today()->subDay(),
+            'waktu_masuk'  => today()->subDay()->setTime(21, 55),
+            'waktu_pulang' => null,
+        ]);
+
+        $this->postJson('/api/absensi/masuk', [
+            'latitude'   => $this->instansi->latitude,
+            'longitude'  => $this->instansi->longitude,
+            'kode_qr'    => $this->qr->kode_qr,
+            'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'Anda masih memiliki sesi absen kemarin yang belum di-pulang-kan. Lakukan absen pulang terlebih dahulu.');
+
+        // Guard harus mencegah SEBELUM insert — tidak ada baris baru untuk hari ini
+        $this->assertDatabaseMissing('absensi', [
+            'karyawan_id' => $this->karyawan->id,
+            'tanggal'     => today()->toDateString(),
+        ]);
+    });
+
+    it('masuk: tidak menolak kalau sesi kemarin sudah di-pulang-kan', function () {
+        Absensi::factory()->create([
+            'karyawan_id'  => $this->karyawan->id,
+            'shift_id'     => $this->shiftMalam->id,
+            'tanggal'      => today()->subDay(),
+            'waktu_masuk'  => today()->subDay()->setTime(21, 55),
+            'waktu_pulang' => today()->setTime(7, 0),
+        ]);
+
+        KaryawanShift::factory()->create([
+            'karyawan_id'     => $this->karyawan->id,
+            'shift_id'        => $this->shiftMalam->id,
+            'tanggal_berlaku' => today()->subDay(),
+        ]);
+
+        $this->postJson('/api/absensi/masuk', [
+            'latitude'   => $this->instansi->latitude,
+            'longitude'  => $this->instansi->longitude,
+            'kode_qr'    => $this->qr->kode_qr,
+            'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+        ])->assertOk();
+
+        $this->assertDatabaseHas('absensi', [
+            'karyawan_id' => $this->karyawan->id,
+            'tanggal'     => today()->toDateString(),
+        ]);
+    });
+
+    it('masuk: tidak menolak kalau tidak ada sesi kemarin sama sekali', function () {
+        KaryawanShift::factory()->create([
+            'karyawan_id'     => $this->karyawan->id,
+            'shift_id'        => $this->shiftMalam->id,
+            'tanggal_berlaku' => today()->subDay(),
+        ]);
+
+        $this->postJson('/api/absensi/masuk', [
+            'latitude'   => $this->instansi->latitude,
+            'longitude'  => $this->instansi->longitude,
+            'kode_qr'    => $this->qr->kode_qr,
+            'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+        ])->assertOk();
+    });
+});
 
 
 // ── status() ─────────────────────────────────────────────────────────────

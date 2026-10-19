@@ -13,6 +13,121 @@
 
 ---
 
+## fase 58: Endpoint GET /api/jadwal/saya & /api/jadwal/rekan — blocker TukarJadwal frontend selesai
+
+Menutup item todo "Endpoint GET /api/jadwal belum ada — blocker modul
+TukarJadwal frontend" (dicatat saat audit frontend TukarJadwal, lihat
+CHANGELOG-fr.md fase 15). Dua commit: `876b418` (controller awal) dan
+`2d8b4c3` (fix exclude jenis cuti/dinas + test).
+
+### Endpoint baru
+
+`JadwalController` (API, Sanctum), mengikuti pola controller approval
+yang sudah ada (scoped via `$request->user()`, response
+`{success, data:{total,records}}`):
+
+- `GET /api/jadwal/saya?tanggal_mulai=&tanggal_selesai=` — jadwal milik
+  sendiri dalam rentang tanggal, sumber picker `jadwal_id` di form Tukar
+  Jadwal (mode tukar maupun pindah).
+- `GET /api/jadwal/rekan?tanggal=` — jadwal rekan pada satu tanggal,
+  sumber picker `jadwal_tujuan_id` untuk mode tukar.
+
+### KEPUTUSAN RS: scope `GET /api/jadwal/rekan` dibatasi instansi + unit_kerja sama
+
+Sebelumnya BUTUH KEPUTUSAN (lihat todo.md versi lama) — tiga opsi
+dipertimbangkan: sebatas instansi saja, instansi+unit_kerja, atau tanpa
+batas. Dipilih **instansi+unit_kerja**: karyawan rotasi unit lain punya
+shift yang tidak relevan untuk ditukar, dan ini membatasi exposure data
+jadwal karyawan lain seminimal mungkin sambil tetap berguna untuk
+use case-nya.
+
+### BUG DITEMUKAN & DIPERBAIKI (sebelum push): jenis cuti/dinas tidak dikecualikan
+
+Versi awal controller (`876b418`) mengambil SEMUA baris Jadwal tanpa
+filter jenis, termasuk `jenis='cuti'`/`'dinas'` (baris hasil
+sinkronisasi approval, `shift_id` null) — kontradiksi langsung dengan
+kebijakan `TukarJadwalForm::opsiJadwal()` sejak fase 50 (baris hasil
+sinkronisasi dikunci dari modul lain). Kalau dibiarkan, FE bisa
+menampilkan "jadwal" yang sebenarnya cuti/dinas orang lain sebagai opsi
+tukar.
+
+Fix: `whereNotIn('jenis', [Jadwal::JENIS_CUTI, Jadwal::JENIS_DINAS])`
+ditambahkan di kedua endpoint. `jenis='libur'` sengaja tetap
+ditampilkan — konsisten keputusan RS fase 50 (libur boleh jadi objek
+tukar).
+
+### `bisa_diajukan` — ditambahkan saat implementasi, bukan dari todo awal
+
+Tiap record Jadwal di kedua endpoint ditandai `bisa_diajukan: false`
+kalau jadwal itu sedang terikat pengajuan TukarJadwal aktif (status
+`menunggu_rekan`/`menunggu_admin`), baik sebagai `jadwal_id` maupun
+`jadwal_tujuan_id`. Dihitung sekali per request (satu query ke
+`tukar_jadwals`, bukan per-record) supaya tidak N+1.
+
+Menutup sebagian gap "rebutan jadwal" dari sisi UX picker FE — validasi
+rebutannya sendiri sudah ada sejak fase 11 di titik submit
+(`TukarJadwalController::ajukan()`), tapi sebelumnya user baru tahu
+setelah mencoba submit. Sekarang kelihatan di picker lebih awal.
+
+### Test
+
+`JadwalControllerTest.php` (baru): 12 test — scope unit_kerja+instansi
+(satu unit diterima, beda unit ditolak, beda instansi ditolak walau
+unit sama), exclude cuti/dinas (saya & rekan), exclude diri sendiri,
+exclude karyawan nonaktif, `bisa_diajukan` true/false, validasi tanggal
+wajib (saya & rekan).
+
+Full suite: **565 test passing (1673 assertions)**.
+
+### Belum dikerjakan
+
+- `TukarJadwalFormScreen` di `absensi_frontapp` (blocker aslinya) belum
+  disentuh di sesi ini — endpoint sumbernya sekarang sudah tersedia.
+  Lihat `CHANGELOG-fr.md`/`todo-fr.md` kalau lanjut ke situ.
+
+## fase 57: fix shift malam T+1 belum ikuti jendela 2 hari di status() & masuk() (lanjutan fase 40)
+
+Commit `b0dbee6`. Ditemukan lewat audit sinkronisasi kontrak API saat
+mulai lanjut kerja frontend, bukan dari test otomatis.
+
+### BUG DITEMUKAN & DIPERBAIKI: status() tidak ikut perbaikan jendela 2 hari fase 40
+
+`pulang()` sudah benar mencari sesi terbuka dalam jendela kemarin-hari
+ini sejak fase 40 (shift malam masuk tanggal T, pulang T+1 pagi), tapi
+`status()` masih `whereDate('tanggal', today())` polos — tidak pernah
+ikut diperbaiki waktu itu. Akibatnya karyawan shift malam yang sudah
+absen masuk tapi belum absen pulang, saat membuka app di T+1, dibaca
+"belum absen masuk hari ini" oleh `status()`. Di sisi frontend
+(`absen-frapp`) ini salah arahkan home screen ke flow absen masuk,
+padahal seharusnya flow absen pulang.
+
+Fix: `status()` sekarang memprioritaskan sesi terbuka (`waktu_masuk`
+terisi, `waktu_pulang` masih null) dalam jendela kemarin-hari ini;
+fallback ke baris hari ini kalau tidak ada sesi terbuka (termasuk kasus
+sudah lengkap masuk+pulang hari ini, atau belum absen sama sekali).
+
+### Guard baru: masuk() menolak kalau sesi kemarin masih terbuka
+
+Tanpa guard ini, bug di atas sebenarnya punya celah susulan: kalau FE
+(sebelum fix) salah arahkan ke flow absen masuk padahal harusnya
+pulang, `masuk()` bisa saja berhasil membuat baris Absensi BARU untuk
+hari ini, padahal sesi kemarin (shift malam) masih menggantung tanpa
+`waktu_pulang`. `masuk()` sekarang cek dulu: kalau ada sesi kemarin
+dengan `waktu_masuk` terisi dan `waktu_pulang` masih null, tolak dengan
+422 ("masih memiliki sesi absen kemarin yang belum di-pulang-kan").
+
+`pulang()` sendiri tidak disentuh — query jendela 2 harinya sudah benar
+sejak fase 40.
+
+### Test
+
+6 test baru di `AbsensiControllerTest` (describe block baru): deteksi
+sesi terbuka kemarin, fallback ke hari ini (lengkap masuk+pulang),
+regression guard batas jendela 2 hari, guard masuk() menolak/tidak
+menolak sesuai kondisi sesi kemarin.
+
+Full suite:  571 passed (1688 assertions)
+
 ## fase 56: Laporan Presensi (Excel & PDF) + redesign simulasi rotasi 24/7
 
 Tiga pekerjaan dalam rentang dua hari: fitur laporan baru, perbaikan seeder
