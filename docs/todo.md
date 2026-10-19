@@ -22,8 +22,6 @@ Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
-## Bug aktif yang sudah teridentifikasi
-
 
 ## Kebutuhan masukan dari pihak RS
 
@@ -33,6 +31,30 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       butuh lebih banyak staf daripada ICU) — baru relevan kalau data dummy ini
       mulai dipakai buat demo/keputusan ke pihak RS, bukan sekadar testing
       internal.
+- [ ] **TukarJadwal mode tukar hampir selalu gagal untuk karyawan rotasi —
+      bukan cuma soal hari libur** — ditemukan saat investigasi item lama
+      "TukarJadwal × hari libur rotasi" (lihat CHANGELOG terbaru untuk detail
+      baca kode). Cek konflik di `TukarJadwalForm`/
+      `TukarJadwalController::ajukan()` (`$konflikAsal`/`$konflikTujuan`)
+      menolak pengajuan kalau salah satu karyawan SUDAH PUNYA baris Jadwal
+      lain di tanggal pasangannya. Untuk karyawan umum ini aman — generator
+      cuma bikin baris di hari kerja shift, ada "celah" di hari libur
+      mingguan. Untuk karyawan rotasi, `jadwal:generate-rotasi` WAJIB bikin
+      baris untuk SETIAP hari dalam rentang yang digenerate (termasuk hari
+      libur siklus, `jenis='libur'`) — jadi karyawan rotasi HAMPIR SELALU
+      sudah punya baris sendiri di tanggal manapun yang sudah ter-generate,
+      entah kerja atau libur. Akibatnya pengajuan tukar yang melibatkan
+      karyawan rotasi nyaris selalu ditolak di validasi, sebelum sempat
+      sampai `approveAndSwap()`. Satu-satunya celah: tanggal tujuan belum
+      pernah digenerate untuk karyawan itu.
+      Kenapa baru ketahuan sekarang: `SimulasiMassalSeeder` (fase 56,
+      120/150 karyawan rotasi) tidak pernah bikin satu pun pengajuan
+      TukarJadwal, jadi jalur ini tidak pernah dilewati data besar.
+      **BUTUH KEPUTUSAN:** apakah baris existing di tanggal pasangan boleh
+      ditimpa otomatis saat swap disetujui (konsekuensinya mirip
+      keterbatasan mode pindah fase 50 — tanggal itu jadi kosong/"Jadwal
+      Hilang"), atau mode tukar memang dibatasi begitu dan solusinya
+      diarahkan ke mode pindah untuk kasus rotasi, atau pendekatan lain.
 
 ## Simulasi & data
 
@@ -40,9 +62,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       (fase 43/50), lihat CHANGELOG untuk detail.
 - [x] ~~Simulasi massal 150 karyawan × 3 bulan~~ — selesai (fase 49), lalu
       di-redesign jadi tim-per-shift 24/7 yang realistis (fase 56).
-- [ ] **TukarJadwal × hari libur rotasi** — masih belum ditelusuri. Seeder
-      simulasi massal tidak membuat pengajuan TukarJadwal sama sekali, jadi
-      tidak membantu area ini. Masih terkait keterbatasan fase 11.
 
 - [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
       production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
