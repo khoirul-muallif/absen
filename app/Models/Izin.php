@@ -25,4 +25,22 @@ class Izin extends Model
     {
         return $this->belongsTo(Karyawan::class);
     }
+
+    /**
+     * jam_keluar/jam_kembali TIDAK di-cast (beda dari Shift::jam_masuk),
+     * jadi keluar dari DB sebagai string "H:i:s" apa adanya (fase 27).
+     * Pakai method ini di response API, JANGAN panggil ->format() di
+     * kolomnya langsung — nilainya string, bukan Carbon.
+     */
+    public function jamKeluarString(): string
+    {
+        return \Carbon\Carbon::parse($this->jam_keluar)->format('H:i');
+    }
+
+    public function jamKembaliString(): ?string
+    {
+        return $this->jam_kembali
+            ? \Carbon\Carbon::parse($this->jam_kembali)->format('H:i')
+            : null;
+    }
 }

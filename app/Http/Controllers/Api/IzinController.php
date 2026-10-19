@@ -101,7 +101,7 @@ class IzinController extends Controller
             'message' => 'Jam kembali berhasil dicatat.',
             'data'    => [
                 'id'          => $izin->id,
-                'jam_kembali' => $izin->jam_kembali,
+                'jam_kembali' => $izin->jamKembaliString(),
             ],
         ]);
     }
@@ -121,8 +121,8 @@ class IzinController extends Controller
         $izin = $query->get()->map(fn ($i) => [
             'id'               => $i->id,
             'tanggal'          => $i->tanggal->format('d M Y'),
-            'jam_keluar'       => $i->jam_keluar,
-            'jam_kembali'      => $i->jam_kembali,
+            'jam_keluar'       => $i->jamKeluarString(),
+            'jam_kembali'      => $i->jamKembaliString(),
             'keperluan'        => $i->keperluan,
             'status'           => $i->status,
             'catatan_approval' => $i->catatan_approval,

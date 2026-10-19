@@ -25,4 +25,19 @@ class Lembur extends Model
     {
         return $this->belongsTo(Karyawan::class);
     }
+
+    /**
+     * jam_mulai/jam_selesai TIDAK di-cast, keluar dari DB sebagai string
+     * "H:i:s" apa adanya (fase 27, sama seperti Izin). Pakai method ini
+     * di response API, JANGAN panggil ->format() di kolomnya langsung.
+     */
+    public function jamMulaiString(): string
+    {
+        return \Carbon\Carbon::parse($this->jam_mulai)->format('H:i');
+    }
+
+    public function jamSelesaiString(): string
+    {
+        return \Carbon\Carbon::parse($this->jam_selesai)->format('H:i');
+    }
 }

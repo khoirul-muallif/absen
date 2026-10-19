@@ -67,8 +67,8 @@ class LemburController extends Controller
         $lembur = $query->get()->map(fn ($l) => [
             'id'               => $l->id,
             'tanggal'          => $l->tanggal->format('d M Y'),
-            'jam_mulai'        => $l->jam_mulai,
-            'jam_selesai'      => $l->jam_selesai,
+            'jam_mulai'        => $l->jamMulaiString(),
+            'jam_selesai'      => $l->jamSelesaiString(),
             'alasan'           => $l->alasan,
             'status'           => $l->status,
             'catatan_approval' => $l->catatan_approval,

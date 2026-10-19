@@ -80,6 +80,20 @@ test('riwayat bisa difilter berdasarkan status', function () {
         ->assertJsonCount(1, 'data.records');
 });
 
+test('riwayat: jam_mulai dan jam_selesai format H:i, bukan H:i:s mentah dari DB', function () {
+    Lembur::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jam_mulai'   => '17:00',
+        'jam_selesai' => '20:30',
+    ]);
+
+    $response = $this->getJson('/api/lembur');
+
+    $response->assertStatus(200);
+    expect($response->json('data.records.0.jam_mulai'))->toBe('17:00');
+    expect($response->json('data.records.0.jam_selesai'))->toBe('20:30');
+});
+
 test('bisa membatalkan lembur yang masih pending', function () {
     $lembur = Lembur::factory()->create(['karyawan_id' => $this->karyawan->id, 'status' => 'pending']);
 

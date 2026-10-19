@@ -70,6 +70,31 @@ test('riwayat bisa difilter berdasarkan status', function () {
     $response->assertStatus(200)
         ->assertJsonCount(1, 'data.records');
 });
+test('riwayat: jam_keluar dan jam_kembali format H:i, bukan H:i:s mentah dari DB', function () {
+    Izin::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jam_keluar'  => '10:00',
+        'jam_kembali' => '12:30',
+    ]);
+
+    $response = $this->getJson('/api/izin');
+
+    $response->assertStatus(200);
+    expect($response->json('data.records.0.jam_keluar'))->toBe('10:00');
+    expect($response->json('data.records.0.jam_kembali'))->toBe('12:30');
+});
+
+test('riwayat: jam_kembali null tetap null (bukan string "00:00")', function () {
+    Izin::factory()->create([
+        'karyawan_id' => $this->karyawan->id,
+        'jam_keluar'  => '10:00',
+        'jam_kembali' => null,
+    ]);
+
+    $response = $this->getJson('/api/izin');
+
+    expect($response->json('data.records.0.jam_kembali'))->toBeNull();
+});
 
 test('bisa membatalkan izin yang jam_kembali belum terisi', function () {
     // Dasar pembatalan sekarang jam_kembali, BUKAN status — izin dari API
