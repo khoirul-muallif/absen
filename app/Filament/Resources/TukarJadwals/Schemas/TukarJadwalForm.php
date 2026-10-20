@@ -24,10 +24,25 @@ class TukarJadwalForm
             ->components([
                 Radio::make('mode')
                     ->label('Jenis Pengajuan')
-                    ->options([
-                        'tukar' => 'Tukar dengan rekan kerja',
-                        'pindah' => 'Pindah tanggal sendiri (tanpa rekan)',
-                    ])
+                    ->options(function (Get $get) {
+                        $karyawan = ($id = $get('karyawan_pengaju_filter')) ? Karyawan::find($id) : null;
+
+                        if ($karyawan?->isRotasi()) {
+                            return ['pindah' => 'Pindah tanggal sendiri (tanpa rekan)'];
+                        }
+
+                        return [
+                            'tukar' => 'Tukar dengan rekan kerja',
+                            'pindah' => 'Pindah tanggal sendiri (tanpa rekan)',
+                        ];
+                    })
+                    ->helperText(function (Get $get) {
+                        $karyawan = ($id = $get('karyawan_pengaju_filter')) ? Karyawan::find($id) : null;
+
+                        return $karyawan?->isRotasi()
+                            ? 'Karyawan rotasi hanya bisa mengajukan pindah tanggal sendiri — mode tukar dengan rekan dinonaktifkan karena hampir selalu bentrok dengan jadwal rotasi yang sudah tergenerate di tanggal pasangannya.'
+                            : null;
+                    })
                     ->default('tukar')
                     ->live()
                     ->dehydrated(false)
@@ -52,14 +67,17 @@ class TukarJadwalForm
                             $component->state($record->karyawan_pengaju_id);
                         }
                     })
-                    ->afterStateUpdated(function ($set) {
+                    ->afterStateUpdated(function ($set, $get, $state) {
                         $set('tanggal_pengajuan', null);
                         $set('jadwal_id', null);
-                        // Rekan tujuan yang sudah dipilih bisa jadi tidak valid lagi
-                        // sesuai tipe_jadwal/unit pengaju yang baru.
                         $set('karyawan_tujuan_filter', null);
                         $set('tanggal_tujuan_pengajuan', null);
                         $set('jadwal_tujuan_id', null);
+
+                        $karyawan = $state ? Karyawan::find($state) : null;
+                        if ($karyawan?->isRotasi() && $get('mode') !== 'pindah') {
+                            $set('mode', 'pindah');
+                        }
                     }),
 
                 // ── Tanggal Jadwal pengaju ───────────────────────────────────
@@ -228,19 +246,31 @@ class TukarJadwalForm
 
                 DatePicker::make('tanggal_baru')
                     ->label('Pindah ke tanggal')
+                    ->native(false)
+                    ->live()
                     ->visible(fn (Get $get) => $get('mode') === 'pindah')
                     ->required(fn (Get $get) => $get('mode') === 'pindah')
                     ->dehydrated(fn (Get $get) => $get('mode') === 'pindah')
+                    ->disabledDates(function (Get $get) {
+                        $jadwalId = $get('jadwal_id');
+                        $tanggalSendiri = $jadwalId ? Jadwal::find($jadwalId)?->tanggal?->format('Y-m-d') : null;
+
+                        return collect(array_keys(self::tanggalJadwalMap($get('karyawan_pengaju_filter'))))
+                            ->reject(fn ($tgl) => $tgl === $tanggalSendiri)
+                            ->values()
+                            ->toArray();
+                    })
                     ->helperText(function (Get $get) {
                         $jadwal = Jadwal::with('karyawan')->find($get('jadwal_id'));
+                        $dasar = 'Tanggal yang tidak bisa diklik berarti karyawan ini sudah punya Jadwal (kerja atau libur) di tanggal itu.';
 
                         if ($jadwal?->karyawan?->isRotasi()) {
-                            return '⚠️ Karyawan rotasi: tanggal asal akan kosong setelah dipindah dan '
+                            return $dasar . ' ⚠️ Karyawan rotasi: tanggal asal akan kosong setelah dipindah dan '
                                 . 'ditandai "Jadwal Hilang" di Rekap Harian. Minta admin sistem membuat ulang '
                                 . 'jadwal rotasi bulan ini supaya tanggal itu terisi lagi.';
                         }
 
-                        return null;
+                        return $dasar;
                     })
                     ->rule(function (Get $get) {
                         return function (string $attribute, $value, \Closure $fail) use ($get) {

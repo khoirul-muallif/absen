@@ -26,6 +26,13 @@ class TukarJadwalController extends Controller
             'alasan' => 'required|string',
         ]);
 
+        if ($request->mode === 'tukar' && $karyawan->isRotasi()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Karyawan rotasi tidak bisa mengajukan tukar jadwal dengan rekan — gunakan mode pindah tanggal sendiri.',
+            ], 422);
+        }
+
         $jadwal = Jadwal::findOrFail($request->jadwal_id);
 
         // Pastikan jadwal yang dipilih memang milik karyawan yang login
