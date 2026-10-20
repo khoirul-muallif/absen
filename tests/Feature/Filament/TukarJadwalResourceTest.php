@@ -360,11 +360,11 @@ it('opsiJadwal tidak error untuk karyawan rotasi yang punya Jadwal libur', funct
         'jenis' => 'libur',
     ]);
 
-    $opsi = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'opsiJadwal'))
+    $map = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'tanggalJadwalMap'))
         ->invoke(null, $karyawan->id);
 
-    expect($opsi)->toHaveCount(1)
-        ->and(array_values($opsi)[0])->toContain('(Libur)');
+    expect($map)->toHaveCount(1)
+        ->and(array_values($map)[0]['label'])->toBe('Libur');
 });
 
 it('approveAndSwap menandai kedua Jadwal sumber=manual, tidak tertimpa generator', function () {
@@ -495,14 +495,16 @@ it('opsiJadwal mengecualikan jadwal berjenis cuti dan dinas, tapi tetap menampil
         'tanggal' => '2026-11-04', 'jenis' => 'dinas',
     ]);
 
-    $opsi = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'opsiJadwal'))
+    $map = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'tanggalJadwalMap'))
         ->invoke(null, $karyawan->id);
 
-    expect($opsi)->toHaveCount(2)
-        ->and($opsi)->toHaveKey($jadwalKerja->id)
-        ->and($opsi)->toHaveKey($jadwalLibur->id)
-        ->and($opsi)->not->toHaveKey($jadwalCuti->id)
-        ->and($opsi)->not->toHaveKey($jadwalDinas->id);
+    $idTersimpan = collect($map)->pluck('id');
+
+    expect($map)->toHaveCount(2)
+        ->and($idTersimpan)->toContain($jadwalKerja->id)
+        ->and($idTersimpan)->toContain($jadwalLibur->id)
+        ->and($idTersimpan)->not->toContain($jadwalCuti->id)
+        ->and($idTersimpan)->not->toContain($jadwalDinas->id);
 });
 
 it('bisa menukar jadwal libur milik satu karyawan dengan jadwal kerja rekan', function () {

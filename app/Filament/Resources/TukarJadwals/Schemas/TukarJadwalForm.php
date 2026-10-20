@@ -8,6 +8,8 @@ use App\Models\Jadwal;
 use App\Models\TukarJadwal;
 use App\Models\Karyawan;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -39,7 +41,7 @@ class TukarJadwalForm
 
                 Select::make('karyawan_pengaju_filter')
                     ->label('Karyawan pengaju')
-                    ->options(fn () => Karyawan::pluck('nama', 'id'))
+                    ->options(fn () => self::opsiKaryawanPengaju())
                     ->searchable()
                     ->preload()
                     ->live()
@@ -50,15 +52,56 @@ class TukarJadwalForm
                             $component->state($record->karyawan_pengaju_id);
                         }
                     })
-                    ->afterStateUpdated(fn ($set) => $set('jadwal_id', null)),
+                    ->afterStateUpdated(function ($set) {
+                        $set('tanggal_pengajuan', null);
+                        $set('jadwal_id', null);
+                        // Rekan tujuan yang sudah dipilih bisa jadi tidak valid lagi
+                        // sesuai tipe_jadwal/unit pengaju yang baru.
+                        $set('karyawan_tujuan_filter', null);
+                        $set('tanggal_tujuan_pengajuan', null);
+                        $set('jadwal_tujuan_id', null);
+                    }),
 
-                Select::make('jadwal_id')
-                    ->label('Jadwal yang mau diajukan')
-                    ->options(fn (Get $get) => self::opsiJadwal($get('karyawan_pengaju_filter')))
-                    ->searchable()
-                    ->required()
+                // ── Tanggal Jadwal pengaju ───────────────────────────────────
+                // Diganti dari Select (daftar panjang semua tanggal) jadi
+                // DatePicker kalender — hanya tanggal yang benar-benar punya
+                // Jadwal (dan bukan cuti/dinas) yang bisa diklik. jadwal_id
+                // (Hidden) yang sebenarnya dikirim ke server, diisi otomatis
+                // lewat afterStateUpdated begitu tanggal dipilih.
+                DatePicker::make('tanggal_pengajuan')
+                    ->label('Tanggal Jadwal yang mau diajukan')
+                    ->native(false)
+                    ->live()
+                    ->dehydrated(false)
                     ->disabled(fn (Get $get) => ! $get('karyawan_pengaju_filter'))
-                    ->helperText(fn (Get $get) => ! $get('karyawan_pengaju_filter') ? 'Pilih karyawan pengaju dulu' : null)
+                    ->helperText(fn (Get $get) => ! $get('karyawan_pengaju_filter')
+                        ? 'Pilih karyawan pengaju dulu'
+                        : 'Hanya tanggal yang sudah punya Jadwal yang bisa dipilih.')
+                    ->minDate(fn (Get $get) => self::tanggalPalingAwal($get('karyawan_pengaju_filter')))
+                    ->maxDate(fn (Get $get) => self::tanggalPalingAkhir($get('karyawan_pengaju_filter')))
+                    ->disabledDates(fn (Get $get) => self::tanggalDisabled($get('karyawan_pengaju_filter')))
+                    ->afterStateHydrated(function ($component, $record) {
+                        if ($record && $record->jadwal) {
+                            $component->state($record->jadwal->tanggal->format('Y-m-d'));
+                        }
+                    })
+                    ->afterStateUpdated(function (Get $get, $set, $state) {
+                        $tersedia = self::tanggalJadwalMap($get('karyawan_pengaju_filter'));
+                        $set('jadwal_id', $state && isset($tersedia[$state]) ? $tersedia[$state]['id'] : null);
+                    }),
+
+                Placeholder::make('shift_pengajuan_info')
+                    ->label('Shift pada tanggal ini')
+                    ->content(function (Get $get) {
+                        $tersedia = self::tanggalJadwalMap($get('karyawan_pengaju_filter'));
+                        $tanggal = $get('tanggal_pengajuan');
+
+                        return ($tanggal && isset($tersedia[$tanggal])) ? $tersedia[$tanggal]['label'] : '-';
+                    })
+                    ->visible(fn (Get $get) => (bool) $get('tanggal_pengajuan')),
+
+                Hidden::make('jadwal_id')
+                    ->required()
                     ->rule(function ($record) {
                         return function (string $attribute, $value, \Closure $fail) use ($record) {
                             if (! $value) return;
@@ -73,32 +116,67 @@ class TukarJadwalForm
                             }
                         };
                     }),
+
                 Select::make('karyawan_tujuan_filter')
                     ->label('Karyawan rekan tujuan')
-                    ->options(fn () => Karyawan::pluck('nama', 'id'))
+                    ->options(fn (Get $get) => self::opsiKaryawanTujuan($get('karyawan_pengaju_filter')))
                     ->searchable()
                     ->preload()
                     ->live()
                     ->dehydrated(false)
                     ->visible(fn (Get $get) => $get('mode') !== 'pindah')
                     ->required(fn (Get $get) => $get('mode') !== 'pindah')
+                    ->disabled(fn (Get $get) => ! $get('karyawan_pengaju_filter'))
+                    ->helperText(fn (Get $get) => ! $get('karyawan_pengaju_filter') ? 'Pilih karyawan pengaju dulu' : null)
                     ->afterStateHydrated(function ($component, $record) {
                         if ($record && $record->jadwalTujuan) {
                             $component->state($record->jadwalTujuan->karyawan_id);
                         }
                     })
-                    ->afterStateUpdated(fn ($set) => $set('jadwal_tujuan_id', null)),
+                    ->afterStateUpdated(function ($set) {
+                        $set('tanggal_tujuan_pengajuan', null);
+                        $set('jadwal_tujuan_id', null);
+                    }),
 
-                Select::make('jadwal_tujuan_id')
-                    ->label('Jadwal tujuan (rekan)')
-                    ->options(fn (Get $get) => self::opsiJadwal($get('karyawan_tujuan_filter')))
-                    ->searchable()
+                // ── Tanggal Jadwal tujuan (rekan) ────────────────────────────
+                DatePicker::make('tanggal_tujuan_pengajuan')
+                    ->label('Tanggal Jadwal tujuan (rekan)')
+                    ->native(false)
+                    ->live()
+                    ->dehydrated(false)
+                    ->visible(fn (Get $get) => $get('mode') !== 'pindah')
+                    ->disabled(fn (Get $get) => ! $get('karyawan_tujuan_filter'))
+                    ->helperText(fn (Get $get) => ! $get('karyawan_tujuan_filter')
+                        ? 'Pilih karyawan rekan dulu'
+                        : 'Hanya tanggal yang sudah punya Jadwal yang bisa dipilih.')
+                    ->minDate(fn (Get $get) => self::tanggalPalingAwal($get('karyawan_tujuan_filter')))
+                    ->maxDate(fn (Get $get) => self::tanggalPalingAkhir($get('karyawan_tujuan_filter')))
+                    ->disabledDates(fn (Get $get) => self::tanggalDisabled($get('karyawan_tujuan_filter')))
+                    ->afterStateHydrated(function ($component, $record) {
+                        if ($record && $record->jadwalTujuan) {
+                            $component->state($record->jadwalTujuan->tanggal->format('Y-m-d'));
+                        }
+                    })
+                    ->afterStateUpdated(function (Get $get, $set, $state) {
+                        $tersedia = self::tanggalJadwalMap($get('karyawan_tujuan_filter'));
+                        $set('jadwal_tujuan_id', $state && isset($tersedia[$state]) ? $tersedia[$state]['id'] : null);
+                    }),
+
+                Placeholder::make('shift_tujuan_info')
+                    ->label('Shift pada tanggal ini')
+                    ->content(function (Get $get) {
+                        $tersedia = self::tanggalJadwalMap($get('karyawan_tujuan_filter'));
+                        $tanggal = $get('tanggal_tujuan_pengajuan');
+
+                        return ($tanggal && isset($tersedia[$tanggal])) ? $tersedia[$tanggal]['label'] : '-';
+                    })
+                    ->visible(fn (Get $get) => $get('mode') !== 'pindah' && (bool) $get('tanggal_tujuan_pengajuan')),
+
+                Hidden::make('jadwal_tujuan_id')
                     ->different('jadwal_id')
                     ->visible(fn (Get $get) => $get('mode') !== 'pindah')
                     ->required(fn (Get $get) => $get('mode') !== 'pindah')
                     ->dehydrated(fn (Get $get) => $get('mode') !== 'pindah')
-                    ->disabled(fn (Get $get) => ! $get('karyawan_tujuan_filter'))
-                    ->helperText(fn (Get $get) => ! $get('karyawan_tujuan_filter') ? 'Pilih karyawan rekan dulu' : null)
                     ->rule(function (Get $get, $record) {
                         return function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                             $jadwalIdAsal = $get('jadwal_id');
@@ -156,16 +234,6 @@ class TukarJadwalForm
                     ->helperText(function (Get $get) {
                         $jadwal = Jadwal::with('karyawan')->find($get('jadwal_id'));
 
-                        // Khusus karyawan rotasi: memindah baris Jadwal berarti
-                        // meng-update tanggalnya di tempat (bukan buat baris baru +
-                        // hapus lama), jadi tanggal asal jadi tidak punya baris sama
-                        // sekali. Untuk rotasi itu berarti ter-flag "Jadwal Hilang" di
-                        // Rekap Harian sampai jadwal:generate-rotasi dijalankan ulang
-                        // untuk bulan itu (self-healing, generator akan mengisi ulang
-                        // posisi siklus yang benar) — bukan false alarm, tapi butuh
-                        // tindak lanjut manual karena generator belum terjadwal
-                        // otomatis. Tidak berlaku untuk karyawan umum: hari kosong
-                        // memang normal bagi mereka, tidak di-flag apa pun.
                         if ($jadwal?->karyawan?->isRotasi()) {
                             return '⚠️ Karyawan rotasi: tanggal asal akan kosong setelah dipindah dan '
                                 . 'ditandai "Jadwal Hilang" di Rekap Harian. Minta admin sistem membuat ulang '
@@ -210,7 +278,13 @@ class TukarJadwalForm
             ]);
     }
 
-    protected static function opsiJadwal(?int $karyawanId): array
+    /**
+     * Tanggal -> ['id' => jadwal_id, 'label' => nama shift/"Libur"] untuk satu
+     * karyawan. Sumber kebenaran tunggal dipakai DatePicker, Placeholder shift
+     * info, minDate/maxDate, dan disabledDates — supaya tidak ada versi query
+     * yang menyimpang satu sama lain.
+     */
+    protected static function tanggalJadwalMap(?int $karyawanId): array
     {
         if (! $karyawanId) {
             return [];
@@ -220,10 +294,6 @@ class TukarJadwalForm
             ->where('karyawan_id', $karyawanId)
             // Baris hasil sinkronisasi Cuti/Dinas approved dikunci dari modul
             // lain sejak fase 21/28 (JadwalForm) — TukarJadwal harus konsisten.
-            // Tanpa filter ini, mode "pindah" bisa memindahkan tanggal baris
-            // cuti/dinas tanpa guard sama sekali (cek karyawanCutiDinasApproved()
-            // di jadwal_tujuan_id tidak pernah dievaluasi untuk mode ini —
-            // field itu non-visible/non-dehydrated saat mode=pindah).
             //
             // Jadwal berjenis 'libur' SENGAJA TETAP ditampilkan — boleh jadi
             // objek tukar/pindah (keputusan RS, fase 50).
@@ -231,10 +301,105 @@ class TukarJadwalForm
             ->orderBy('tanggal')
             ->get()
             ->mapWithKeys(fn (Jadwal $jadwal) => [
-                $jadwal->id => $jadwal->shift
-                    ? "{$jadwal->tanggal->format('d M Y')} ({$jadwal->shift->nama_shift})"
-                    : "{$jadwal->tanggal->format('d M Y')} (Libur)",
+                $jadwal->tanggal->format('Y-m-d') => [
+                    'id' => $jadwal->id,
+                    'label' => $jadwal->shift ? $jadwal->shift->nama_shift : 'Libur',
+                ],
             ])
+            ->toArray();
+    }
+
+    protected static function tanggalPalingAwal(?int $karyawanId): ?string
+    {
+        $tersedia = array_keys(self::tanggalJadwalMap($karyawanId));
+
+        return $tersedia ? min($tersedia) : null;
+    }
+
+    protected static function tanggalPalingAkhir(?int $karyawanId): ?string
+    {
+        $tersedia = array_keys(self::tanggalJadwalMap($karyawanId));
+
+        return $tersedia ? max($tersedia) : null;
+    }
+
+    /**
+     * Semua tanggal DI DALAM rentang [min, max] milik karyawan ini yang TIDAK
+     * punya Jadwal (atau Jadwal-nya cuti/dinas) — ini yang di-disable di
+     * kalender, supaya cuma tanggal yang benar-benar punya Jadwal valid yang
+     * bisa diklik.
+     */
+    protected static function tanggalDisabled(?int $karyawanId): array
+    {
+        $tersedia = self::tanggalJadwalMap($karyawanId);
+        if (empty($tersedia)) {
+            return [];
+        }
+
+        $tanggalTersedia = array_keys($tersedia);
+        $cursor = \Carbon\Carbon::parse(min($tanggalTersedia));
+        $akhir = \Carbon\Carbon::parse(max($tanggalTersedia));
+
+        $disabled = [];
+        while ($cursor->lte($akhir)) {
+            $key = $cursor->format('Y-m-d');
+            if (! isset($tersedia[$key])) {
+                $disabled[] = $key;
+            }
+            $cursor->addDay();
+        }
+
+        return $disabled;
+    }
+
+    protected static function labelKaryawan(Karyawan $k): string
+    {
+        $unit = $k->unit_kerja ?: '-';
+        $tipe = $k->isRotasi() ? 'rotasi' : 'umum';
+
+        return "{$k->nama} - {$unit} ({$tipe})";
+    }
+
+    protected static function opsiKaryawanPengaju(): array
+    {
+        return Karyawan::where('is_active', true)
+            ->orderBy('nama')
+            ->get()
+            ->mapWithKeys(fn (Karyawan $k) => [$k->id => self::labelKaryawan($k)])
+            ->toArray();
+    }
+
+    /**
+     * Daftar rekan tujuan difilter berdasarkan tipe_jadwal pengaju: karyawan
+     * umum cuma bisa ditawari rekan umum lain (unit_kerja tidak relevan buat
+     * umum — assignment-nya lewat KaryawanShift, bukan pola per unit). Karyawan
+     * rotasi cuma ditawari rekan rotasi DI UNIT YANG SAMA — menukar/meminjam
+     * shift dari pola unit lain tidak masuk akal secara operasional.
+     */
+    protected static function opsiKaryawanTujuan(?int $karyawanPengajuId): array
+    {
+        if (! $karyawanPengajuId) {
+            return [];
+        }
+
+        $pengaju = Karyawan::find($karyawanPengajuId);
+        if (! $pengaju) {
+            return [];
+        }
+
+        $query = Karyawan::where('is_active', true)
+            ->where('id', '!=', $pengaju->id);
+
+        if ($pengaju->isRotasi()) {
+            $query->where('tipe_jadwal', Karyawan::TIPE_ROTASI)
+                ->where('unit_kerja', $pengaju->unit_kerja);
+        } else {
+            $query->where('tipe_jadwal', Karyawan::TIPE_UMUM);
+        }
+
+        return $query->orderBy('nama')
+            ->get()
+            ->mapWithKeys(fn (Karyawan $k) => [$k->id => self::labelKaryawan($k)])
             ->toArray();
     }
 }
