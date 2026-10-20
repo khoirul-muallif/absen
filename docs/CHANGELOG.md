@@ -13,6 +13,55 @@
 
 ---
 
+## fase 63: scheduler otomatis jadwal:generate-bulanan/rotasi + halaman admin "Generate Jadwal"
+
+Menutup item todo.md "Scheduler otomatis untuk jadwal:generate-bulanan
+(masih manual)", sekaligus catatan lama CHANGELOG fase 54 soal tombol
+panel untuk membuat ulang jadwal yang ternyata belum pernah dibuat —
+sebelumnya teks admin cuma menyuruh "minta admin sistem".
+
+### Scheduler (routes/console.php)
+
+- `jadwal:generate-bulanan`: tanggal terakhir tiap bulan jam 23:30,
+  tanpa opsi (default command-nya sendiri sudah generate bulan depan).
+- `jadwal:generate-rotasi`: tanggal terakhir tiap bulan jam 23:35,
+  tanpa `--unit` — dikonfirmasi dari source: tanpa opsi ini, query
+  TIDAK difilter sama sekali, otomatis mencakup semua unit sekaligus
+  (bukan perlu loop per unit). Dipakai `Schedule::call()` dengan
+  `now()->addMonthNoOverflow()` dihitung dinamis saat scheduler jalan,
+  bukan `Schedule::command()` dengan argumen statis.
+
+### BUG DITEMUKAN & DIPERBAIKI (sebelum commit): urutan `->name()`/`->withoutOverlapping()`
+
+`Schedule::call()` melempar `LogicException` kalau `->withoutOverlapping()`
+dipanggil sebelum `->name()` — beda dari `Schedule::command()` yang
+otomatis punya nama dari command-nya sendiri. Error ini bikin SEMUA
+Artisan command gagal start (bukan cuma scheduler), karena
+`routes/console.php` di-boot duluan. Fix: `->name()` dipindah ke atas
+`->withoutOverlapping()`.
+
+### Halaman admin baru: `GenerateJadwal` (Filament Page, grup Presensi)
+
+- Dua form independen (`formBulanan`/`formRotasi`) lewat `getForms()`
+  — masing-masing bulan+tahun (default bulan depan), form rotasi tambah
+  filter unit opsional (dropdown dari `PolaRotasi.unit_kerja` yang ada).
+- Dua `Action` terpisah dengan `requiresConfirmation()`. Hasil
+  ditampilkan lewat `Notification` dari `Artisan::output()` — kedua
+  command sudah menulis hasilnya dalam bahasa hasil ("Jadwal
+  dibuat/diupdate: X"), tidak menyebut nama command sama sekali,
+  konsisten larangan QUICK_CONTEXT (admin RS tidak punya akses terminal).
+- Header action "Generate Jadwal" di `ListJadwals`, link ke halaman ini.
+
+### Test
+
+`GenerateJadwalTest` (baru): 8 test — halaman render, default bulan
+depan di kedua form, `generateBulananAction` membuat Jadwal sesuai
+bulan dipilih + tidak menimpa yang sudah ada + notifikasi muncul,
+`generateRotasiAction` tanpa filter unit (semua unit) + dengan filter
+unit (cuma unit tersebut) + notifikasi muncul.
+
+Full suite: **591 test passing (1757 assertions)** — naik dari 583.
+
 ## fase 62: regression test untuk absensi:audit-menit-terlambat
 
 Commit `bd0398c`. Menutup item todo.md "absensi:audit-menit-terlambat

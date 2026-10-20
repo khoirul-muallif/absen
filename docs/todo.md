@@ -111,7 +111,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 - [ ] Frontend scan QR + GPS + face gesture (html5-qrcode, Geolocation API,
       face-api.js/MediaPipe) — masih rencana
-- [ ] Scheduler otomatis untuk jadwal:generate-bulanan (masih manual)
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
