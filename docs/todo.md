@@ -55,6 +55,13 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       keterbatasan mode pindah fase 50 — tanggal itu jadi kosong/"Jadwal
       Hilang"), atau mode tukar memang dibatasi begitu dan solusinya
       diarahkan ke mode pindah untuk kasus rotasi, atau pendekatan lain.
+      Mitigasi UX parsial sudah diterapkan (fase 64): dropdown "rekan
+      tujuan" sekarang difilter — rotasi cuma ditawari rekan rotasi di unit
+      yang sama, umum cuma ditawari rekan umum. Ini mencegah admin memilih
+      kombinasi yang jelas tidak masuk akal, tapi TIDAK menyelesaikan
+      konflik struktural `$konflikAsal`/`$konflikTujuan` di atas — untuk
+      kombinasi rotasi×rotasi×unit-sama yang sudah difilter benar pun
+      konfliknya tetap bisa terjadi. Keputusan di atas masih diperlukan.
 
 ## Simulasi & data
 
@@ -104,6 +111,16 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       dilihat langsung di browser dulu.
       Sekalian worth dites ke user asli (admin awam, bukan developer),
       termasuk apakah preview siklus yang baru benar-benar membantu.
+
+- [ ] **`opsiJadwal`/`tanggalJadwalMap` di TukarJadwalForm tidak difilter
+      per bulan** — kalender tanggal (fase 64) menampilkan SEMUA Jadwal
+      milik karyawan sepanjang waktu yang pernah di-generate, bukan cuma
+      beberapa bulan terdekat. Untuk karyawan yang sudah lama bekerja
+      dengan banyak bulan Jadwal ter-generate, `minDate()`/`maxDate()`
+      kalendernya bisa membentang sangat jauh meski sebagian besar
+      tanggalnya `disabledDates()`. Belum masalah nyata sekarang (data
+      masih dummy, rentang pendek), tapi berpotensi jadi kalender yang
+      berat/lambat di-render kalau rentangnya membentang bertahun-tahun.
 
 
 ## Fitur & infrastruktur

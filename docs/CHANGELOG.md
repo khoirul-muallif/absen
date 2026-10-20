@@ -13,6 +13,66 @@
 
 ---
 
+## fase 64: TukarJadwalForm — filter rekan tujuan per tipe_jadwal/unit + kalender tanggal dengan info shift
+
+Dua penyempurnaan UX form TukarJadwal, ditemukan lewat pemakaian
+langsung di browser (bukan dari todo.md), dalam satu commit `77efbdf`.
+
+### Filter "Karyawan rekan tujuan" berdasarkan tipe_jadwal & unit pengaju
+
+Sebelumnya dropdown rekan tujuan menampilkan SEMUA karyawan tanpa
+filter apa pun — admin bisa memilih kombinasi yang pasti nggak masuk
+akal secara operasional (karyawan umum ditukar dengan rotasi, atau
+rotasi lintas unit kerja berbeda). Sekarang:
+- Karyawan **umum** cuma ditawari rekan **umum** lain (unit_kerja tidak
+  relevan buat umum — assignment-nya lewat `KaryawanShift`).
+- Karyawan **rotasi** cuma ditawari rekan **rotasi di unit yang sama**.
+- Karyawan nonaktif (`is_active=false`) disembunyikan dari kedua
+  dropdown (pengaju maupun tujuan).
+- Label kedua dropdown diseragamkan jadi "Nama - Unit (tipe)".
+
+Catatan: ini mengurangi gejala temuan "TukarJadwal mode tukar hampir
+selalu gagal untuk karyawan rotasi" (lihat todo.md) dengan mencegah
+admin memilih kombinasi yang jelas-jelas tidak masuk akal di awal,
+tapi TIDAK menyelesaikan isu strukturalnya — konflik `$konflikAsal`/
+`$konflikTujuan` di titik validasi tetap bisa terjadi untuk kombinasi
+rotasi×rotasi×unit-sama yang sudah difilter benar. Item itu tetap
+menunggu keputusan RS.
+
+### Dropdown tanggal (daftar panjang) diganti kalender
+
+`opsiJadwal()` sebelumnya nggak difilter per bulan — daftar tanggal di
+dropdown Select makin panjang seiring waktu, susah di-scan admin.
+Diganti `DatePicker` kalender untuk kedua sisi (jadwal pengaju & jadwal
+tujuan): tanggal tanpa Jadwal (atau Jadwal-nya cuti/dinas) otomatis
+`disabledDates()`, shift pada tanggal terpilih ditampilkan di
+`Placeholder` di bawahnya.
+
+`jadwal_id`/`jadwal_tujuan_id` tetap jadi sumber kebenaran yang
+dikirim ke server (sekarang sebagai `Hidden`, bukan `Select` lagi) —
+`DatePicker` cuma alat bantu UI (`dehydrated(false)`), nge-set
+Hidden-nya lewat `afterStateUpdated()`. `opsiJadwal()` diganti
+`tanggalJadwalMap()` — bentuk return berubah dari flat `[id => label]`
+jadi `[tanggal => ['id', 'label']]`, jadi sumber kebenaran tunggal
+buat `DatePicker`, `Placeholder`, `minDate()`/`maxDate()`, dan
+`disabledDates()` sekaligus.
+
+`required()` dipindah murni ke field `Hidden`, bukan di `DatePicker` —
+field UI cuma alat bantu klik, bukan sumber kebenaran; test yang
+`fillForm()` langsung ke `jadwal_id` tanpa pernah "mengklik"
+`DatePicker` tetap valid.
+
+### Test
+
+Dua test lama di `TukarJadwalResourceTest` yang pakai Reflection ke
+`opsiJadwal()` disesuaikan ke `tanggalJadwalMap()` (nama & bentuk
+return baru). Tidak ada test baru — perubahan ini murni UI/UX di
+atas logika yang sudah dikunci test-test TukarJadwal yang ada.
+
+Full suite: **591 test passing (1757 assertions)** — tidak berubah
+dari sebelumnya.
+
+
 ## fase 63: scheduler otomatis jadwal:generate-bulanan/rotasi + halaman admin "Generate Jadwal"
 
 Menutup item todo.md "Scheduler otomatis untuk jadwal:generate-bulanan
