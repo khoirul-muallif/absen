@@ -126,9 +126,9 @@ class KaryawanSeeder extends Seeder
         // CATATAN: Jadwal TIDAK digenerate otomatis di sini — jalankan manual
         // setelah seed: php artisan jadwal:generate-rotasi {bulan} {tahun}
         $polaBerlibur = PolaRotasi::where('unit_kerja', 'Rawat Inap')
-        ->where('nama_pola', 'Tim Pagi - 5 Kerja 2 Libur')
-        ->firstOrFail();
-        
+            ->where('nama_pola', 'Rotasi 2 Pagi - 2 Siang - 2 Malam - 2 Libur')
+            ->firstOrFail();
+
         $yono = $this->buatKaryawan($instansi, [
             'nip' => '198904042026044006',
             'nama' => 'Yono Pratama',

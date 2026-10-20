@@ -16,24 +16,29 @@ class PolaRotasiSeeder extends Seeder
             ->get()
             ->keyBy('nama_shift');
 
-        // Tim bershift TETAP (bukan muter pagi->siang->malam per orang).
-        // Kenapa: pola lama (1 tim muter 3 jenis shift lewat offset
-        // tanggal_mulai antar grup) TERBUKTI tidak bisa menjamin shift malam
-        // selalu terisi -- malam cuma 1 dari 7 posisi siklus, jadi dengan
-        // offset berapapun selama grupnya < 7, selalu ada hari di mana tidak
-        // ada satupun grup yang jatuh di posisi malam. Lihat insiden 7 Okt
-        // 2026 (2 shift kosong) di todo.md / status report.
+        // Rotasi individu (bukan tim tetap per shift seperti fase 56).
+        // Alasan: tim tetap valid secara matematis (coverage terjamin)
+        // tapi tidak mencerminkan praktik lazim RS -- yang umum adalah
+        // tiap perawat gentian pagi/siang/malam, BUKAN dikunci permanen
+        // di satu shift. Lihat diskusi 20 Okt 2026.
         //
-        // Desain baru: tiap tim shift-nya tetap, cuma kerja/libur yang
-        // diputar 5-2. Coverage harian dijamin bukan dari struktur pola ini,
-        // tapi dari OFFSET INDIVIDUAL tiap karyawan dalam tim (lihat
-        // SimulasiMassalSeeder) -- selama anggota tim offsetnya menyebar ke
-        // beberapa posisi siklus berbeda, tidak mungkin semua anggota libur
-        // bareng di hari yang sama.
-        $timShift = [
-            'Pagi' => $shift['pagi'],
-            'Siang' => $shift['siang'],
-            'Malam' => $shift['malam'],
+        // Siklus 8 hari: 2 Pagi, 2 Siang, 2 Malam, 2 Libur. Urutan ini
+        // SENGAJA menaruh Libur tepat setelah Malam (bukan Pagi) --
+        // supaya tidak ada yang masuk pagi langsung sehabis dua hari
+        // shift malam (aturan umum di RS: ada jeda istirahat wajib
+        // setelah shift malam sebelum masuk shift lain).
+        //
+        // Coverage harian dijamin dari OFFSET INDIVIDUAL tiap karyawan
+        // dalam unit (lihat SimulasiMassalSeeder), BUKAN dari banyaknya
+        // pola per unit seperti desain tim-tetap sebelumnya -- jadi
+        // SATU PolaRotasi per unit sudah cukup. Karyawan dengan
+        // tanggal_mulai berbeda otomatis jatuh di posisi siklus berbeda
+        // pada hari yang sama, sehingga tiap shift tetap ada yang isi.
+        $langkah = [
+            ...array_fill(0, 2, ['shift_id' => $shift['pagi']->id, 'libur' => false]),
+            ...array_fill(0, 2, ['shift_id' => $shift['siang']->id, 'libur' => false]),
+            ...array_fill(0, 2, ['shift_id' => $shift['malam']->id, 'libur' => false]),
+            ...array_fill(0, 2, ['shift_id' => null, 'libur' => true]),
         ];
 
         $unitRotasi = [
@@ -43,25 +48,18 @@ class PolaRotasiSeeder extends Seeder
         ];
 
         foreach ($unitRotasi as $unit) {
-            foreach ($timShift as $namaTim => $shiftTim) {
-                $langkah = [
-                    ...array_fill(0, 5, ['shift_id' => $shiftTim->id, 'libur' => false]),
-                    ...array_fill(0, 2, ['shift_id' => null, 'libur' => true]),
-                ];
-
-                PolaRotasi::updateOrCreate(
-                    [
-                        'instansi_id' => $instansi->id,
-                        'unit_kerja' => $unit['unit_kerja'],
-                        'nama_pola' => "Tim {$namaTim} - 5 Kerja 2 Libur",
-                    ],
-                    [
-                        'langkah' => $langkah,
-                        'berlaku_saat_libur_nasional' => $unit['berlaku_saat_libur_nasional'],
-                        'is_active' => true,
-                    ]
-                );
-            }
+            PolaRotasi::updateOrCreate(
+                [
+                    'instansi_id' => $instansi->id,
+                    'unit_kerja' => $unit['unit_kerja'],
+                    'nama_pola' => 'Rotasi 2 Pagi - 2 Siang - 2 Malam - 2 Libur',
+                ],
+                [
+                    'langkah' => $langkah,
+                    'berlaku_saat_libur_nasional' => $unit['berlaku_saat_libur_nasional'],
+                    'is_active' => true,
+                ]
+            );
         }
     }
 }

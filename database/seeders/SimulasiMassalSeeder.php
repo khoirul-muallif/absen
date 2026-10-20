@@ -24,7 +24,6 @@ class SimulasiMassalSeeder extends Seeder
     protected int $jumlahBulanKeBelakang = 3;
 
     protected array $unitRotasi = ['Rawat Inap', 'IGD', 'ICU'];
-    protected array $timRotasi = ['Pagi', 'Siang', 'Malam']; // harus match nama tim di PolaRotasiSeeder
 
     protected float $peluangAlpha = 0.05;
     protected float $peluangTerlambat = 0.20;
@@ -43,21 +42,19 @@ class SimulasiMassalSeeder extends Seeder
         $shiftUmum = Shift::where('instansi_id', $instansi->id)->where('nama_shift', 'umum')->firstOrFail();
         $jenisCutiTahunan = JenisCuti::where('nama', 'Cuti Tahunan')->firstOrFail();
 
-        // $polaPerUnitTim['Rawat Inap']['Pagi'] = PolaRotasi, dst.
-        $semuaPola = PolaRotasi::whereIn('unit_kerja', $this->unitRotasi)->get();
-        $polaPerUnitTim = [];
+        // $polaPerUnit['Rawat Inap'] = PolaRotasi, dst -- satu pola rotasi
+        // individu per unit (bukan per tim shift lagi, lihat PolaRotasiSeeder).
+        $polaPerUnit = [];
         foreach ($this->unitRotasi as $unit) {
-            foreach ($this->timRotasi as $tim) {
-                $pola = $semuaPola->first(
-                    fn (PolaRotasi $p) => $p->unit_kerja === $unit && $p->nama_pola === "Tim {$tim} - 5 Kerja 2 Libur"
-                );
+            $pola = PolaRotasi::where('unit_kerja', $unit)
+                ->where('nama_pola', 'Rotasi 2 Pagi - 2 Siang - 2 Malam - 2 Libur')
+                ->first();
 
-                if (! $pola) {
-                    throw new \RuntimeException("PolaRotasi \"Tim {$tim}\" untuk unit \"{$unit}\" belum ada -- jalankan PolaRotasiSeeder dulu.");
-                }
-
-                $polaPerUnitTim[$unit][$tim] = $pola;
+            if (! $pola) {
+                throw new \RuntimeException("PolaRotasi rotasi-individu untuk unit \"{$unit}\" belum ada -- jalankan PolaRotasiSeeder dulu.");
             }
+
+            $polaPerUnit[$unit] = $pola;
         }
 
         $awalWindow = today()->subMonths($this->jumlahBulanKeBelakang - 1)->startOfMonth();
@@ -82,12 +79,12 @@ class SimulasiMassalSeeder extends Seeder
             ]);
         }
 
-        // Sebar rotasi: rata ke tiap unit, lalu dalam tiap unit rata lagi ke
-        // 3 tim shift. Tiap karyawan di-assign ke SATU pola (tim shift
-        // tetap), dengan tanggal_mulai di-offset menyebar ke seluruh 7
-        // posisi siklus (index % panjangSiklus) -- supaya hari libur
-        // sesama anggota tim tidak pernah barengan semua, shift tetap ada
-        // yang isi tiap hari.
+        // Sebar rotasi: rata ke tiap unit. Tiap karyawan di-assign ke SATU
+        // pola rotasi-individu unitnya, dengan tanggal_mulai di-offset
+        // menyebar ke seluruh 8 posisi siklus (index % panjangSiklus) --
+        // supaya pada hari yang sama, anggota unit itu tersebar di posisi
+        // Pagi/Siang/Malam/Libur yang berbeda-beda, bukan serentak di
+        // posisi yang sama.
         $karyawanRotasiBaru = collect();
         $jumlahPerUnit = intdiv($jumlahRotasi, count($this->unitRotasi));
         $sisaRotasi = $jumlahRotasi;
@@ -96,31 +93,23 @@ class SimulasiMassalSeeder extends Seeder
             $jumlahUnitIni = ($i === count($this->unitRotasi) - 1) ? $sisaRotasi : $jumlahPerUnit;
             $sisaRotasi -= $jumlahUnitIni;
 
-            $jumlahPerTim = intdiv($jumlahUnitIni, count($this->timRotasi));
-            $sisaUnitIni = $jumlahUnitIni;
+            $pola = $polaPerUnit[$unit];
+            $panjangSiklus = $pola->panjangSiklus();
 
-            foreach ($this->timRotasi as $j => $tim) {
-                $jumlahTimIni = ($j === count($this->timRotasi) - 1) ? $sisaUnitIni : $jumlahPerTim;
-                $sisaUnitIni -= $jumlahTimIni;
+            $karyawanUnitIni = Karyawan::factory()
+                ->rotasi()
+                ->count($jumlahUnitIni)
+                ->create(['instansi_id' => $instansi->id, 'unit_kerja' => $unit]);
 
-                $pola = $polaPerUnitTim[$unit][$tim];
-                $panjangSiklus = $pola->panjangSiklus();
-
-                $karyawanTimIni = Karyawan::factory()
-                    ->rotasi()
-                    ->count($jumlahTimIni)
-                    ->create(['instansi_id' => $instansi->id, 'unit_kerja' => $unit]);
-
-                foreach ($karyawanTimIni as $index => $k) {
-                    $k->karyawanPolaRotasis()->create([
-                        'pola_rotasi_id' => $pola->id,
-                        'tanggal_mulai' => $awalWindow->copy()->subDays($index % $panjangSiklus),
-                        'tanggal_berakhir' => null,
-                    ]);
-                }
-
-                $karyawanRotasiBaru = $karyawanRotasiBaru->concat($karyawanTimIni);
+            foreach ($karyawanUnitIni as $index => $k) {
+                $k->karyawanPolaRotasis()->create([
+                    'pola_rotasi_id' => $pola->id,
+                    'tanggal_mulai' => $awalWindow->copy()->subDays($index % $panjangSiklus),
+                    'tanggal_berakhir' => null,
+                ]);
             }
+
+            $karyawanRotasiBaru = $karyawanRotasiBaru->concat($karyawanUnitIni);
         }
 
         $this->command->info("Karyawan baru: {$jumlahUmum} umum, {$jumlahRotasi} rotasi (".
