@@ -159,12 +159,33 @@ class TukarJadwal extends Model
             }
 
             if ($this->isPindahSendiri()) {
-                $jadwalA->update(['tanggal' => $this->tanggal_baru, 'sumber' => 'manual']);
+                $existing = Jadwal::lockForUpdate()
+                    ->where('karyawan_id', $jadwalA->karyawan_id)
+                    ->where('tanggal', $this->tanggal_baru)
+                    ->first();
+
+                if (! $existing) {
+                    $jadwalA->update(['tanggal' => $this->tanggal_baru, 'sumber' => 'manual']);
+                } elseif ($existing->jenis === Jadwal::JENIS_LIBUR) {
+                    $jenisAsal = $jadwalA->jenis;
+                    $shiftIdAsal = $jadwalA->shift_id;
+
+                    $jadwalA->update(['jenis' => Jadwal::JENIS_LIBUR, 'shift_id' => null, 'sumber' => 'manual']);
+                    $existing->update(['jenis' => $jenisAsal, 'shift_id' => $shiftIdAsal, 'sumber' => 'manual']);
+                } else {
+                    throw new \Exception(
+                        'Gagal: tanggal tujuan sudah terisi Jadwal lain (bukan libur) sejak pengajuan '
+                        . 'dibuat. Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
+                    );
+                }
             } else {
                 $jadwalB = Jadwal::lockForUpdate()->findOrFail($this->jadwal_tujuan_id);
 
                 if ($jadwalB->karyawan_id !== $this->karyawan_tujuan_id) {
-                    throw new \Exception(/* ... */);
+                    throw new \Exception(
+                        'Gagal: jadwal tujuan sudah berubah kepemilikan sejak pengajuan ini dibuat. '
+                        . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
+                    );
                 }
 
                 $karyawanA = $jadwalA->karyawan_id;
@@ -176,7 +197,10 @@ class TukarJadwal extends Model
                     $jadwalB->update(['karyawan_id' => $karyawanA, 'sumber' => 'manual']);
                     $jadwalA->update(['karyawan_id' => $karyawanB, 'tanggal' => $tanggalA, 'sumber' => 'manual']);
                 } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                    throw new \Exception(/* ... */);
+                    throw new \Exception(
+                        'Gagal: salah satu karyawan sudah punya jadwal sendiri di tanggal pasangannya. '
+                        . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
+                    );
                 }
             }
 

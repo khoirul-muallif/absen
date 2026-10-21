@@ -157,7 +157,7 @@ it('menolak tukar kalau salah satu karyawan sudah punya jadwal di tanggal pasang
             'alasan' => 'Test konflik tanggal',
         ])
         ->call('create')
-        ->assertHasFormErrors(['jadwal_tujuan_id']);
+        ->assertHasFormErrors(['karyawan_tujuan_filter']);
 });
 
 // ── Create: mode pindah ──────────────────────────────────────────────────
@@ -310,7 +310,7 @@ it('menolak tukar kalau pengaju sedang cuti/dinas approved di tanggal asalnya se
             'alasan' => 'Test bentrok cuti pengaju',
         ])
         ->call('create')
-        ->assertHasFormErrors(['jadwal_tujuan_id']);
+        ->assertHasFormErrors(['karyawan_tujuan_filter']);
 });
 
 it('menolak tukar kalau karyawan tujuan sedang dinas approved di tanggal tujuannya sendiri', function () {
@@ -347,7 +347,7 @@ it('menolak tukar kalau karyawan tujuan sedang dinas approved di tanggal tujuann
             'alasan' => 'Test bentrok dinas tujuan',
         ])
         ->call('create')
-        ->assertHasFormErrors(['jadwal_tujuan_id']);
+        ->assertHasFormErrors(['karyawan_tujuan_filter']);
 });
 
 it('opsiJadwal tidak error untuk karyawan rotasi yang punya Jadwal libur', function () {
