@@ -8,9 +8,11 @@
 
 **Review UX 17 Filament Resource SELESAI** (fase 25–36). **Laporan Presensi
 SELESAI** (fase 56: Harian/Bulanan/Pelanggaran, Excel+PDF). **Simulasi
-rotasi 24/7 realistis SELESAI** (fase 56: tim per shift, bukan 1 tim muter
-3 shift). **Refactor tampilan 3 halaman Laporan Presensi jadi card Filament
-SELESAI** (fase 56 lanjutan, commit `584d2e8`).
+rotasi 24/7 realistis SELESAI** (redesign terakhir fase 65: rotasi individu
+per unit, bukan tim tetap per shift — lihat CHANGELOG). **Refactor tampilan
+3 halaman Laporan Presensi jadi card Filament SELESAI** (fase 56 lanjutan,
+commit `584d2e8`). **TukarJadwal × rotasi SELESAI** (fase 65 — validasi lama
+terbukti cukup, tidak perlu pembatasan tambahan).
 
 Fokus berikutnya:
 
@@ -25,43 +27,15 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Kebutuhan masukan dari pihak RS
 
-- [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder` (fase 56)
-      membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU) dan rata
-      lagi ke 3 tim shift per unit. Belum tentu realistis (Rawat Inap biasanya
-      butuh lebih banyak staf daripada ICU) — baru relevan kalau data dummy ini
-      mulai dipakai buat demo/keputusan ke pihak RS, bukan sekadar testing
-      internal.
-- [ ] **TukarJadwal mode tukar hampir selalu gagal untuk karyawan rotasi —
-      bukan cuma soal hari libur** — ditemukan saat investigasi item lama
-      "TukarJadwal × hari libur rotasi" (lihat CHANGELOG terbaru untuk detail
-      baca kode). Cek konflik di `TukarJadwalForm`/
-      `TukarJadwalController::ajukan()` (`$konflikAsal`/`$konflikTujuan`)
-      menolak pengajuan kalau salah satu karyawan SUDAH PUNYA baris Jadwal
-      lain di tanggal pasangannya. Untuk karyawan umum ini aman — generator
-      cuma bikin baris di hari kerja shift, ada "celah" di hari libur
-      mingguan. Untuk karyawan rotasi, `jadwal:generate-rotasi` WAJIB bikin
-      baris untuk SETIAP hari dalam rentang yang digenerate (termasuk hari
-      libur siklus, `jenis='libur'`) — jadi karyawan rotasi HAMPIR SELALU
-      sudah punya baris sendiri di tanggal manapun yang sudah ter-generate,
-      entah kerja atau libur. Akibatnya pengajuan tukar yang melibatkan
-      karyawan rotasi nyaris selalu ditolak di validasi, sebelum sempat
-      sampai `approveAndSwap()`. Satu-satunya celah: tanggal tujuan belum
-      pernah digenerate untuk karyawan itu.
-      Kenapa baru ketahuan sekarang: `SimulasiMassalSeeder` (fase 56,
-      120/150 karyawan rotasi) tidak pernah bikin satu pun pengajuan
-      TukarJadwal, jadi jalur ini tidak pernah dilewati data besar.
-      **BUTUH KEPUTUSAN:** apakah baris existing di tanggal pasangan boleh
-      ditimpa otomatis saat swap disetujui (konsekuensinya mirip
-      keterbatasan mode pindah fase 50 — tanggal itu jadi kosong/"Jadwal
-      Hilang"), atau mode tukar memang dibatasi begitu dan solusinya
-      diarahkan ke mode pindah untuk kasus rotasi, atau pendekatan lain.
-      Mitigasi UX parsial sudah diterapkan (fase 64): dropdown "rekan
-      tujuan" sekarang difilter — rotasi cuma ditawari rekan rotasi di unit
-      yang sama, umum cuma ditawari rekan umum. Ini mencegah admin memilih
-      kombinasi yang jelas tidak masuk akal, tapi TIDAK menyelesaikan
-      konflik struktural `$konflikAsal`/`$konflikTujuan` di atas — untuk
-      kombinasi rotasi×rotasi×unit-sama yang sudah difilter benar pun
-      konfliknya tetap bisa terjadi. Keputusan di atas masih diperlukan.
+- [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
+      membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU).
+      Belum tentu realistis (Rawat Inap biasanya butuh lebih banyak staf
+      daripada ICU) — baru relevan kalau data dummy ini mulai dipakai
+      buat demo/keputusan ke pihak RS, bukan sekadar testing internal.
+      Catatan: sejak redesign rotasi-individu (fase 65), setiap karyawan
+      rotasi dalam satu unit memakai SATU pola yang sama (bukan lagi
+      dibagi ke 3 tim shift terpisah) — pembagian 40/40/40 sekarang murni
+      per unit, tidak ada lagi sub-pembagian tim.
 
 ## Simulasi & data
 
@@ -89,26 +63,18 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       
 ## UX yang tersisa
 
-- [ ] **Kalender "Pindah ke tanggal" (TukarJadwal) cuma bisa disabled/
-      enabled, tidak bisa beda warna per kategori** — usulan: hitam =
-      hari kerja (Jadwal ada, shift terisi), merah = libur (Jadwal ada,
-      shift null), hijau = kosong/bisa dipilih. DatePicker Filament
-      (Flatpickr) tidak expose pewarnaan per-tanggal secara native,
-      cuma disabledDates binary — butuh custom Alpine.js/Flatpickr hook
-      (onDayCreate) kalau mau diimplementasikan, bukan cuma ganti
-      parameter. Ditemukan 20 Okt 2026 saat audit TukarJadwal x rotasi.
-
 - [ ] **Kalender "Pindah ke tanggal" (TukarJadwal) tidak punya indikator
       visual kenapa tanggal di-disable** — functionally sudah benar
       (disabledDates() memblokir tanggal yang sudah punya Jadwal, baik
       kerja maupun libur — dikonfirmasi lewat Tinker 20 Okt 2026: baris
       Jadwal utk karyawan rotasi lengkap tanpa gap, termasuk hari libur
       pola rotasi), tapi admin tidak tahu APAKAH tanggal itu disabled
-      karena kerja atau karena libur — cuma keabuan polos. Usulan:
-      hitam = hari kerja, merah = libur, hijau = kosong/bisa dipilih.
-      DatePicker Filament (Flatpickr) tidak expose pewarnaan per-tanggal
-      secara native, cuma disabledDates binary — butuh custom
-      Alpine.js/Flatpickr hook (onDayCreate), bukan cuma ganti parameter.
+      karena kerja atau karena libur — cuma keabuan polos. Usulan: hitam
+      = hari kerja, merah = libur, hijau = kosong/bisa dipilih. DatePicker
+      Filament (Flatpickr) tidak expose pewarnaan per-tanggal secara
+      native, cuma disabledDates binary — butuh custom Alpine.js/Flatpickr
+      hook (onDayCreate), bukan cuma ganti parameter. Ditemukan 20 Okt 2026
+      saat audit TukarJadwal x rotasi.
 
 - [ ] **"Shift Karyawan Umum" & "Shift Karyawan Rotasi" tidak lagi
       bersebelahan di menu** — fase 15 sengaja menaruh keduanya berdampingan

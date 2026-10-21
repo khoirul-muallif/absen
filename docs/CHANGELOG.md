@@ -12,6 +12,98 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 65: redesign rotasi individu + investigasi & penyelesaian TukarJadwal × rotasi
+
+Tiga pekerjaan berurutan dalam satu sesi, dipicu pertanyaan Khoirul soal
+kejanggalan desain tim-tetap-per-shift (fase 56) dibanding praktik lazim RS.
+Commit: `819b74e`, `7477e51`, `be17e7c`.
+
+### Redesign rotasi: tim-tetap-per-shift → rotasi individu
+
+Riset praktik RS Indonesia menunjukkan yang lazim adalah perawat **gentian**
+pagi/siang/malam (bukan dikunci permanen di satu shift), dengan aturan
+eksplisit seperti larangan >2-3 hari berturut shift sama dan wajib ada jeda
+setelah shift malam. Desain tim-tetap fase 56 valid secara matematis
+(coverage terjamin) tapi tidak mencerminkan itu.
+
+`PolaRotasiSeeder` diubah dari 3 pola per unit (Tim Pagi/Siang/Malam, shift
+tetap, 5 kerja 2 libur) menjadi **1 pola per unit**: "Rotasi 2 Pagi - 2 Siang
+- 2 Malam - 2 Libur" (siklus 8 hari). Libur sengaja ditaruh tepat setelah
+Malam (bukan setelah Pagi) — supaya tidak ada yang masuk pagi langsung
+sehabis 2 hari shift malam. Coverage harian tetap dijamin dari offset
+individual `tanggal_mulai` tiap karyawan (index % panjangSiklus), persis
+prinsip fase 56, cuma levelnya di individu bukan tim.
+
+`SimulasiMassalSeeder` disederhanakan mengikuti itu (hapus level pembagian
+tim, `$polaPerUnit` ganti `$polaPerUnitTim`). `KaryawanSeeder` (referensi
+demo Yono Pratama) disesuaikan ke nama pola baru.
+
+**Verifikasi coverage** (sebelum commit): migrate:fresh --seed +
+SimulasiMassalSeeder jalan bersih (150 karyawan baru, 120 rotasi rata
+40/40/40 per unit), audit `karyawan:cek-tipe-jadwal` & `absensi:audit-menit-terlambat`
+0 salah. Dicek eksplisit lewat SQL: tanggal 7 Okt 2026 (dulu bolong di
+desain lama) sekarang 10 staf merata tiap unit×shift; scan seluruh window 3
+bulan (Agustus-Oktober) — tidak ada satu pun kombinasi tanggal+unit+shift
+yang kosong.
+
+### Investigasi & penyelesaian "TukarJadwal × rotasi" (item lama todo.md)
+
+Direproduksi manual lewat Tinker: dua karyawan rotasi unit sama (Adiarja
+Manullang, Cici Lestari) coba tukar jadwal beda tanggal — dikonfirmasi BENAR
+gagal karena masing-masing sudah punya baris Jadwal sendiri (hasil
+`jadwal:generate-rotasi`, termasuk hari libur) persis di tanggal pasangannya.
+
+Sempat dicoba dua pendekatan pembatasan (mode tukar dinonaktifkan total untuk
+rotasi, lalu direvisi jadi "tukar hanya boleh tanggal sama") — keduanya
+**di-revert**. Alasan: validasi `$konflikAsal`/`$konflikTujuan` yang sudah
+ada sejak fase 11 terbukti CUKUP menangani semua kasus dengan benar,
+termasuk kasus valid dari fase 50 (tukar libur↔kerja beda tanggal) yang
+sempat tidak sengaja ikut terblokir oleh pembatasan baru itu.
+
+**Keputusan final:** tidak ada pembatasan tambahan sama sekali. Validasi
+lama dipertahankan apa adanya — kalau kombinasi tanggal memang konflik,
+ditolak dengan pesan jelas di titik submit (bukan nyangkut diam-diam sampai
+approve).
+
+### BUG DITEMUKAN & DIPERBAIKI (dalam proses investigasi di atas)
+
+1. **`approveAndSwap()` kehilangan branch `else`** (logic swap `karyawan_id`
+   untuk mode tukar) saat iterasi awal perbaikan — membuat approve mode
+   tukar "sukses" tanpa benar-benar menukar apa pun. Ditemukan lewat test
+   suite (5 test mode-tukar gagal serentak). Branch dikembalikan utuh.
+2. **`tanggal_baru` (mode pindah) kehilangan `rule()` validasi server-side**
+   saat `disabledDates()` diperbarui untuk mendukung pindah ke tanggal libur
+   milik sendiri (karyawan rotasi). Ditambahkan balik, disesuaikan: tanggal
+   berjenis `libur` dianggap valid tujuan, bukan cuma tanggal benar-benar
+   kosong.
+3. **Pesan error validasi `jadwal_tujuan_id` tidak pernah terlihat admin** —
+   `rule()` menempel error ke field `Hidden` yang tidak pernah dirender di
+   layar. Form secara teknis MENOLAK submit dengan benar (dikonfirmasi lewat
+   isi response Livewire di Network tab — `errors["data.jadwal_tujuan_id"]`
+   terisi), tapi admin melihatnya sebagai "submit diam-diam tanpa reaksi".
+   Fix: seluruh logic `rule()` (cek rebutan pending, konflik existing,
+   bentrok cuti/dinas) dipindah ke `Select::make('karyawan_tujuan_filter')`
+   — field yang sama secara makna, tapi versi visible-nya.
+
+### Test
+
+3 test lama di `TukarJadwalResourceTest` disesuaikan assertion key-nya dari
+`jadwal_tujuan_id` ke `karyawan_tujuan_filter` (mengikuti pemindahan error
+di atas) — tidak ada perubahan pada setup data atau ekspektasi perilaku.
+
+Full suite: **591 test passing (1757 assertions)** — tidak berubah secara
+angka dari sebelum sesi ini, karena seluruh pekerjaan ini perbaikan dan
+investigasi, bukan fitur baru net.
+
+### Catatan proses
+
+Sesi ini jadi contoh kenapa "test hijau" tidak selalu berarti "perilaku
+benar" — kegagalan `approveAndSwap()` di atas baru ketahuan karena test
+suite dijalankan ulang setelah sebuah fix kecil, bukan karena ada yang
+sengaja mengujinya. Begitu juga butir UX #3: tanpa membaca response Network
+tab mentah-mentah, "tidak ada reaksi" mudah disalahartikan sebagai request
+gagal terkirim, padahal validasinya jalan sempurna — cuma pesannya terjebak
+di field yang tidak pernah dilihat siapa pun.
 
 ## fase 64: TukarJadwalForm — filter rekan tujuan per tipe_jadwal/unit + kalender tanggal dengan info shift
 
