@@ -540,7 +540,7 @@ it('bisa menukar jadwal libur milik satu karyawan dengan jadwal kerja rekan', fu
         ->and($record->shift_asal_id)->toBeNull(); // snapshot shift libur = null
 });
 
-it('bisa memindahkan jadwal libur milik sendiri ke tanggal lain', function () {
+it('menolak memindahkan jadwal libur sendiri (mode pindah cuma untuk hari kerja)', function () {
     $instansi = \App\Models\Instansi::factory()->create();
     $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
 
@@ -549,21 +549,55 @@ it('bisa memindahkan jadwal libur milik sendiri ke tanggal lain', function () {
         'tanggal' => today()->addDays(2), 'jenis' => 'libur',
     ]);
 
-    $tanggalBaru = today()->addDays(10);
+    $tanggalLiburLain = today()->addDays(10);
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'tanggal' => $tanggalLiburLain, 'jenis' => 'libur',
+    ]);
 
     livewire(CreateTukarJadwal::class)
         ->fillForm([
             'mode' => 'pindah',
             'karyawan_pengaju_filter' => $pengaju->id,
             'jadwal_id' => $jadwalLibur->id,
-            'tanggal_baru' => $tanggalBaru->toDateString(),
-            'alasan' => 'Tes pindah libur sendiri',
+            'tanggal_baru' => $tanggalLiburLain->toDateString(),
+            'alasan' => 'Tes pindah libur sendiri — harus ditolak',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['jadwal_id']);
+
+    expect(TukarJadwal::where('jadwal_id', $jadwalLibur->id)->exists())->toBeFalse();
+});
+
+it('bisa memindahkan hari kerja ke tanggal libur milik sendiri', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalKerja = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(2), 'jenis' => 'reguler',
+    ]);
+
+    $tanggalLibur = today()->addDays(10);
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'tanggal' => $tanggalLibur, 'jenis' => 'libur',
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'pindah',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalKerja->id,
+            'tanggal_baru' => $tanggalLibur->toDateString(),
+            'alasan' => 'Tes pindah hari kerja ke tanggal libur',
         ])
         ->call('create')
         ->assertHasNoFormErrors();
 
-    $record = TukarJadwal::where('jadwal_id', $jadwalLibur->id)->first();
+    $record = TukarJadwal::where('jadwal_id', $jadwalKerja->id)->first();
     expect($record)->not->toBeNull()
-        ->and($record->tanggal_baru->toDateString())->toBe($tanggalBaru->toDateString());
+        ->and($record->tanggal_baru->toDateString())->toBe($tanggalLibur->toDateString());
 });
 
