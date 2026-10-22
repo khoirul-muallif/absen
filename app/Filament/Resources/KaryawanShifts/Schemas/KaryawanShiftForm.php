@@ -44,7 +44,7 @@ class KaryawanShiftForm
                             ->validationMessages([
                                 'exists' => 'Karyawan yang dipilih harus bertipe jadwal Umum.',
                             ])
-                            ->helperText('Hanya karyawan tipe "Umum" yang muncul di daftar ini — shift tetap per periode. Karyawan tipe "Rotasi" tidak akan muncul walau dicari; assign lewat menu "Shift Karyawan Rotasi" di grup Manajemen Rotasi.'),
+                            ->helperText('Hanya karyawan tipe "Umum" yang muncul di daftar ini — shift tetap per periode. Karyawan tipe "Rotasi" tidak akan muncul walau dicari; assign lewat menu "Shift Karyawan Rotasi" (sebelah menu ini).'),
 
                         Select::make('shift_id')
                             ->label('Shift')

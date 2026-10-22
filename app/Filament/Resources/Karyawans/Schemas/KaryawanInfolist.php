@@ -84,8 +84,8 @@ class KaryawanInfolist
                         TextEntry::make('arti_tipe_jadwal')
                             ->label('Artinya')
                             ->state(fn (Karyawan $record): string => $record->isRotasi()
-                                ? 'Dijadwalkan dari pola siklus lewat menu "Shift Karyawan Rotasi" (grup Manajemen Rotasi). Unit kerja harus sama persis dengan unit pola, kalau tidak pola tidak bisa di-assign. Kalau tidak pernah di-assign, rekap harian menandainya "jadwal_hilang" — bukan alpha, bukan libur, melainkan anomali yang perlu dicek manual.'
-                                : 'Dijadwalkan lewat penugasan shift periode di menu "Shift Karyawan Umum" (grup Manajemen Shift). Tanpa penugasan yang berlaku, absen lewat aplikasi ditolak dengan "Tidak ada shift aktif untuk hari ini".')
+                                ? 'Dijadwalkan dari pola siklus lewat menu "Shift Karyawan Rotasi" (grup Manajemen Shift & Rotasi). Unit kerja harus sama persis dengan unit pola, kalau tidak pola tidak bisa di-assign. Kalau tidak pernah di-assign, rekap harian menandainya "jadwal_hilang" — bukan alpha, bukan libur, melainkan anomali yang perlu dicek manual.'
+                                : 'Dijadwalkan lewat penugasan shift periode di menu "Shift Karyawan Umum" (grup Manajemen Shift & Rotasi). Tanpa penugasan yang berlaku, absen lewat aplikasi ditolak dengan "Tidak ada shift aktif untuk hari ini".')
                             ->columnSpanFull(),
 
                         TextEntry::make('catatan_ubah_tipe')

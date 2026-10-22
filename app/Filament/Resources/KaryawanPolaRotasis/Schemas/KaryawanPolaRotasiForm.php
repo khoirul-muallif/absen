@@ -44,9 +44,9 @@ class KaryawanPolaRotasiForm
                             ->validationMessages([
                                 'exists' => 'Karyawan yang dipilih harus bertipe jadwal Rotasi.',
                             ])
-                            ->helperText('Hanya karyawan tipe "Rotasi" yang muncul di daftar ini — pakai pola siklus, bukan shift tetap. Karyawan tipe "Umum" tidak akan muncul walau dicari; assign lewat menu "Shift Karyawan Umum" di grup Manajemen Shift.'),
+                            ->helperText('Hanya karyawan tipe "Rotasi" yang muncul di daftar ini — pakai pola siklus, bukan shift tetap. Karyawan tipe "Umum" tidak akan muncul walau dicari; assign lewat menu "Shift Karyawan Umum" (sebelah menu ini).'),
 
-                        Select::make('pola_rotasi_id')
+                            Select::make('pola_rotasi_id')
                             ->label('Pola Rotasi')
                             // Dibatasi ke instansi DAN unit kerja karyawan.
                             // Sebelumnya tidak dibatasi sama sekali — kejadian

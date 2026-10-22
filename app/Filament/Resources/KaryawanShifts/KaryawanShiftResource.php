@@ -33,9 +33,9 @@ class KaryawanShiftResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'id';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Manajemen Shift';
+    protected static string|UnitEnum|null $navigationGroup = 'Manajemen Shift & Rotasi';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

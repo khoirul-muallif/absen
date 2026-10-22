@@ -21,6 +21,7 @@ use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\View\PanelsRenderHook;
+use Filament\Navigation\NavigationGroup;
 
 
 class AdminPanelProvider extends PanelProvider
@@ -62,8 +63,16 @@ class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::SIDEBAR_NAV_START,
                 fn () => view('filament.sidebar-search'),
             )
+            ->navigationGroups([
+                NavigationGroup::make('Presensi'),
+                NavigationGroup::make('Pengajuan & Cuti'),
+                NavigationGroup::make('Manajemen Shift & Rotasi'),
+                NavigationGroup::make('Laporan'),
+                NavigationGroup::make('Master Data'),
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ]);
+
     }
 }

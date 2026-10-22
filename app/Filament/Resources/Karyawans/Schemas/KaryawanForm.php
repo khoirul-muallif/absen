@@ -177,9 +177,8 @@ class KaryawanForm
                                 };
                             })
                             ->helperText(fn ($state) => $state === Karyawan::TIPE_ROTASI
-                                ? 'Karyawan rotasi dijadwalkan dari pola siklus lewat menu "Shift Karyawan Rotasi" (grup Manajemen Rotasi) — tidak pakai penugasan shift periode. Kalau lupa di-assign, RekapHarian menandainya sebagai anomali "jadwal_hilang", bukan otomatis dianggap libur.'
-                                : 'Karyawan umum dijadwalkan lewat penugasan shift periode di menu "Shift Karyawan Umum" (grup Manajemen Shift), bukan pola siklus.'),
-                    ]),
+                            ? 'Karyawan rotasi dijadwalkan dari pola siklus lewat menu "Shift Karyawan Rotasi" (grup Manajemen Shift & Rotasi) — tidak pakai penugasan shift periode. Kalau lupa di-assign, RekapHarian menandainya sebagai anomali "jadwal_hilang", bukan otomatis dianggap libur.'
+                            : 'Karyawan umum dijadwalkan lewat penugasan shift periode di menu "Shift Karyawan Umum" (grup Manajemen Shift & Rotasi), bukan pola siklus.'),                    ]),
 
                 Section::make('Foto')
                     ->description('Foto profil dan foto wajah untuk face recognition')
