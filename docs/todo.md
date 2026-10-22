@@ -85,12 +85,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       eksplisit. Sisa: keputusan apakah kedua menu disatukan lagi dalam satu
       grup.
 
-- [ ] **Anchor preview siklus belum bisa dipilih di halaman Pola Rotasi** —
-      preview 14 hari di sana selalu menganggap siklus dimulai HARI INI,
-      padahal anchor sebenarnya `tanggal_mulai` per karyawan. Di halaman Shift
-      Karyawan Rotasi sudah benar (fase 33). Ide: dropdown "lihat sebagai
-      karyawan X" di infolist Pola Rotasi — perhitungannya sudah siap,
-      `PolaRotasi::hitungPreviewSiklus()` menerima parameter `$mulai`.
 
 - [ ] **Ikon reorder di Repeater Pola Rotasi** — 3 ikon (↕️⬆️⬇️) yang
       fungsinya mirip-mirip. Bawaan Filament, jadi opsinya antara mengatur

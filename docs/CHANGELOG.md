@@ -12,6 +12,70 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 67: PolaRotasiInfolist — preview siklus bisa di-anchor per karyawan
+
+Menutup item todo.md "anchor preview siklus belum bisa dipilih di halaman
+Pola Rotasi". Preview 14 hari sebelumnya selalu menganggap siklus dimulai
+**hari ini**, padahal anchor sebenarnya `tanggal_mulai` per karyawan —
+sudah benar di halaman Shift Karyawan Rotasi sejak fase 33, belum pernah
+ikut diperbaiki di sini. `PolaRotasi::hitungPreviewSiklus()` sudah
+menerima parameter `$mulai` sejak fase 32 (komentar CHANGELOG waktu itu
+eksplisit menyebutnya), tapi tidak pernah ada jalan dari UI untuk
+memilihnya.
+
+### Desain: query string + link, bukan Select reaktif
+
+Section "Preview 14 Hari" di halaman View sekarang menampilkan daftar
+tautan karyawan yang di-assign ke pola ini (plus opsi "Preview generik"),
+masing-masing membawa `?preview_karyawan=<id KaryawanPolaRotasi>`. Yang
+aktif ditandai bold+underline.
+
+**CATATAN PROSES:** percobaan pertama pakai `Select::live()` dengan
+`TextEntry::state()` reaktif terhadap `Get` — pola yang biasa dipakai di
+Form (mis. `TukarJadwalForm`, fase 64/66). Dites langsung di browser:
+dropdown terisi dan menunjukkan pilihan yang benar, tapi `TextEntry` lain
+tidak ikut re-render sama sekali — preview tetap anchor "hari ini" walau
+dropdown sudah menunjuk karyawan lain. Kemungkinan `ViewRecord` tidak
+menjalankan siklus `fill()`/state-array seperti form biasa, jadi `live()`
+di konteks Infolist murni kosmetik di sini. Diganti ke query-string + link
+biasa (full page reload per klik) — tidak bergantung reactivity Livewire
+sama sekali, jadi predictable. Trade-off bukan AJAX, tapi wajar untuk
+kebutuhan "lihat preview sekali-sekali" ini. Dicatat eksplisit supaya
+kalau nanti ada yang coba pola Select-live di Infolist lagi, sudah ada
+jejak kenapa itu tidak dipakai di sini.
+
+### Guard
+
+Assignment di-scope ke `pola_rotasi_id` milik record yang sedang dibuka
+(`KaryawanPolaRotasi::where('pola_rotasi_id', $record->id)->find($assignmentId)`),
+supaya query string tidak bisa dipakai nge-preview anchor dari assignment
+milik pola lain.
+
+### Perubahan pendukung
+
+`PolaRotasiForm::tabelPreview()` (dipakai Form & Infolist) dapat parameter
+opsional `$anchorLabel` — `null` tetap pakai teks lama ("menganggap siklus
+dimulai hari ini"), diisi menghasilkan teks yang menyebut nama karyawan
+yang sedang di-preview. Tidak ada perubahan di model atau validasi — murni
+UI di Infolist plus satu parameter opsional di helper HTML yang sudah ada.
+
+### Test
+
+Tidak ada test baru ditulis khusus untuk perubahan ini —
+`PolaRotasi::hitungPreviewSiklus()` sudah dikunci test sejak fase 32
+(`PolaRotasiResourceTest`: "preview siklus mengulang langkah sesuai
+panjang siklus", dll), dan perubahan ini murni memanggil method yang sama
+dengan `$mulai` berbeda — tidak ada logic baru yang perlu dikunci.
+
+Full suite `--filter=PolaRotasi`: **53 test passing (166 assertions)** —
+tidak berubah dari sebelumnya.
+
+### Belum dikerjakan
+
+- Ikon reorder Repeater Pola Rotasi (3 ikon ↕️⬆️⬇️ bawaan Filament) — masih
+  menunggu dilihat langsung di browser sebelum diputuskan, sesuai catatan
+  todo.md asli.
+  
 ## fase 66: TukarJadwalForm — batasi jendela kalender per bulan + balik kebijakan pindah hari libur rotasi
 
 Menutup item todo.md "`tanggalJadwalMap`/`opsiJadwal` belum difilter per
@@ -101,7 +165,7 @@ fase 65.
   sesi ini.
 - Ikon reorder Repeater Pola Rotasi — masih menunggu dilihat langsung di
   browser sebelum diputuskan.
-  
+
 ## fase 65: redesign rotasi individu + investigasi & penyelesaian TukarJadwal × rotasi
 
 Tiga pekerjaan berurutan dalam satu sesi, dipicu pertanyaan Khoirul soal

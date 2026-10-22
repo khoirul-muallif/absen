@@ -85,11 +85,69 @@ class PolaRotasiInfolist
                     ->icon('heroicon-o-calendar-days')
                     ->collapsed()
                     ->schema([
+                        TextEntry::make('pilih_preview')
+                            ->label('Lihat sebagai')
+                            ->state(function (PolaRotasi $record): HtmlString {
+                                $assignments = KaryawanPolaRotasi::with('karyawan')
+                                    ->where('pola_rotasi_id', $record->id)
+                                    ->orderBy('tanggal_mulai')
+                                    ->get();
+
+                                if ($assignments->isEmpty()) {
+                                    return new HtmlString('<span style="opacity:.6">Belum ada karyawan di-assign — tidak ada pilihan preview per-karyawan.</span>');
+                                }
+
+                                $aktifId = request()->integer('preview_karyawan') ?: null;
+                                $urlDasar = request()->url();
+
+                                $tautan = [];
+
+                                $tautan[] = sprintf(
+                                    '<a href="%s" style="%s">Preview generik (mulai hari ini)</a>',
+                                    $urlDasar,
+                                    $aktifId === null ? 'font-weight:600;text-decoration:underline' : 'opacity:.75'
+                                );
+
+                                foreach ($assignments as $item) {
+                                    $nama = $item->karyawan?->nama ?? 'karyawan terhapus';
+                                    $isAktif = $aktifId === $item->id;
+
+                                    $tautan[] = sprintf(
+                                        '<a href="%s?preview_karyawan=%d" style="%s">%s (mulai %s)</a>',
+                                        $urlDasar,
+                                        $item->id,
+                                        $isAktif ? 'font-weight:600;text-decoration:underline' : 'opacity:.75',
+                                        e($nama),
+                                        $item->tanggal_mulai?->format('d M Y') ?? '-'
+                                    );
+                                }
+
+                                return new HtmlString(implode(' &nbsp;|&nbsp; ', $tautan));
+                            })
+                            ->columnSpanFull(),
+
                         TextEntry::make('preview')
                             ->label('')
-                            ->state(fn (PolaRotasi $record): HtmlString|string => $record->panjangSiklus() === 0
-                                ? 'Tidak ada langkah untuk di-preview.'
-                                : PolaRotasiForm::tabelPreview($record->previewSiklus(), $record->panjangSiklus()))
+                            ->state(function (PolaRotasi $record): HtmlString|string {
+                                if ($record->panjangSiklus() === 0) {
+                                    return 'Tidak ada langkah untuk di-preview.';
+                                }
+
+                                $assignmentId = request()->integer('preview_karyawan') ?: null;
+                                $assignment = $assignmentId
+                                    ? KaryawanPolaRotasi::with('karyawan')
+                                        ->where('pola_rotasi_id', $record->id)
+                                        ->find($assignmentId)
+                                    : null;
+
+                                $hasil = $record->previewSiklus(14, $assignment?->tanggal_mulai);
+
+                                return PolaRotasiForm::tabelPreview(
+                                    $hasil,
+                                    $record->panjangSiklus(),
+                                    $assignment ? ($assignment->karyawan?->nama ?? 'karyawan terhapus') : null
+                                );
+                            })
                             ->columnSpanFull(),
                     ]),
 

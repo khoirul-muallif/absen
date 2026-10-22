@@ -230,7 +230,7 @@ class PolaRotasiForm
      * Rakit tabel HTML dari hasil PolaRotasi::hitungPreviewSiklus().
      * Dipakai form maupun infolist.
      */
-    public static function tabelPreview(array $hasil, int $panjangSiklus): HtmlString
+    public static function tabelPreview(array $hasil, int $panjangSiklus, ?string $anchorLabel = null): HtmlString
     {
         $baris = '';
 
@@ -256,12 +256,15 @@ class PolaRotasiForm
             );
         }
 
-        return new HtmlString(
-            "<p style=\"margin-bottom:6px\">Panjang siklus: <b>{$panjangSiklus} hari</b>. "
-            .'Preview ini menganggap siklus dimulai <b>hari ini</b> — anchor sebenarnya adalah '
-            .'tanggal mulai per karyawan di menu Shift Karyawan Rotasi, jadi urutan shift-nya benar '
-            .'tapi tanggalnya belum tentu.</p>'
-            ."<table style=\"font-size:.9em\">{$baris}</table>"
-        );
+        $intro = $anchorLabel === null
+            ? "<p style=\"margin-bottom:6px\">Panjang siklus: <b>{$panjangSiklus} hari</b>. "
+                .'Preview ini menganggap siklus dimulai <b>hari ini</b> — anchor sebenarnya adalah '
+                .'tanggal mulai per karyawan di menu Shift Karyawan Rotasi, jadi urutan shift-nya benar '
+                .'tapi tanggalnya belum tentu.</p>'
+            : "<p style=\"margin-bottom:6px\">Panjang siklus: <b>{$panjangSiklus} hari</b>. "
+                ."Preview ini di-anchor ke tanggal mulai siklus <b>{$anchorLabel}</b> — tanggal yang "
+                .'ditampilkan di bawah benar-benar sesuai jadwal yang akan digenerate untuk karyawan tersebut.</p>';
+
+        return new HtmlString($intro."<table style=\"font-size:.9em\">{$baris}</table>");
     }
 }
