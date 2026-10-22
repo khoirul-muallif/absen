@@ -39,11 +39,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Simulasi & data
 
-- [x] ~~Simulasi karyawan rotasi yang punya langkah LIBUR di polanya~~ — selesai
-      (fase 43/50), lihat CHANGELOG untuk detail.
-- [x] ~~Simulasi massal 150 karyawan × 3 bulan~~ — selesai (fase 49), lalu
-      di-redesign jadi tim-per-shift 24/7 yang realistis (fase 56).
-
 - [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
       production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
       tidak pernah tersimpan sejak fase 9, jadi SEMUA baris lama salah di
@@ -52,14 +47,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
 
-## item yang saya temukan tapi sengaja nggak difix sekarang
-
-- [ ] **Perbandingan `jam_kembali <= jam_keluar` di `IzinController::isiJamKembali()` rapuh** —
-      `$request->jam_kembali` formatnya H:i (dari input), `$izin->jam_keluar`
-      formatnya H:i:s (dari DB, kolom TIME tidak di-cast). Perbandingan string
-      lexicographic kebetulan masih benar untuk kasus umum, tapi harusnya pakai
-      Carbon::parse() di kedua sisi biar eksplisit dan nggak rapuh ke depannya.
-      Ditemukan saat kerjain item "format jam Izin & Lembur belum seragam".
       
 ## UX yang tersisa
 
@@ -86,12 +73,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       grup.
 
 
-- [ ] **Ikon reorder di Repeater Pola Rotasi** — 3 ikon (↕️⬆️⬇️) yang
-      fungsinya mirip-mirip. Bawaan Filament, jadi opsinya antara mengatur
-      ulang lewat konfigurasi Repeater atau menerima apa adanya. Perlu
-      dilihat langsung di browser dulu.
-      Sekalian worth dites ke user asli (admin awam, bukan developer),
-      termasuk apakah preview siklus yang baru benar-benar membantu.
 
 
 

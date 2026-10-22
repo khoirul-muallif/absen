@@ -12,6 +12,67 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 68: hapus reorderableWithButtons() di Repeater langkah Pola Rotasi
+
+Menutup item todo.md terakhir dari daftar "Ikon reorder di Repeater Pola
+Rotasi — 3 ikon (↕️⬆️⬇️) yang fungsinya mirip-mirip. Bawaan Filament, jadi
+opsinya antara mengatur ulang lewat konfigurasi Repeater atau menerima apa
+adanya. Perlu dilihat langsung di browser dulu."
+
+### Masalah
+
+`Repeater::make('langkah')` sebelumnya memakai `reorderableWithButtons()`
+di atas drag-handle default Filament, jadi tiap item langkah siklus
+menampilkan 3 ikon sekaligus untuk satu fungsi yang sama (ubah urutan):
+drag-handle (↕️) plus dua tombol panah (⬆️⬇️). Dikonfirmasi lewat
+screenshot — persis seperti dugaan di todo.md.
+
+### Percobaan pertama (GAGAL, dicatat supaya tidak diulang)
+
+`reorderable(false)` dipasang sebelum `reorderableWithButtons()` dengan
+asumsi itu mematikan drag-handle saja dan menyisakan tombol panah —
+pola yang dikira independen satu sama lain. Diuji manual di browser:
+hasilnya malah **nol ikon reorder sama sekali**, tombol panahnya ikut mati.
+Berarti di Filament 4.15.1 yang dipakai project ini, `reorderableWithButtons()`
+tidak independen dari `reorderable()`.
+
+### Fix yang dipakai
+
+Kedua method (`reorderable(false)` dan `reorderableWithButtons()`) dihapus
+total, balik ke drag-handle default Filament (satu ikon ↕️ per item).
+
+**KEPUTUSAN:** drag-and-drop dipilih ketimbang menggali source vendor
+untuk mempertahankan tombol panah. Alasan:
+- Drag dianggap lebih familiar untuk admin awam (bukan developer) —
+  sejalan dengan catatan todo.md sendiri yang minta ini dites ke "admin
+  awam, bukan developer", dan pola drag-reorder sudah umum (mirip reorder
+  app/foto di HP).
+- Risiko salah-geser dianggap kecil: reorder di sini cuma mengubah urutan
+  hari siklus (bukan operasi destruktif), dan preview 14 hari langsung
+  di bawah Repeater (fase 32, diperkuat anchor per-karyawan di fase 67)
+  jadi verifikasi visual instan kalau ketuker.
+- `reorderableWithButtons()` sendiri aslinya dipasang karena urutan di
+  sini "punya makna" (posisi siklus) — niat itu tetap terjaga lewat drag
+  bawaan Filament, cuma beda cara input, bukan hilang sepenuhnya.
+
+Diuji manual di browser dengan 3 item langkah campuran (kerja + libur):
+tersisa 1 ikon drag per item, tombol hapus tetap ada seperti sebelumnya.
+
+Tidak ada perubahan test — perubahan ini murni pengaturan tampilan
+Repeater, tidak menyentuh validasi atau logika `langkah` apa pun.
+
+Full suite `--filter=PolaRotasi` dijalankan sebelum commit, tidak ada
+regresi.
+
+### Catatan
+
+Kalau nanti ada kebutuhan balik ke tombol panah (mis. drag ternyata tetap
+membingungkan di uji admin awam yang disebut todo.md), jalur yang belum
+dicoba: baca langsung source `reorderableWithButtons()` di
+`vendor/filament/forms` untuk versi 4.15.1 — kemungkinan ada flag atau
+kombinasi method lain yang benar-benar independen dari `reorderable()`,
+belum sempat digali di sesi ini.
+
 ## fase 67: PolaRotasiInfolist — preview siklus bisa di-anchor per karyawan
 
 Menutup item todo.md "anchor preview siklus belum bisa dipilih di halaman
@@ -75,7 +136,7 @@ tidak berubah dari sebelumnya.
 - Ikon reorder Repeater Pola Rotasi (3 ikon ↕️⬆️⬇️ bawaan Filament) — masih
   menunggu dilihat langsung di browser sebelum diputuskan, sesuai catatan
   todo.md asli.
-  
+
 ## fase 66: TukarJadwalForm — batasi jendela kalender per bulan + balik kebijakan pindah hari libur rotasi
 
 Menutup item todo.md "`tanggalJadwalMap`/`opsiJadwal` belum difilter per
