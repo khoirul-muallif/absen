@@ -155,7 +155,6 @@ class PolaRotasiForm
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Hari ke Siklus')
-                            ->reorderableWithButtons()
                             ->minItems(1)
                             ->itemLabel(fn (array $state): ?string => self::labelLangkah($state))
                             ->columnSpanFull(),
