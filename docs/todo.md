@@ -99,15 +99,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       Sekalian worth dites ke user asli (admin awam, bukan developer),
       termasuk apakah preview siklus yang baru benar-benar membantu.
 
-- [ ] **`opsiJadwal`/`tanggalJadwalMap` di TukarJadwalForm tidak difilter
-      per bulan** — kalender tanggal (fase 64) menampilkan SEMUA Jadwal
-      milik karyawan sepanjang waktu yang pernah di-generate, bukan cuma
-      beberapa bulan terdekat. Untuk karyawan yang sudah lama bekerja
-      dengan banyak bulan Jadwal ter-generate, `minDate()`/`maxDate()`
-      kalendernya bisa membentang sangat jauh meski sebagian besar
-      tanggalnya `disabledDates()`. Belum masalah nyata sekarang (data
-      masih dummy, rentang pendek), tapi berpotensi jadi kalender yang
-      berat/lambat di-render kalau rentangnya membentang bertahun-tahun.
 
 
 ## Fitur & infrastruktur

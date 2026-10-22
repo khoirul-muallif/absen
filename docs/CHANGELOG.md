@@ -12,6 +12,96 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 66: TukarJadwalForm — batasi jendela kalender per bulan + balik kebijakan pindah hari libur rotasi
+
+Menutup item todo.md "`tanggalJadwalMap`/`opsiJadwal` belum difilter per
+bulan" (sejak fase 64), sekaligus satu keputusan RS yang sebelumnya
+tertunda terkait mode Pindah.
+
+### Jendela kalender dibatasi per bulan
+
+`tanggalJadwalMap()` (dan seluruh turunannya — `tanggalPalingAwal()`,
+`tanggalPalingAkhir()`, `tanggalDisabled()`) sebelumnya memuat SELURUH
+histori Jadwal karyawan tanpa batas. `minDate()`/`maxDate()` kalender bisa
+membentang bertahun-tahun untuk karyawan yang sudah lama bekerja dengan
+banyak bulan ter-generate, meski sebagian besar tanggalnya `disabledDates()`
+— belum masalah nyata saat data masih dummy/rentang pendek, tapi berpotensi
+bikin kalender berat di-render seiring data menumpuk (persis seperti yang
+sudah diprediksi di todo.md).
+
+Sekarang dibatasi jendela **1 bulan ke belakang s/d 3 bulan ke depan** dari
+hari ini (`RENTANG_BULAN_SEBELUM`/`RENTANG_BULAN_SESUDAH`, konstanta di
+`TukarJadwalForm`). Supaya record yang sedang **diedit** tetap valid dibuka
+walau tanggalnya di luar jendela default, tiap pemanggil menitip tanggal
+yang wajib termasuk lewat parameter `$tanggalWajibTermasuk` — jendelanya
+otomatis melebar mencakup bulan tanggal itu (`jadwal_id`/`jadwal_tujuan_id`/
+`tanggal_baru` milik record).
+
+### KEPUTUSAN RS: balik sebagian kebijakan fase 50 — mode Pindah untuk hari kerja, bukan hari libur
+
+Fase 50 mengizinkan mode Pindah memindah **hari libur milik sendiri** ke
+tanggal lain. Sekarang dibalik: mode Pindah hanya untuk memindah **hari
+KERJA** ke tanggal yang sudah berstatus libur milik sendiri. Memindah hari
+libur sendiri ke tanggal lain sekarang harus lewat mode Tukar dengan rekan.
+
+**Tidak bertentangan dengan keputusan fase 65** yang mempertahankan
+validasi `$konflikAsal`/`$konflikTujuan` tanpa pembatasan tambahan — itu
+soal mode Tukar (termasuk skenario "satu sisi libur" fase 50 yang TETAP
+diizinkan dan tidak disentuh sesi ini). Perubahan kali ini murni di mode
+Pindah.
+
+Guard dipasang 2 lapis:
+- **UX** — `disabledDates()` di `tanggal_pengajuan` mengecualikan tanggal
+  berstatus Libur dari pilihan sumber saat `mode === 'pindah'` (parameter
+  baru `$kecualikanLibur` di `tanggalDisabled()`). `afterStateUpdated()` di
+  Radio `mode` juga mereset `tanggal_pengajuan`/`jadwal_id` kalau admin
+  ganti dari Tukar ke Pindah padahal sudah terlanjur pilih tanggal libur.
+- **Server-side** — `rule()` baru di `Hidden::make('jadwal_id')` menolak
+  submit kalau `mode === 'pindah'` dan `Jadwal` yang dipilih berjenis
+  `libur`, supaya aturan ini tidak bisa dilewati lewat request langsung.
+
+Sisi tujuan (`tanggal_baru`) tidak berubah — `rule()`-nya sejak fase 50
+sudah benar menolak kalau tujuan bukan `JENIS_LIBUR`, sudah sejalan dengan
+arah baru ini.
+
+### BUG DITEMUKAN & DIPERBAIKI (saat assembling perubahan windowing)
+
+`Placeholder::make('shift_tujuan_info')` (kolom "Shift pada tanggal ini" di
+sisi rekan tujuan) salah pakai filter & tanggal milik **pengaju**
+(`karyawan_pengaju_filter`/`tanggal_pengajuan`) alih-alih **tujuan**
+(`karyawan_tujuan_filter`/`tanggal_tujuan_pengajuan`) — salin-tempel keliru
+saat menambahkan parameter `$tanggalWajibTermasuk` ke seluruh closure
+terkait. Admin yang membuka form tukar melihat shift pengaju di kolom yang
+seharusnya menampilkan shift rekan tujuan. `shift_pengajuan_info` turut
+dirapikan ikut `$tanggalWajibTermasuk` dari record saat edit, supaya
+placeholder-nya tidak salah tampil "-" untuk record lama di luar jendela
+default.
+
+### Test
+
+`TukarJadwalResourceTest`: test lama "bisa memindahkan jadwal libur milik
+sendiri ke tanggal lain" (mengunci perilaku fase 50 lama yang sekarang
+dibalik) diganti 2 test — "menolak memindahkan jadwal libur sendiri (mode
+pindah cuma untuk hari kerja)" dan "bisa memindahkan hari kerja ke tanggal
+libur milik sendiri". Tidak ada test lain yang tersentuh asumsi lama ini
+(dicek: test "tukar libur-dengan-kerja berhasil" dari fase 50 — mode
+Tukar, bukan Pindah — tidak berubah).
+
+Full suite: **592 test passing (1763 assertions)** — naik dari 591 di akhir
+fase 65.
+
+### Belum dikerjakan
+
+- Pewarnaan kalender "Pindah ke tanggal" — diselesaikan sebagai perjelas
+  helperText (menjelaskan eksplisit kenapa sebuah tanggal tidak bisa
+  diklik), bukan warna sungguhan di grid kalender. Filament tidak punya
+  opsi per-hari-coloring bawaan untuk DatePicker.
+- Anchor preview siklus Pola Rotasi belum bisa dipilih per-karyawan (item
+  todo.md lama, `PolaRotasiResource`/`PolaRotasiForm`) — belum disentuh
+  sesi ini.
+- Ikon reorder Repeater Pola Rotasi — masih menunggu dilihat langsung di
+  browser sebelum diputuskan.
+  
 ## fase 65: redesign rotasi individu + investigasi & penyelesaian TukarJadwal × rotasi
 
 Tiga pekerjaan berurutan dalam satu sesi, dipicu pertanyaan Khoirul soal
