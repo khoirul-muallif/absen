@@ -12,6 +12,62 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 69: gabung grup menu "Manajemen Shift" & "Manajemen Rotasi"
+
+Menutup item todo.md "Shift Karyawan Umum & Shift Karyawan Rotasi tidak
+lagi bersebelahan di menu" — fase 15 sengaja menaruh dua menu ini
+berdampingan supaya jelas keduanya pasangan untuk 2 tipe_jadwal berbeda,
+tapi reorganisasi sidebar fase 20 memisahkannya ke grup berbeda tanpa
+keputusan tertulis. Fase 31 & 33 sempat menutup sebagian lewat helper
+text yang menyebut grup pasangannya secara eksplisit, tapi tidak
+menyelesaikan akar masalahnya.
+
+### Perubahan
+
+`Shift`, `PolaRotasi`, `KaryawanShift`, dan `KaryawanPolaRotasi`
+digabung jadi satu `navigationGroup` **"Manajemen Shift & Rotasi"**,
+dengan `navigationSort` direnumber eksplisit 1-4 (sebelumnya 1,1,2,2 —
+dua pasang nilai sama yang urutan tie-break-nya tidak predictable kalau
+digabung apa adanya):
+1. Shift
+2. Pola Rotasi
+3. Shift Karyawan Umum
+4. Shift Karyawan Rotasi
+
+"Shift Karyawan Umum" dan "Shift Karyawan Rotasi" sekarang bersebelahan
+persis (posisi 3-4), sesuai maksud asli fase 15.
+
+Helper text yang menyebut nama grup lama dirapikan di 4 tempat:
+- `KaryawanShiftForm` & `KaryawanPolaRotasiForm`: referensi grup
+  dihapus sepenuhnya (diganti "sebelah menu ini") — sudah tidak perlu
+  disebut eksplisit karena sekarang memang satu grup yang sama.
+- `KaryawanForm` & `KaryawanInfolist` (helper text `tipe_jadwal`
+  karyawan): nama grup diupdate ke "Manajemen Shift & Rotasi" — tetap
+  disebut eksplisit di sini karena dibaca dari halaman Karyawan, bukan
+  dari form shift itu sendiri, jadi nama grup tetap membantu orientasi
+  admin yang belum tentu familiar sidebar-nya.
+
+Dicek dengan grep menyeluruh (`Manajemen Shift`, `Manajemen Rotasi`) —
+tidak ada referensi tersisa ke nama grup lama di mana pun.
+
+### Urutan grup di sidebar — sengaja TIDAK diubah
+
+Sempat dipertimbangkan menambah `->navigationGroups()` eksplisit di
+`AdminPanelProvider.php` untuk mengatur urutan grup (saat ini murni
+ikut urutan discovery Filament, bukan aturan eksplisit — tidak ada
+`navigationGroups()` di provider). **KEPUTUSAN:** urutan yang ada
+sekarang (Presensi, Laporan, Pengajuan & Cuti, Master Data, Manajemen
+Shift & Rotasi) dikonfirmasi sudah cukup baik, tidak perlu diatur
+ulang. Grup gabungan baru ini tetap di posisi terakhir — tidak masalah,
+karena item todo.md aslinya cuma soal 2 resource individual bersebelahan
+*di dalam* grup, bukan posisi grup itu sendiri di sidebar.
+
+### Test
+
+`--filter=Karyawan` (mencakup `KaryawanResourceTest`,
+`KaryawanShiftResourceTest`, `KaryawanPolaRotasiResourceTest`): **135
+test passing (404 assertions)**, tidak ada regresi.
+
 ## fase 68: hapus reorderableWithButtons() di Repeater langkah Pola Rotasi
 
 Menutup item todo.md terakhir dari daftar "Ikon reorder di Repeater Pola

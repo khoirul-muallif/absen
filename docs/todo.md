@@ -63,14 +63,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       hook (onDayCreate), bukan cuma ganti parameter. Ditemukan 20 Okt 2026
       saat audit TukarJadwal x rotasi.
 
-- [ ] **"Shift Karyawan Umum" & "Shift Karyawan Rotasi" tidak lagi
-      bersebelahan di menu** — fase 15 sengaja menaruh keduanya berdampingan
-      supaya jelas ini pasangan untuk 2 tipe_jadwal; reorganisasi sidebar
-      fase 20 memisahkannya ke grup berbeda tanpa keputusan tertulis.
-      Status: separuh tertutup di fase 31 & 33 — kedua form sekarang punya
-      helper text yang menyebut nama menu DAN grup pasangannya secara
-      eksplisit. Sisa: keputusan apakah kedua menu disatukan lagi dalam satu
-      grup.
 
 
 
