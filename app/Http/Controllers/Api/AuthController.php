@@ -46,6 +46,7 @@ class AuthController extends Controller
                     'unit_kerja'     => $karyawan->unit_kerja,
                     'status_pegawai' => $karyawan->status_pegawai,
                     'role'           => $karyawan->role,
+                    'tipe_jadwal'    => $karyawan->tipe_jadwal,
                     'foto_profil'    => $karyawan->foto_profil
                         ? asset('storage/' . $karyawan->foto_profil)
                         : null,
@@ -96,6 +97,7 @@ class AuthController extends Controller
                 'jabatan'          => $karyawan->jabatan,
                 'unit_kerja'       => $karyawan->unit_kerja,
                 'status_pegawai'   => $karyawan->status_pegawai,
+                'tipe_jadwal'      => $karyawan->tipe_jadwal,
                 'tanggal_bergabung'=> $karyawan->tanggal_bergabung?->format('d M Y'),
                 'foto_profil'      => $karyawan->foto_profil
                     ? asset('storage/' . $karyawan->foto_profil)

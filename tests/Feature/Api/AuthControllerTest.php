@@ -25,6 +25,7 @@ it('bisa login dengan email dan password yang benar', function () {
     $response->assertOk()
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.karyawan.id', $karyawan->id)
+        ->assertJsonPath('data.karyawan.tipe_jadwal', $karyawan->tipe_jadwal)
         ->assertJsonPath('data.karyawan.instansi.id', $instansi->id)
         ->assertJsonStructure(['data' => ['token']]);
 });
@@ -122,6 +123,7 @@ it('mengembalikan data karyawan yang sedang login lewat /me', function () {
         ->getJson('/api/auth/me');
 
     $response->assertStatus(200)
+        ->assertJsonPath('data.tipe_jadwal', $karyawan->tipe_jadwal)
         ->assertJsonPath('data.shift_aktif.jam_masuk', '08:00')
         ->assertJsonPath('data.shift_aktif.jam_pulang', '15:00');
 });
