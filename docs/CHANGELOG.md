@@ -12,6 +12,67 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 70: GenerateJadwalBulanan generate baris libur mingguan eksplisit (opsi A)
+
+Menutup item todo.md "Keputusan arsitektur — libur mingguan karyawan umum
+gak punya baris Jadwal". **KEPUTUSAN: opsi A** — konsisten dengan rotasi
+yang sudah punya baris eksplisit untuk hari liburnya sendiri, dan supaya
+"Pindah Tanggal" TukarJadwal punya tanggal tujuan valid untuk karyawan
+umum (sebelumnya nyaris tidak kepake, cuma berlaku ke libur nasional).
+
+### Perubahan
+
+`GenerateJadwalBulanan`: cek "bukan hari kerja pola shift" (dulu `skip`,
+`$stat['skip_libur_mingguan']`) sekarang generate baris `Jadwal` eksplisit
+(`jenis=libur`, `shift_id=null`) seperti halnya libur nasional. Stat
+dipecah jadi `dibuat_libur_nasional` / `dibuat_libur_mingguan` (sebelumnya
+cuma `dibuat_libur` untuk nasional saja), tabel output disesuaikan.
+
+### BUG DITEMUKAN & DIPERBAIKI (bukan cuma soal opsi A): RekapHarian salah
+label baris libur nasional sebagai libur_personal
+
+Diaudit sebagai bagian dari perubahan ini: `RekapHarian` cek #2 menandai
+SEMUA baris `jenis=libur` sebagai `libur_personal` tanpa melihat sumbernya.
+Ini sudah salah sejak sebelum opsi A — begitu `GenerateJadwalBulanan` sudah
+pernah jalan dan membuat baris libur nasional eksplisit (cek #4 di command
+itu, sudah ada dari awal), `RekapHarian` yang jalan belakangan akan
+melabelinya `libur_personal`, bukan `libur_nasional`. Stat `libur_nasional`
+di bawahnya cuma pernah kena untuk tanggal yang `GenerateJadwalBulanan`
+BELUM pernah dijalankan (jalur lama, generate `Absensi` langsung).
+
+Fix: cek #2 sekarang mengecek `HariLibur::meliburkan()` dulu untuk
+tanggal itu sebelum memutuskan kategorinya — `libur_nasional` kalau match
+HariLibur, `libur_mingguan` kalau karyawan umum dan tidak match, sisanya
+(rotasi) tetap `libur_personal` seperti sebelumnya.
+
+### Titik yang diaudit tapi TIDAK disentuh (sudah aman)
+
+- `Karyawan::shiftYangDiharapkanPada()` — untuk karyawan umum, baris
+  `jenis=libur` eksplisit (baru) dan fallback `KaryawanShift` +
+  `adalahHariKerja()` (lama, kalau baris belum ada) sama-sama berujung
+  `return null` untuk hari yang sama. Hasil akhir tidak berubah, jadi
+  `PengingatBelumAbsen`/`PengingatBelumAbsenPulang` otomatis tidak
+  terdampak.
+- `GenerateJadwal.php` (halaman admin) — `notifikasiHasil()` cuma
+  menampilkan `Artisan::output()` mentah, otomatis ikut berubah mengikuti
+  tabel command tanpa perlu disentuh.
+
+### Test
+
+`GenerateJadwalBulananTest`: test lama "skip tanggal yang bukan hari
+kerja pola shift (libur mingguan)" diganti "generate jadwal libur
+eksplisit untuk hari yang bukan hari kerja (libur mingguan)" — sekarang
+mengunci bahwa baris DIBUAT (`jenis=libur`, `shift_id=null`), bukan
+tidak ada baris sama sekali.
+
+Full suite: 592 test passing (1769 assertions) — naik dari 592 (1763)
+sebelumnya (soal jumlah assertion naik meski jumlah test sama: test yang
+diganti punya assertion lebih banyak dari versi lama).
+
+Diverifikasi juga lewat `migrate:fresh --seed` + `SimulasiMassalSeeder`:
+9265 baris Absensi, audit `tipe_jadwal` & `menit_terlambat`/
+`melebihi_toleransi_bulanan` 0 salah.
+
 ## fase 69: gabung grup menu "Manajemen Shift" & "Manajemen Rotasi"
 
 Menutup item todo.md "Shift Karyawan Umum & Shift Karyawan Rotasi tidak

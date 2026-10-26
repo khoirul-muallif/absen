@@ -61,7 +61,7 @@ test('tidak menimpa Jadwal yang sudah ada di tanggal tersebut', function () {
     expect($jadwal->jenis)->toBe('piket')->and($jadwal->sumber)->toBe('manual');
 });
 
-test('skip tanggal yang bukan hari kerja pola shift (libur mingguan)', function () {
+test('generate jadwal libur eksplisit untuk hari yang bukan hari kerja (libur mingguan)', function () {
     $shift = Shift::factory()->create([
         'instansi_id' => $this->instansi->id,
         'hari_kerja' => [1, 2, 3, 4, 5], // Senin-Jumat
@@ -76,8 +76,15 @@ test('skip tanggal yang bukan hari kerja pola shift (libur mingguan)', function 
     jalankanGeneratorBulanan(8, 2026);
 
     // 2026-08-01 & 2026-08-02 = Sabtu & Minggu
-    expect(Jadwal::where('karyawan_id', $karyawan->id)->whereDate('tanggal', '2026-08-01')->exists())->toBeFalse()
-        ->and(Jadwal::where('karyawan_id', $karyawan->id)->whereDate('tanggal', '2026-08-02')->exists())->toBeFalse();
+    $sabtu = Jadwal::where('karyawan_id', $karyawan->id)->whereDate('tanggal', '2026-08-01')->first();
+    $minggu = Jadwal::where('karyawan_id', $karyawan->id)->whereDate('tanggal', '2026-08-02')->first();
+
+    expect($sabtu)->not->toBeNull()
+        ->and($sabtu->jenis)->toBe('libur')
+        ->and($sabtu->shift_id)->toBeNull()
+        ->and($minggu)->not->toBeNull()
+        ->and($minggu->jenis)->toBe('libur')
+        ->and($minggu->shift_id)->toBeNull();
 });
 
 test('skip tanggal yang bentrok dengan Cuti approved', function () {

@@ -42,13 +42,31 @@ class RekapHarian extends Command
                 continue;
             }
 
-            // 2. Jadwal libur eksplisit (berlaku untuk umum & rotasi)
+            // 2. Jadwal libur eksplisit (berlaku untuk umum & rotasi).
+            //    Baris jenis=libur bisa berasal dari 3 sumber sekarang: libur nasional
+            //    (umum & rotasi), libur mingguan (umum saja, sejak opsi A), atau posisi
+            //    libur di siklus rotasi (personal per karyawan). Dibedakan di sini
+            //    supaya statistiknya tetap bermakna — sebelumnya SEMUA baris libur
+            //    (termasuk yang sebenarnya libur nasional) jatuh ke libur_personal,
+            //    yang berarti stat libur_nasional di bawah nggak pernah kena untuk
+            //    tanggal yang generatornya sudah dijalankan duluan.
             $jadwal = Jadwal::where('karyawan_id', $karyawan->id)
                 ->whereDate('tanggal', $tanggal)
                 ->first();
 
             if ($jadwal?->jenis === Jadwal::JENIS_LIBUR) {
-                $stat['libur_personal']++;
+                $adalahHariLibur = HariLibur::where('instansi_id', $karyawan->instansi_id)
+                    ->meliburkan()
+                    ->whereDate('tanggal', $tanggal)
+                    ->exists();
+
+                if ($adalahHariLibur) {
+                    $stat['libur_nasional']++;
+                } elseif ($karyawan->isUmum()) {
+                    $stat['libur_mingguan']++;
+                } else {
+                    $stat['libur_personal']++;
+                }
                 continue;
             }
 

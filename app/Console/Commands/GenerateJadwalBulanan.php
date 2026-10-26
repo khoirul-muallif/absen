@@ -41,7 +41,8 @@ class GenerateJadwalBulanan extends Command
 
         $stat = [
             'dibuat_reguler'   => 0,
-            'dibuat_libur'     => 0,
+            'dibuat_libur_nasional' => 0,
+            'dibuat_libur_mingguan' => 0,
             'skip_sudah_ada'   => 0,
             'skip_libur_mingguan' => 0,
             'skip_cuti_dinas'  => 0,
@@ -81,10 +82,21 @@ class GenerateJadwalBulanan extends Command
                     continue;
                 }
 
-                // 2. Bukan hari kerja pola shift ini? -> libur mingguan wajar, gak perlu row
-                //    (konsisten dengan fallback RekapHarian)
+                // 2. Bukan hari kerja pola shift ini? -> generate eksplisit jenis 'libur'
+                //    (opsi A dari todo.md) — supaya "Pindah Tanggal" TukarJadwal punya
+                //    tanggal tujuan valid untuk karyawan umum, konsisten dengan rotasi
+                //    yang juga punya baris eksplisit untuk hari liburnya sendiri.
                 if (! $assignment->shift->adalahHariKerja($tanggal)) {
-                    $stat['skip_libur_mingguan']++;
+                    if (! $dryRun) {
+                        Jadwal::create([
+                            'karyawan_id' => $karyawan->id,
+                            'shift_id'    => null,
+                            'tanggal'     => $tanggal->toDateString(),
+                            'jenis'       => Jadwal::JENIS_LIBUR,
+                            'keterangan'  => 'Libur mingguan - otomatis dari generator jadwal bulanan',
+                        ]);
+                    }
+                    $stat['dibuat_libur_mingguan']++;
                     continue;
                 }
 
@@ -123,7 +135,7 @@ class GenerateJadwalBulanan extends Command
                             'keterangan'  => 'Hari libur nasional/cuti bersama - otomatis dari generator jadwal bulanan',
                         ]);
                     }
-                    $stat['dibuat_libur']++;
+                    $stat['dibuat_libur_nasional']++;
                     continue;
                 }
 
@@ -144,16 +156,16 @@ class GenerateJadwalBulanan extends Command
         $this->newLine();
         $this->info($dryRun ? 'Preview selesai (belum ada data yang disimpan).' : 'Selesai.');
         $this->table(
-            ['Periode', 'Reguler Dibuat', 'Libur Dibuat', 'Skip (Sudah Ada)', 'Skip (Libur Mingguan)', 'Skip (Cuti/Dinas)'],
-            [[
-                $awalBulan->format('M Y'),
-                $stat['dibuat_reguler'],
-                $stat['dibuat_libur'],
-                $stat['skip_sudah_ada'],
-                $stat['skip_libur_mingguan'],
-                $stat['skip_cuti_dinas'],
-            ]]
-        );
+    ['Periode', 'Reguler Dibuat', 'Libur Nasional Dibuat', 'Libur Mingguan Dibuat', 'Skip (Sudah Ada)', 'Skip (Cuti/Dinas)'],
+    [[
+        $awalBulan->format('M Y'),
+        $stat['dibuat_reguler'],
+        $stat['dibuat_libur_nasional'],
+        $stat['dibuat_libur_mingguan'],
+        $stat['skip_sudah_ada'],
+        $stat['skip_cuti_dinas'],
+    ]]
+);
 
         return self::SUCCESS;
     }
