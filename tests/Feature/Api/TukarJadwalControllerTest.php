@@ -443,3 +443,49 @@ it('404 kalau membatalkan pengajuan milik karyawan lain', function () {
     $this->deleteJson("/api/tukar-jadwal/{$tukarJadwal->id}")
         ->assertStatus(404);
 });
+
+it('bisa pindah ke tanggal yang sudah berstatus libur milik sendiri', function () {
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+    $tanggalLibur = today()->addDays(9);
+    Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR,
+        'tanggal' => $tanggalLibur,
+    ]);
+
+    loginKaryawanSebagai($karyawan);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'pindah',
+        'jadwal_id' => $jadwal->id,
+        'tanggal_baru' => $tanggalLibur->toDateString(),
+        'alasan' => 'Test',
+    ])->assertCreated()
+        ->assertJsonPath('success', true);
+});
+
+it('menolak pindah kalau jadwal asal berjenis libur (harus lewat mode tukar)', function () {
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $jadwalLibur = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR,
+        'tanggal' => today()->addDays(3),
+    ]);
+
+    loginKaryawanSebagai($karyawan);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'pindah',
+        'jadwal_id' => $jadwalLibur->id,
+        'tanggal_baru' => today()->addDays(10)->toDateString(),
+        'alasan' => 'Test',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Hari libur hanya bisa dipindah lewat mode Tukar dengan rekan, bukan Pindah Tanggal.');
+});

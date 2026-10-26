@@ -59,13 +59,23 @@ class TukarJadwalController extends Controller
     protected function ajukanPindah($karyawan, Jadwal $jadwal, Request $request): JsonResponse
     {
         $tanggalBaru = \Carbon\Carbon::parse($request->tanggal_baru);
+        if ($jadwal->jenis === Jadwal::JENIS_LIBUR) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hari libur hanya bisa dipindah lewat mode Tukar dengan rekan, bukan Pindah Tanggal.',
+            ], 422);
+        }
 
-        $sudahAdaJadwal = Jadwal::where('karyawan_id', $karyawan->id)
+        // Tujuan pindah harus hari libur milik sendiri (kebijakan fase 50/66).
+        // approveAndSwap() menerima 2 kasus: tidak ada baris sama sekali (tinggal
+        // dipindah), atau ada baris existing berjenis libur (ditukar posisi).
+        // Baris existing SELAIN libur tetap harus ditolak di sini.
+        $existingTujuan = Jadwal::where('karyawan_id', $karyawan->id)
             ->where('tanggal', $tanggalBaru->toDateString())
             ->where('id', '!=', $jadwal->id)
-            ->exists();
+            ->first();
 
-        if ($sudahAdaJadwal) {
+        if ($existingTujuan && $existingTujuan->jenis !== Jadwal::JENIS_LIBUR) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda sudah punya jadwal di tanggal tersebut.',
