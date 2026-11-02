@@ -26,14 +26,28 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Bug diketahui, belum dikerjakan
 
-- [ ] **Tukar jadwal beda hari (mode tukar, tanggal_asal != tanggal_tujuan)
-      bikin bug** — dilaporkan Khoirul 30 Okt 2026 (belum ada detail
-      reproduksi/pesan error). Rencana sementara: nonaktifkan dulu
-      kombinasi ini di FE (misal filter rekanList biar cuma nawarin
-      rekan yang jadwalnya di TANGGAL YANG SAMA, bukan tanggal bebas),
-      sampai akar masalahnya ketemu. Perlu detail lebih lanjut dari
-      Khoirul sebelum dikerjakan: apa gejalanya, kapan muncul (submit?
-      approve? tampilan riwayat?).
+- [ ] **Tukar jadwal beda hari gagal untuk karyawan rotasi (mode tukar,
+      tanggal_asal != tanggal_tujuan) — penyebab sudah ketahuan, solusi
+      belum diputuskan.** Dilaporkan Khoirul 30 Okt 2026, diverifikasi
+      2 Nov 2026 via screenshot: tukar tanggal SAMA (04 Nov⇄04 Nov)
+      berhasil, tukar beda tanggal (05 Nov⇄06 Nov) gagal dengan pesan
+      "salah satu karyawan sudah punya jadwal sendiri di tanggal
+      pasangannya".
+
+      Penyebab: karyawan rotasi punya baris Jadwal di SETIAP hari
+      termasuk hari liburnya (desain rotasi individu fase 65) — jadi
+      `$konflikAsal`/`$konflikTujuan` di `ajukanTukar()` SELALU match
+      kecuali kebetulan tanggal tujuan adalah hari LIBUR si pengaju
+      (dan sebaliknya untuk rekan). Ini bukan bug di validasinya
+      sendiri (logicnya benar, konsisten sejak fase 11) — ini
+      konsekuensi struktural desain rotasi yang belum pernah dibahas
+      implikasinya ke modul TukarJadwal beda tanggal.
+
+      Belum diputuskan solusinya: apakah memang seharusnya begini
+      (tukar beda tanggal untuk rotasi memang cuma valid kalau salah
+      satu sisi libur — sama seperti kebijakan "satu sisi libur" fase
+      50), atau perlu pelonggaran aturan konflik khusus rotasi. Perlu
+      diskusi keputusan RS sebelum dikerjakan secara teknis.
       
 ## Kebutuhan masukan dari pihak RS
 
