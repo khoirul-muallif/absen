@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\TukarJadwals\Tables;
 
+use App\Exceptions\TukarJadwalKonflikException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -98,12 +99,20 @@ class TukarJadwalsTable
                             ? 'Jadwal akan langsung dipindah ke tanggal baru setelah disetujui.'
                             : 'Jadwal kedua karyawan akan langsung tertukar setelah disetujui.')
                         ->action(function ($record) {
-                            $record->approveAndSwap(auth()->user());
+                            try {
+                                $record->approveAndSwap(auth()->user());
 
-                            Notification::make()
-                                ->title('Tukar jadwal disetujui')
-                                ->success()
-                                ->send();
+                                Notification::make()
+                                    ->title('Tukar jadwal disetujui')
+                                    ->success()
+                                    ->send();
+                            } catch (TukarJadwalKonflikException $e) {
+                                Notification::make()
+                                    ->title('Gagal menyetujui pengajuan')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
                         }),
                     Action::make('batalkanMenungguRekan')
                         ->label('Batalkan (rekan tidak respons)')

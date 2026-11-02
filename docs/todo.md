@@ -11,8 +11,7 @@ SELESAI** (fase 56: Harian/Bulanan/Pelanggaran, Excel+PDF). **Simulasi
 rotasi 24/7 realistis SELESAI** (redesign terakhir fase 65: rotasi individu
 per unit, bukan tim tetap per shift — lihat CHANGELOG). **Refactor tampilan
 3 halaman Laporan Presensi jadi card Filament SELESAI** (fase 56 lanjutan,
-commit `584d2e8`). **TukarJadwal × rotasi SELESAI** (fase 65 — validasi lama
-terbukti cukup, tidak perlu pembatasan tambahan).
+commit `584d2e8`). **TukarJadwal × rotasi beda tanggal SELESAI** (tukar beda tanggal untuk rotasi sekarang diizinkan kalau sisi existing-nya libur, baris libur diserap saat approve — lihat CHANGELOG. Batasan yang diterima: kalau kedua sisi sama-sama shift kerja, tukar beda tanggal tetap ditolak, butuh pihak ketiga nutup shift, di luar scope tukar 2-arah).
 
 Fokus berikutnya:
 
@@ -24,31 +23,7 @@ Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
-## Bug diketahui, belum dikerjakan
-
-- [ ] **Tukar jadwal beda hari gagal untuk karyawan rotasi (mode tukar,
-      tanggal_asal != tanggal_tujuan) — penyebab sudah ketahuan, solusi
-      belum diputuskan.** Dilaporkan Khoirul 30 Okt 2026, diverifikasi
-      2 Nov 2026 via screenshot: tukar tanggal SAMA (04 Nov⇄04 Nov)
-      berhasil, tukar beda tanggal (05 Nov⇄06 Nov) gagal dengan pesan
-      "salah satu karyawan sudah punya jadwal sendiri di tanggal
-      pasangannya".
-
-      Penyebab: karyawan rotasi punya baris Jadwal di SETIAP hari
-      termasuk hari liburnya (desain rotasi individu fase 65) — jadi
-      `$konflikAsal`/`$konflikTujuan` di `ajukanTukar()` SELALU match
-      kecuali kebetulan tanggal tujuan adalah hari LIBUR si pengaju
-      (dan sebaliknya untuk rekan). Ini bukan bug di validasinya
-      sendiri (logicnya benar, konsisten sejak fase 11) — ini
-      konsekuensi struktural desain rotasi yang belum pernah dibahas
-      implikasinya ke modul TukarJadwal beda tanggal.
-
-      Belum diputuskan solusinya: apakah memang seharusnya begini
-      (tukar beda tanggal untuk rotasi memang cuma valid kalau salah
-      satu sisi libur — sama seperti kebijakan "satu sisi libur" fase
-      50), atau perlu pelonggaran aturan konflik khusus rotasi. Perlu
-      diskusi keputusan RS sebelum dikerjakan secara teknis.
-      
+  
 ## Kebutuhan masukan dari pihak RS
 
 - [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`

@@ -7,6 +7,7 @@ use App\Models\Jadwal;
 use App\Models\Karyawan;
 use App\Models\Shift;
 use App\Models\TukarJadwal;
+use App\Models\User;
 
 use function Pest\Livewire\livewire;
 
@@ -599,5 +600,138 @@ it('bisa memindahkan hari kerja ke tanggal libur milik sendiri', function () {
     $record = TukarJadwal::where('jadwal_id', $jadwalKerja->id)->first();
     expect($record)->not->toBeNull()
         ->and($record->tanggal_baru->toDateString())->toBe($tanggalLibur->toDateString());
+});
+it('approve tukar beda tanggal menghapus baris libur yang diserap dan menandai sumber=manual', function () {
+    $shift = Shift::factory()->create();
+    $admin = User::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $liburPengajuDiTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR, 'tanggal' => today()->addDays(5),
+    ]);
+
+    $tukarJadwal = TukarJadwal::factory()->create([
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'status' => 'menunggu_admin',
+    ]);
+
+    $hasil = $tukarJadwal->approveAndSwap($admin);
+
+    expect($hasil)->toBeTrue();
+    $this->assertModelMissing($liburPengajuDiTujuan);
+
+    $this->assertDatabaseHas('jadwals', [
+        'id' => $jadwalAsal->id,
+        'karyawan_id' => $tujuan->id,
+        'tanggal' => today()->addDays(3)->toDateString(),
+        'sumber' => 'manual',
+    ]);
+    $this->assertDatabaseHas('jadwals', [
+        'id' => $jadwalTujuan->id,
+        'karyawan_id' => $pengaju->id,
+        'tanggal' => today()->addDays(5)->toDateString(),
+        'sumber' => 'manual',
+    ]);
+});
+
+it('approve ditolak dan rollback penuh kalau baris libur yang mau diserap dipakai pengajuan lain', function () {
+    $shift = Shift::factory()->create();
+    $admin = User::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $liburRebutan = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR, 'tanggal' => today()->addDays(5),
+    ]);
+
+    $tukarJadwal = TukarJadwal::factory()->create([
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'status' => 'menunggu_admin',
+    ]);
+
+    TukarJadwal::factory()->create([
+        'jadwal_id' => $liburRebutan->id,
+        'status' => 'menunggu_rekan',
+    ]);
+
+    expect(fn () => $tukarJadwal->approveAndSwap($admin))->toThrow(\App\Exceptions\TukarJadwalKonflikException::class);
+    $this->assertModelExists($liburRebutan);
+    $this->assertDatabaseHas('jadwals', ['id' => $jadwalAsal->id, 'karyawan_id' => $pengaju->id]);
+    $this->assertDatabaseHas('jadwals', ['id' => $jadwalTujuan->id, 'karyawan_id' => $tujuan->id]);
+    expect($tukarJadwal->fresh()->status)->toBe('menunggu_admin');
+});
+
+it('approve ditolak kalau baris yang tadinya libur sudah berubah jadi kerja sejak pengajuan dibuat', function () {
+    $shift = Shift::factory()->create();
+    $admin = User::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(5), 'jenis' => Jadwal::JENIS_REGULER,
+    ]);
+    $tukarJadwal = TukarJadwal::factory()->create([
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'status' => 'menunggu_admin',
+    ]);
+
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'jenis' => Jadwal::JENIS_REGULER, 'tanggal' => today()->addDays(5),
+    ]);
+
+    expect(fn () => $tukarJadwal->approveAndSwap($admin))->toThrow(\App\Exceptions\TukarJadwalKonflikException::class);    expect($tukarJadwal->fresh()->status)->toBe('menunggu_admin');
+});
+
+it('regression: approve tukar tanggal sama (karyawan umum) tetap jalan seperti sebelumnya', function () {
+    $shift = Shift::factory()->create();
+    $admin = User::factory()->create();
+    $pengaju = Karyawan::factory()->create();
+    $tujuan = Karyawan::factory()->create();
+
+    $tanggalSama = today()->addDays(4);
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id, 'tanggal' => $tanggalSama,
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id, 'tanggal' => $tanggalSama,
+    ]);
+
+    $tukarJadwal = TukarJadwal::factory()->create([
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'status' => 'menunggu_admin',
+    ]);
+
+    expect($tukarJadwal->approveAndSwap($admin))->toBeTrue();
+    $this->assertDatabaseHas('jadwals', ['id' => $jadwalAsal->id, 'karyawan_id' => $tujuan->id]);
+    $this->assertDatabaseHas('jadwals', ['id' => $jadwalTujuan->id, 'karyawan_id' => $pengaju->id]);
 });
 

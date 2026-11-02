@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\TukarJadwalKonflikException;
 use App\Traits\HasApprovalWorkflow;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -117,11 +118,11 @@ class TukarJadwal extends Model
     public function responRekan(Karyawan $rekan, bool $setuju, ?string $catatan = null): bool
     {
         if ($this->status !== 'menunggu_rekan') {
-            throw new \Exception('Pengajuan ini bukan lagi tahap menunggu respon rekan.');
+            throw new TukarJadwalKonflikException('Pengajuan ini bukan lagi tahap menunggu respon rekan.');
         }
 
         if ($rekan->id !== $this->karyawan_tujuan_id) {
-            throw new \Exception('Anda bukan pihak yang dituju pada pengajuan ini.');
+            throw new TukarJadwalKonflikException('Anda bukan pihak yang dituju pada pengajuan ini.');
         }
 
         return $this->update([
@@ -142,7 +143,7 @@ class TukarJadwal extends Model
     public function approveAndSwap(User $approver, ?string $catatan = null): bool
     {
         if ($this->status !== 'menunggu_admin') {
-            throw new \Exception(
+            throw new TukarJadwalKonflikException(
                 'Gagal: pengajuan ini belum berstatus menunggu_admin (kemungkinan masih '
                 . 'menunggu respon rekan, atau sudah selesai diproses sebelumnya).'
             );
@@ -152,7 +153,7 @@ class TukarJadwal extends Model
             $jadwalA = Jadwal::lockForUpdate()->findOrFail($this->jadwal_id);
 
             if ($jadwalA->karyawan_id !== $this->karyawan_pengaju_id) {
-                throw new \Exception(
+                throw new TukarJadwalKonflikException(
                     'Gagal: jadwal pengaju sudah berubah kepemilikan sejak pengajuan ini dibuat. '
                     . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
                 );
@@ -173,7 +174,7 @@ class TukarJadwal extends Model
                     $jadwalA->update(['jenis' => Jadwal::JENIS_LIBUR, 'shift_id' => null, 'sumber' => 'manual']);
                     $existing->update(['jenis' => $jenisAsal, 'shift_id' => $shiftIdAsal, 'sumber' => 'manual']);
                 } else {
-                    throw new \Exception(
+                    throw new TukarJadwalKonflikException(
                         'Gagal: tanggal tujuan sudah terisi Jadwal lain (bukan libur) sejak pengajuan '
                         . 'dibuat. Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
                     );
@@ -182,7 +183,7 @@ class TukarJadwal extends Model
                 $jadwalB = Jadwal::lockForUpdate()->findOrFail($this->jadwal_tujuan_id);
 
                 if ($jadwalB->karyawan_id !== $this->karyawan_tujuan_id) {
-                    throw new \Exception(
+                    throw new TukarJadwalKonflikException(
                         'Gagal: jadwal tujuan sudah berubah kepemilikan sejak pengajuan ini dibuat. '
                         . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
                     );
@@ -191,13 +192,59 @@ class TukarJadwal extends Model
                 $karyawanA = $jadwalA->karyawan_id;
                 $karyawanB = $jadwalB->karyawan_id;
                 $tanggalA  = $jadwalA->tanggal;
+                $tanggalB  = $jadwalB->tanggal;
+
+                // Re-cek race condition: baris di tanggal pasangan bisa saja berubah sejak
+                // pengajuan dibuat (ajukan() sudah validasi ini, tapi approve bisa terjadi
+                // belakangan). Baris LIBUR boleh diserap (dihapus, karena hasil swap di
+                // bawah jadi representasi final tanggal itu); baris KERJA menggagalkan
+                // approve seluruhnya.
+                $existingDiTujuan = Jadwal::lockForUpdate()
+                    ->where('karyawan_id', $karyawanA)
+                    ->where('tanggal', $tanggalB)
+                    // exclude kedua baris yang sedang di-swap sendiri -- kalau tanggalA
+                    // == tanggalB (tukar tanggal sama), jadwalA bisa match query ini.
+                    ->whereNotIn('id', [$jadwalA->id, $jadwalB->id])
+
+                    ->first();
+
+                $existingDiAsal = Jadwal::lockForUpdate()
+                    ->where('karyawan_id', $karyawanB)
+                    ->where('tanggal', $tanggalA)
+                    ->whereNotIn('id', [$jadwalA->id, $jadwalB->id])
+                    ->first();
+
+                foreach ([$existingDiTujuan, $existingDiAsal] as $existing) {
+                    if (! $existing) {
+                        continue;
+                    }
+                    if ($existing->jenis !== Jadwal::JENIS_LIBUR) {
+                        throw new TukarJadwalKonflikException(
+                            'Gagal: salah satu karyawan sudah punya jadwal KERJA sendiri di tanggal '
+                            . 'pasangannya sejak pengajuan ini dibuat. Tolak pengajuan ini dan minta '
+                            . 'karyawan mengajukan ulang.'
+                        );
+                    }
+                    $dipakaiPengajuanLain = self::whereIn('status', ['menunggu_rekan', 'menunggu_admin'])
+                        ->where('id', '!=', $this->id)
+                        ->where(fn ($q) => $q->where('jadwal_id', $existing->id)->orWhere('jadwal_tujuan_id', $existing->id))
+                        ->exists();
+                    if ($dipakaiPengajuanLain) {
+                        throw new TukarJadwalKonflikException(
+                            'Gagal: baris libur yang akan diserap sedang dipakai pengajuan tukar/pindah '
+                            . 'lain yang masih diproses. Selesaikan pengajuan itu dulu.'
+                        );
+                    }
+                }
 
                 try {
                     $jadwalA->update(['tanggal' => now()->addYears(100)]);
+                    $existingDiTujuan?->delete();
+                    $existingDiAsal?->delete();
                     $jadwalB->update(['karyawan_id' => $karyawanA, 'sumber' => 'manual']);
                     $jadwalA->update(['karyawan_id' => $karyawanB, 'tanggal' => $tanggalA, 'sumber' => 'manual']);
                 } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                    throw new \Exception(
+                    throw new TukarJadwalKonflikException(
                         'Gagal: salah satu karyawan sudah punya jadwal sendiri di tanggal pasangannya. '
                         . 'Tolak pengajuan ini dan minta karyawan mengajukan ulang.'
                     );
@@ -235,7 +282,7 @@ class TukarJadwal extends Model
     public function batalkanOlehAdmin(User $admin, string $catatan): bool
     {
         if ($this->status !== 'menunggu_rekan') {
-            throw new \Exception(
+            throw new TukarJadwalKonflikException(
                 'Hanya pengajuan berstatus menunggu_rekan yang bisa dibatalkan lewat tombol ini. '
                 . 'Pengajuan yang sudah menunggu_admin bisa ditolak lewat tombol Tolak biasa.'
             );

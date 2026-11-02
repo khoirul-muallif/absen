@@ -125,7 +125,7 @@ class TukarJadwalController extends Controller
                 'message' => 'Jadwal rekan tujuan sudah lewat, tidak bisa ditukar.',
             ], 422);
         }
-        
+
         if ($jadwalTujuan->karyawan_id === $karyawan->id) {
             return response()->json([
                 'success' => false,
@@ -145,21 +145,28 @@ class TukarJadwalController extends Controller
             ], 422);
         }
 
-        // Konflik jadwal existing (kalau ditukar, masing-masing sudah punya jadwal lain di tanggal pasangannya?)
-        $konflikAsal = Jadwal::where('karyawan_id', $jadwalAsal->karyawan_id)
+        // Konflik jadwal existing (kalau ditukar, masing-masing sudah punya jadwal lain
+        // di tanggal pasangannya?). KEBIJAKAN (2 Nov 2026): kalau baris yang bentrok itu
+        // LIBUR, tetap diizinkan -- baris libur itu akan diserap/ditimpa oleh hasil swap
+        // saat approve (lihat TukarJadwal::approveAndSwap()). Kalau bentrok dengan shift
+        // KERJA sungguhan, tetap ditolak -- itu akan menghilangkan cover shift orang lain
+        // tanpa ketahuan siapa pun.
+        $existingDiTujuan = Jadwal::where('karyawan_id', $jadwalAsal->karyawan_id)
             ->where('tanggal', $jadwalTujuan->tanggal)
             ->where('id', '!=', $jadwalAsal->id)
-            ->exists();
+            ->first();
 
-        $konflikTujuan = Jadwal::where('karyawan_id', $jadwalTujuan->karyawan_id)
+        $existingDiAsal = Jadwal::where('karyawan_id', $jadwalTujuan->karyawan_id)
             ->where('tanggal', $jadwalAsal->tanggal)
             ->where('id', '!=', $jadwalTujuan->id)
-            ->exists();
+            ->first();
 
-        if ($konflikAsal || $konflikTujuan) {
+        if (($existingDiTujuan && $existingDiTujuan->jenis !== Jadwal::JENIS_LIBUR)
+            || ($existingDiAsal && $existingDiAsal->jenis !== Jadwal::JENIS_LIBUR)
+        ) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tidak bisa ditukar: salah satu karyawan sudah punya jadwal sendiri di tanggal pasangannya.',
+                'message' => 'Tidak bisa ditukar: salah satu karyawan sudah punya jadwal KERJA sendiri di tanggal pasangannya.',
             ], 422);
         }
 

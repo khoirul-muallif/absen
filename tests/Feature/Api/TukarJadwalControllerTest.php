@@ -555,3 +555,139 @@ it('menolak tukar kalau jadwal tujuan tanggalnya sudah lewat', function () {
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Jadwal rekan tujuan sudah lewat, tidak bisa ditukar.');
 });
+
+it('bisa mengajukan tukar beda tanggal kalau existing di tujuan berjenis libur', function () {
+    $pengaju = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $tujuan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    // Pengaju (si A) kebetulan sudah punya baris LIBUR sendiri di tanggal tujuan (5)
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    loginKaryawanSebagai($pengaju);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'tukar',
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'alasan' => 'Test tukar beda tanggal, sisi sendiri libur',
+    ])->assertCreated()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('data.status', 'menunggu_rekan');
+});
+
+it('bisa mengajukan tukar beda tanggal kalau existing di asal (milik rekan tujuan) berjenis libur', function () {
+    $pengaju = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $tujuan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    // Rekan tujuan (B) kebetulan sudah punya baris LIBUR sendiri di tanggal asal (3)
+    Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR,
+        'tanggal' => today()->addDays(3),
+    ]);
+
+    loginKaryawanSebagai($pengaju);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'tukar',
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'alasan' => 'Test tukar beda tanggal, sisi rekan libur',
+    ])->assertCreated()
+        ->assertJsonPath('success', true);
+});
+
+it('menolak tukar beda tanggal kalau existing di tujuan berjenis KERJA (bukan libur)', function () {
+    $pengaju = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $tujuan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    // Pengaju sudah punya shift KERJA sendiri (bukan libur) di tanggal tujuan (5)
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'jenis' => Jadwal::JENIS_REGULER,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    loginKaryawanSebagai($pengaju);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'tukar',
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'alasan' => 'Test tukar beda tanggal, dua-duanya kerja',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Tidak bisa ditukar: salah satu karyawan sudah punya jadwal KERJA sendiri di tanggal pasangannya.');
+});
+
+it('menolak tukar beda tanggal kalau existing di asal (milik rekan tujuan) berjenis KERJA', function () {
+    $pengaju = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $tujuan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(3),
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->addDays(5),
+    ]);
+
+    Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'jenis' => Jadwal::JENIS_REGULER,
+        'tanggal' => today()->addDays(3),
+    ]);
+
+    loginKaryawanSebagai($pengaju);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'tukar',
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'alasan' => 'Test tukar beda tanggal, sisi rekan kerja',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Tidak bisa ditukar: salah satu karyawan sudah punya jadwal KERJA sendiri di tanggal pasangannya.');
+});
