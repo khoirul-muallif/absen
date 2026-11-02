@@ -489,3 +489,69 @@ it('menolak pindah kalau jadwal asal berjenis libur (harus lewat mode tukar)', f
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Hari libur hanya bisa dipindah lewat mode Tukar dengan rekan, bukan Pindah Tanggal.');
 });
+
+// ── Validasi tanggal lewat (30 Okt 2026) ───────────────────────────────
+
+it('menolak pindah kalau jadwal asal tanggalnya sudah lewat', function () {
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->subDay(),
+    ]);
+
+    loginKaryawanSebagai($karyawan);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'pindah',
+        'jadwal_id' => $jadwal->id,
+        'tanggal_baru' => today()->addDays(10)->toDateString(),
+        'alasan' => 'Test',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Tidak bisa mengajukan tukar/pindah untuk jadwal yang sudah lewat.');
+});
+
+it('menolak pindah kalau tanggal_baru sudah lewat', function () {
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $jadwal = Jadwal::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today(),
+    ]);
+
+    loginKaryawanSebagai($karyawan);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'pindah',
+        'jadwal_id' => $jadwal->id,
+        'tanggal_baru' => today()->subDay()->toDateString(),
+        'alasan' => 'Test',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Tidak bisa memindah ke tanggal yang sudah lewat.');
+});
+
+it('menolak tukar kalau jadwal tujuan tanggalnya sudah lewat', function () {
+    $pengaju = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+    $tujuan = Karyawan::factory()->create(['instansi_id' => $this->instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today(),
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id,
+        'shift_id' => $this->shift->id,
+        'tanggal' => today()->subDay(),
+    ]);
+
+    loginKaryawanSebagai($pengaju);
+
+    $this->postJson('/api/tukar-jadwal', [
+        'mode' => 'tukar',
+        'jadwal_id' => $jadwalAsal->id,
+        'jadwal_tujuan_id' => $jadwalTujuan->id,
+        'alasan' => 'Test',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Jadwal rekan tujuan sudah lewat, tidak bisa ditukar.');
+});

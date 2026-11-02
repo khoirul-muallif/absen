@@ -37,6 +37,13 @@ class TukarJadwalController extends Controller
             ], 403);
         }
 
+        if (self::isLewat($jadwal->tanggal)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak bisa mengajukan tukar/pindah untuk jadwal yang sudah lewat.',
+            ], 422);
+        }
+
         // Cek 1: rebutan dengan pengajuan lain yang masih aktif (belum final)
         $konflikJadwalAsal = TukarJadwal::whereIn('status', ['menunggu_rekan', 'menunggu_admin'])
             ->where(fn ($q) => $q->where('jadwal_id', $jadwal->id)->orWhere('jadwal_tujuan_id', $jadwal->id))
@@ -63,6 +70,12 @@ class TukarJadwalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Hari libur hanya bisa dipindah lewat mode Tukar dengan rekan, bukan Pindah Tanggal.',
+            ], 422);
+        }
+        if (self::isLewat($tanggalBaru)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak bisa memindah ke tanggal yang sudah lewat.',
             ], 422);
         }
 
@@ -106,6 +119,13 @@ class TukarJadwalController extends Controller
     {
         $jadwalTujuan = Jadwal::findOrFail($request->jadwal_tujuan_id);
 
+        if (self::isLewat($jadwalTujuan->tanggal)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Jadwal rekan tujuan sudah lewat, tidak bisa ditukar.',
+            ], 422);
+        }
+        
         if ($jadwalTujuan->karyawan_id === $karyawan->id) {
             return response()->json([
                 'success' => false,
@@ -294,5 +314,15 @@ class TukarJadwalController extends Controller
             'catatan_approval' => $t->catatan_approval,
             'diajukan_at' => $t->created_at->format('d M Y H:i'),
         ];
+    }
+    /**
+     * KEPUTUSAN (30 Okt 2026): tanggal yang sudah lewat tidak boleh dipakai
+     * di tukar/pindah jadwal, baik sisi asal maupun tujuan. Jendela mundur
+     * 30 hari yang sebelumnya ada di FE cuma kemudahan testing, bukan
+     * keputusan bisnis -- dicabut sepenuhnya di sini.
+     */
+    private static function isLewat(\Carbon\Carbon $tanggal): bool
+    {
+        return $tanggal->copy()->startOfDay()->lt(now()->startOfDay());
     }
 }

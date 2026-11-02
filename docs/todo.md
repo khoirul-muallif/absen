@@ -24,7 +24,17 @@ Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
+## Bug diketahui, belum dikerjakan
 
+- [ ] **Tukar jadwal beda hari (mode tukar, tanggal_asal != tanggal_tujuan)
+      bikin bug** — dilaporkan Khoirul 30 Okt 2026 (belum ada detail
+      reproduksi/pesan error). Rencana sementara: nonaktifkan dulu
+      kombinasi ini di FE (misal filter rekanList biar cuma nawarin
+      rekan yang jadwalnya di TANGGAL YANG SAMA, bukan tanggal bebas),
+      sampai akar masalahnya ketemu. Perlu detail lebih lanjut dari
+      Khoirul sebelum dikerjakan: apa gejalanya, kapan muncul (submit?
+      approve? tampilan riwayat?).
+      
 ## Kebutuhan masukan dari pihak RS
 
 - [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
