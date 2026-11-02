@@ -12,6 +12,105 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 71: TukarJadwal × rotasi beda tanggal — konflik diperhalus jadi per-baris, bukan exists() biner
+
+Menutup item todo.md "Tukar jadwal beda hari gagal untuk karyawan rotasi"
+(penyebabnya sudah dipersempit sejak commit `e4eb53b`/`1211100`). Commit
+`68bef8f`.
+
+### Akar masalah
+
+Desain rotasi individu (fase 65) bikin setiap karyawan rotasi punya baris
+Jadwal di SETIAP hari, termasuk hari liburnya sendiri. Akibatnya
+`$konflikAsal`/`$konflikTujuan` di `ajukanTukar()` — yang cuma cek
+`exists()` biner — SELALU match begitu dua karyawan rotasi coba tukar
+beda tanggal, kecuali kebetulan tanggal pasangannya adalah hari libur
+pengaju/rekan. Bukan bug di validasinya sendiri (logicnya konsisten sejak
+fase 11) — ini konsekuensi struktural yang belum pernah dibahas
+implikasinya ke modul TukarJadwal beda tanggal.
+
+### KEPUTUSAN (opsi C revisi, dari 3 opsi yang dipertimbangkan: A —
+longgarkan definisi konflik + swap 4-baris; B — terima sebagai
+keterbatasan, perjelas pesan saja; C — serap baris libur pasangan)
+
+Tukar beda tanggal diizinkan kalau baris existing di tanggal pasangan
+berjenis **LIBUR** — baris itu diserap (dihapus) saat approve, karena
+baris hasil swap jadi representasi final tanggal itu, konsisten dengan
+pola "libur boleh diserap" yang sudah ada di mode Pindah sejak fase
+50/66. Kalau baris existing-nya shift **KERJA**, tetap ditolak seperti
+sebelumnya — menghilangkan cover shift orang lain tanpa ketahuan siapa
+pun bukan sesuatu yang aman diotomatisasi lewat fitur tukar 2-arah ini.
+
+Opsi A (swap 4-baris, benar-benar memindah kepemilikan tanggal di kedua
+sisi) dipertimbangkan tapi ditolak: risiko regresi jauh lebih tinggi ke
+`approveAndSwap()` yang sudah stabil sejak fase 65-66 untuk karyawan
+umum, dan kompleksitas testing naik signifikan. Opsi C dipilih karena
+scope perubahannya kecil (varian tambahan, bukan rewrite) dan hasil
+akhirnya — "jadwal karyawan hari itu berubah" — sudah cukup menjawab
+kebutuhan riil.
+
+### Perubahan
+
+**`ajukanTukar()` (controller):** konflik sekarang dicek per baris
+(`first()`, bukan `exists()`) — baris libur di tanggal pasangan lolos,
+baris kerja tetap ditolak dengan pesan eksplisit "jadwal KERJA sendiri"
+(sebelumnya pesan generik "sudah punya jadwal sendiri").
+
+**`approveAndSwap()` (model):** re-cek ulang di dalam transaksi dengan
+`lockForUpdate()` — menutup race condition antara ajukan → approve
+(baris yang tadinya libur bisa saja sudah berubah jadi kerja lewat
+`jadwal:generate-rotasi --overwrite-generate` di antaranya). Baris libur
+yang mau diserap diperiksa dulu tidak sedang dipakai pengajuan
+tukar/pindah lain yang masih aktif (`menunggu_rekan`/`menunggu_admin`) —
+kalau iya, approve ditolak dan diminta selesaikan pengajuan itu dulu.
+Kalau lolos semua cek, baris libur dihapus sebelum swap `karyawan_id`
+dijalankan.
+
+### BUG DITEMUKAN & DIPERBAIKI (ketahuan dari test regression tukar
+tanggal sama)
+
+Versi awal query re-cek `existingDiTujuan`/`existingDiAsal` cuma
+exclude SATU id masing-masing (`jadwalB->id` di query pertama,
+`jadwalA->id` di query kedua). Untuk kasus `tanggalA == tanggalB`
+(tukar tanggal sama — jalur lama & paling umum dipakai karyawan umum),
+`jadwalA` ikut ter-match sebagai "existing" di query pertama terhadap
+dirinya sendiri — karena bukan libur, approve gagal false-positive untuk
+skenario yang sebelumnya selalu berhasil. Fix: exclude KEDUA id
+(`whereNotIn('id', [$jadwalA->id, $jadwalB->id])`) di kedua query.
+
+### Exception domain, konsisten dengan pola Cuti fase 22
+
+`\Exception` generik diganti `TukarJadwalKonflikException` baru
+(`app/Exceptions/`) di seluruh `approveAndSwap()`, `responRekan()`, dan
+`batalkanOlehAdmin()` — pola yang sama dengan `KuotaCutiTidakCukupException`
+(fase 22). `TukarJadwalsTable` action approve sekarang catch exception
+ini dan tampilkan `Notification::danger()` dengan pesan asli, bukan
+membiarkan 500 mentah sampai ke admin.
+
+### Test
+
+Baru di `TukarJadwalControllerTest`/`TukarJadwalResourceTest`:
+- `ajukanTukar` beda tanggal, sisi sendiri/rekan libur → diterima (2 test)
+- `ajukanTukar` beda tanggal, kedua sisi kerja → ditolak 422 (2 test)
+- `approveAndSwap`: libur diserap, `sumber=manual` di kedua baris hasil
+- `approveAndSwap`: baris libur dipakai pengajuan lain → ditolak, rollback
+  penuh (tidak ada yang berubah, status tetap `menunggu_admin`)
+- `approveAndSwap`: baris libur berubah jadi kerja sejak pengajuan dibuat
+  (simulasi race) → ditolak
+- Regression: tukar tanggal sama (karyawan umum) tetap jalan seperti
+  sebelumnya — inilah yang menangkap bug exclude-id di atas
+
+Full suite: **605 test passing (1802 assertions)** — naik dari 601.
+
+### Belum dikerjakan
+
+Kedua sisi sama-sama shift kerja di tanggal pasangan tetap ditolak —
+butuh pihak ketiga menutup shift yang ditinggalkan, di luar scope tukar
+2-arah. `todo.md` item ini ditutup sebagian; dicatat kalau RS nanti
+butuh skenario itu, perlu keputusan desain terpisah (kemungkinan
+melibatkan pihak ketiga eksplisit di alur pengajuan, bukan sekadar
+pelonggaran validasi).
+
 ## fase 70: GenerateJadwalBulanan generate baris libur mingguan eksplisit (opsi A)
 
 Menutup item todo.md "Keputusan arsitektur — libur mingguan karyawan umum
