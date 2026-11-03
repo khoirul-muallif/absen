@@ -12,6 +12,64 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 72: tolak tanggal lewat untuk Izin & Lembur + cleanup Known Gap basi
+
+Menutup item `todo-fr.md` "Izin & Lembur belum dicek apakah bisa
+diajukan untuk tanggal yang sudah lewat" — Cuti/Dinas (fase 23) dan
+TukarJadwal (commit `1211100`) sudah aman duluan, dua modul ini belum
+pernah diperiksa sama sekali. Commit `6ba3003`.
+
+### Perubahan
+
+`IzinController::ajukan()` & `LemburController::ajukan()`: rule
+`tanggal` ditambah `after_or_equal:today`, pola yang sama dengan
+modul approval lain. Untuk Izin, sempat dipertimbangkan dibatasi lebih
+ketat ke hari ini saja (sifatnya darurat/insidental, bukan
+direncanakan) — **KEPUTUSAN:** tetap `after_or_equal:today` seperti
+modul lain, tidak dipersempit, karena tidak ada alasan operasional
+kuat untuk melarang pengajuan izin untuk besok (mis. sudah tahu ada
+keperluan besok pagi, ingin ajukan malam ini).
+
+### Cleanup: 2 item Known Gap di `QUICK_CONTEXT.md` ternyata sudah basi
+
+Ditemukan saat menelusuri daftar "lubang murah" yang tersisa — dua
+item ternyata sudah selesai di sesi lain tanpa `QUICK_CONTEXT.md` ikut
+dirapikan:
+- Known Gap #9 (`LaporanBulananExport::$nomor` dynamic property) —
+  `protected int $nomor = 0;` sudah dideklarasikan eksplisit.
+- Known Gap #10 (`navigationGroup = 'Laporan'` belum lengkap) — sudah
+  diterapkan ke ketiga halaman laporan (`LaporanPresensi`,
+  `RekapBulananPresensi`, `RekapPelanggaranPresensi`).
+
+Kedua item dihapus dari daftar tanpa perubahan kode.
+
+### Fix test flaky yang ketemu sekalian
+
+- `IzinControllerTest` & `LemburControllerTest`: semua test pakai
+  tanggal hardcode `2026-08-01`, yang sudah lewat per hari ini — gagal
+  422 `validation.after_or_equal` begitu rule baru dipasang. Pola yang
+  sama dengan "tanggal hardcode = bom waktu" (fase 14, fase 26). Fix:
+  `$this->travelTo(Carbon::parse('2026-07-25 08:00:00'))` di
+  `beforeEach` kedua file.
+- `AbsensiResourceTest` "akumulasi bulanan ... menjumlahkan menit
+  terlambat sebelumnya": anchor tanggal pakai `today()` dan
+  `today()->startOfMonth()->addDays(2)` — kebetulan jatuh di tanggal
+  yang sama tiap tanggal 3 tiap bulan (hari eksekusi test ini), bikin
+  dua baris Absensi collide di unique constraint
+  `(karyawan_id, tanggal)` yang sudah ada sejak fase 27 batch A.
+  Bukan regresi dari perubahan Izin/Lembur — murni kebetulan tanggal
+  eksekusi. Fix: `travelTo('2026-08-15')` di awal test, supaya tidak
+  bergantung tanggal hari ini lagi.
+
+### Test
+
+Tidak ada test baru ditambahkan — perubahan ini murni validasi 1 rule
+di 2 controller, sudah dicakup pola `after_or_equal` yang sama seperti
+modul lain. 3 test lama diperbaiki (2 file `travelTo` baru, 1 anchor
+tanggal diperbaiki).
+
+Full suite: **605 test passing (1802 assertions)**, tidak ada regresi.
+
 ## fase 71: TukarJadwal × rotasi beda tanggal — konflik diperhalus jadi per-baris, bukan exists() biner
 
 Menutup item todo.md "Tukar jadwal beda hari gagal untuk karyawan rotasi"
