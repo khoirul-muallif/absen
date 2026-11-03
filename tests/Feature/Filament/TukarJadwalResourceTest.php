@@ -175,6 +175,18 @@ it('bisa membuat pengajuan mode pindah sendiri dengan data valid', function () {
 
     $tanggalBaru = today()->addDays(10);
 
+    // Tujuan pindah harus benar-benar berstatus Libur milik karyawan sendiri
+    // (bukan sekadar "belum ada Jadwal sama sekali") -- lihat bug fix 3 Nov 2026
+    // di rule() tanggal_baru: tanpa baris ini, fixture ini sebelumnya numpang
+    // di bug yang sama (tanggal kosong total ikut lolos validasi).
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id,
+        'shift_id' => null,
+        'jenis' => Jadwal::JENIS_LIBUR,
+        'tanggal' => $tanggalBaru,
+    ]);
+
+
     livewire(CreateTukarJadwal::class)
         ->fillForm([
             'mode' => 'pindah',
@@ -733,5 +745,60 @@ it('regression: approve tukar tanggal sama (karyawan umum) tetap jalan seperti s
     expect($tukarJadwal->approveAndSwap($admin))->toBeTrue();
     $this->assertDatabaseHas('jadwals', ['id' => $jadwalAsal->id, 'karyawan_id' => $tujuan->id]);
     $this->assertDatabaseHas('jadwals', ['id' => $jadwalTujuan->id, 'karyawan_id' => $pengaju->id]);
+});
+
+it('menolak pindah ke tanggal yang tidak punya Jadwal sama sekali (bukan libur, beneran kosong)', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalKerja = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(2), 'jenis' => 'reguler',
+    ]);
+
+    // Tanggal jauh di luar jendela RENTANG_BULAN_SEBELUM/SESUDAH (-1/+3 bulan) --
+    // tanggalJadwalMap() tidak pernah memuat tanggal ini, jadi TIDAK ADA baris
+    // Jadwal apa pun yang match, beda dari "libur" yang beneran ada barisnya.
+    $tanggalJauhDiLuarJendela = today()->addYears(1);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'pindah',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalKerja->id,
+            'tanggal_baru' => $tanggalJauhDiLuarJendela->toDateString(),
+            'alasan' => 'Tes pindah ke tanggal kosong total — harus ditolak',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['tanggal_baru']);
+
+    expect(TukarJadwal::where('jadwal_id', $jadwalKerja->id)->exists())->toBeFalse();
+});
+
+it('tanggal_baru dibatasi minDate/maxDate sesuai jendela Jadwal karyawan pengaju', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $tanggalPalingAwal = today()->startOfMonth()->subMonthNoOverflow();
+    $tanggalPalingAkhir = today()->startOfMonth()->addMonthsNoOverflow(3)->endOfMonth();
+
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => $tanggalPalingAwal, 'jenis' => 'reguler',
+    ]);
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => $tanggalPalingAkhir, 'jenis' => 'reguler',
+    ]);
+
+    $map = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'tanggalPalingAwal'))
+        ->invoke(null, $pengaju->id);
+    $mapAkhir = (new \ReflectionMethod(\App\Filament\Resources\TukarJadwals\Schemas\TukarJadwalForm::class, 'tanggalPalingAkhir'))
+        ->invoke(null, $pengaju->id);
+
+    expect($map)->toBe($tanggalPalingAwal->toDateString())
+        ->and($mapAkhir)->toBe($tanggalPalingAkhir->toDateString());
 });
 

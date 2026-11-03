@@ -49,23 +49,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       
 ## UX yang tersisa
 
-- [ ] **Kalender "Pindah ke tanggal" (TukarJadwal) tidak punya indikator
-      visual kenapa tanggal di-disable** — functionally sudah benar
-      (disabledDates() memblokir tanggal yang sudah punya Jadwal, baik
-      kerja maupun libur — dikonfirmasi lewat Tinker 20 Okt 2026: baris
-      Jadwal utk karyawan rotasi lengkap tanpa gap, termasuk hari libur
-      pola rotasi), tapi admin tidak tahu APAKAH tanggal itu disabled
-      karena kerja atau karena libur — cuma keabuan polos. Usulan: hitam
-      = hari kerja, merah = libur, hijau = kosong/bisa dipilih. DatePicker
-      Filament (Flatpickr) tidak expose pewarnaan per-tanggal secara
-      native, cuma disabledDates binary — butuh custom Alpine.js/Flatpickr
-      hook (onDayCreate), bukan cuma ganti parameter. Ditemukan 20 Okt 2026
-      saat audit TukarJadwal x rotasi.
-
-
-
-
-
 
 ## Fitur & infrastruktur
 

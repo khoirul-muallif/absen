@@ -273,6 +273,8 @@ class TukarJadwalForm
                     ->visible(fn (Get $get) => $get('mode') === 'pindah')
                     ->required(fn (Get $get) => $get('mode') === 'pindah')
                     ->dehydrated(fn (Get $get) => $get('mode') === 'pindah')
+                    ->minDate(fn (Get $get) => self::tanggalPalingAwal($get('karyawan_pengaju_filter')))
+                    ->maxDate(fn (Get $get) => self::tanggalPalingAkhir($get('karyawan_pengaju_filter')))
                     ->disabledDates(function (Get $get, ?TukarJadwal $record) {
                         $semua = self::tanggalJadwalMap(
                             $get('karyawan_pengaju_filter'),
@@ -310,9 +312,15 @@ class TukarJadwalForm
                                 ->where('id', '!=', $jadwal->id)
                                 ->first();
 
-                            if ($existing && $existing->jenis !== Jadwal::JENIS_LIBUR) {
-                                $fail('Karyawan ini sudah punya jadwal (bukan libur) di tanggal tersebut.');
-                                return;
+                        // BUG DITEMUKAN & DIPERBAIKI (3 Nov 2026): sebelumnya kondisi ini
+                            // cuma menolak kalau $existing ADA dan bukan libur -- kalau tidak
+                            // ada Jadwal SAMA SEKALI di tanggal itu (belum pernah di-generate,
+                            // di luar jendela RENTANG_BULAN_SEBELUM/SESUDAH), validasi lolos
+                            // diam-diam. "Tidak ada Jadwal" bukan "Libur" -- dua kondisi beda
+                            // yang sebelumnya disamakan.
+                            if (! $existing || $existing->jenis !== Jadwal::JENIS_LIBUR) {
+                                $fail('Karyawan ini belum punya jadwal di tanggal tersebut, atau jadwalnya bukan Libur.');
+                                 return;
                             }
 
                             if (TukarJadwal::karyawanCutiDinasApproved($jadwal->karyawan_id, $tanggalBaru)) {
@@ -321,13 +329,18 @@ class TukarJadwalForm
                         };
                     }),
 
+                Placeholder::make('info_tanggal_baru')
+                    ->label('')
+                    ->content('ℹ️ Tanggal yang abu-abu/tidak bisa diklik di kalender di atas berarti tanggal itu sudah ada jadwal kerja ATAU belum pernah ada Jadwal sama sekali. Kalau mau tahu pasti, isi "Tanggal Jadwal yang mau diajukan" dulu lalu lihat "Shift pada tanggal ini" di atas untuk cek jadwal pengaju saat ini.')
+                    ->visible(fn (Get $get) => $get('mode') === 'pindah'),
+
                 Textarea::make('alasan')
                     ->required()
                     ->columnSpanFull(),
             ]);
     }
 
-        /**
+    /**
      * Tanggal -> ['id' => jadwal_id, 'label' => nama shift/"Libur"] untuk satu
      * karyawan, dibatasi jendela RENTANG_BULAN_SEBELUM..RENTANG_BULAN_SESUDAH
      * dari hari ini. $tanggalWajibTermasuk melebarkan jendela supaya tanggal
