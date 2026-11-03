@@ -290,6 +290,7 @@ it('akumulasi bulanan saat edit tidak menghitung record itu sendiri dua kali', f
 });
 
 it('akumulasi bulanan: absensi kedua di bulan yang sama menjumlahkan menit_terlambat sebelumnya', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-15 08:00:00'));
     $karyawan = Karyawan::factory()->create();
     $qr = QrInstansi::factory()->create();
 

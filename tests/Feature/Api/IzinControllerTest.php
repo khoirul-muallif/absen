@@ -2,11 +2,13 @@
 
 use App\Models\Izin;
 use App\Models\Karyawan;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     $this->karyawan = Karyawan::factory()->create();
     Sanctum::actingAs($this->karyawan);
+    $this->travelTo(Carbon::parse('2026-07-25 08:00:00'));
 });
 
 test('bisa mengajukan izin baru, langsung approved tanpa approval admin', function () {

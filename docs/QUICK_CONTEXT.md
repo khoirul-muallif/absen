@@ -91,8 +91,7 @@ baru:
 6. Kuota cuti yang belum punya row KuotaCuti tidak pernah menaikkan `terpakai`, jadi batas `default_kuota` di API cuma berlaku terhadap pengajuan pending — bukan terhadap cuti yang sudah dipakai. Lihat `todo.md` (digabung ke item KuotaCuti semesteran).
 7. Karyawan rotasi dengan langkah LIBUR di polanya SUDAH disimulasikan (fase 43/50). `PengingatBelumAbsen`/`PengingatBelumAbsenPulang` masih belum punya test. Lihat `todo.md`.
 8. Simulasi rotasi 24/7 (`SimulasiMassalSeeder`) saat ini membagi staf rata 40/40/40 antar unit/tim — belum proporsional terhadap kebutuhan staf riil RS, butuh keputusan RS. Lihat `todo.md`.
-9. `LaporanBulananExport::map()` pakai `$this->nomor++` tanpa deklarasi `protected int $nomor = 0;` (dynamic property, risiko deprecation PHP 8.2+). Lihat `todo.md`.
-10. `navigationGroup = 'Laporan'` baru diterapkan ke `LaporanPresensi.php`, belum ke `RekapBulananPresensi.php` & `RekapPelanggaranPresensi.php`. Lihat `todo.md`.
+
 
 ## Temuan Penting dari Source Code (jangan dianggap bug, sudah terdokumentasi/fixed)
 - `Shift::tentukanStatus()` tidak pernah pakai `toleransi_menit` — status harian langsung `'terlambat'` begitu lewat 0 menit. `toleransi_menit` cuma dipakai di `sudahMelebihiToleransiBulanan()` (KPI bulanan), dan itu cuma aktif kalau `mode_toleransi='akumulasi_bulanan'` (default semua shift: `'harian'`).

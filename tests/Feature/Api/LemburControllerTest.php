@@ -3,10 +3,12 @@
 use App\Models\Karyawan;
 use App\Models\Lembur;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Carbon;
 
 beforeEach(function () {
     $this->karyawan = Karyawan::factory()->create();
     Sanctum::actingAs($this->karyawan);
+    $this->travelTo(Carbon::parse('2026-07-25 08:00:00'));
 });
 
 test('bisa mengajukan lembur baru', function () {

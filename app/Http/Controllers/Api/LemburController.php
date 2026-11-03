@@ -16,7 +16,7 @@ class LemburController extends Controller
     public function ajukan(Request $request): JsonResponse
     {
         $request->validate([
-            'tanggal'     => 'required|date',
+            'tanggal'     => 'required|date|after_or_equal:today',
             'jam_mulai'   => 'required|date_format:H:i',
             'jam_selesai' => [
                 'required',
