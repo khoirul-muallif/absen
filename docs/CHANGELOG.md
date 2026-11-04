@@ -5,13 +5,117 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
-# CHANGELOG — absensi-app versi 2
 
-> History detail per-fase. **Jangan upload file ini ke chat baru** — cukup dibuka lokal, atau minta Claude baca kalau lagi butuh nelusurin keputusan/bug lama. Ringkasan status terkini ada di `PROJECT_CONTEXT.md`.
+## fase 73: TukarJadwal × rotasi beda tanggal — form admin menyusul fix fase 71, pesan error diperjelas, preview konflik
 
-> Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
+Tiga perbaikan berurutan di form Filament (`TukarJadwalForm.php`),
+ditemukan saat verifikasi manual fix fase 71 lewat panel admin —
+fase 71 asli cuma menutup `TukarJadwalController::ajukanTukar()`
+(API) dan `TukarJadwal::approveAndSwap()` (model), form create
+Filament ketinggalan. Commit `f375146`, `68b2131`, dan satu lagi
+(preview placeholder, commit sesi ini).
 
----
+### BUG DITEMUKAN & DIPERBAIKI: `tanggal_baru` (mode Pindah) tidak punya `minDate()`/`maxDate()`
+
+Ditemukan nggak sengaja pas nguji percobaan pewarnaan kalender yang
+akhirnya dibatalkan (lihat bawah): admin bisa navigasi kalender
+"Pindah ke tanggal" ke bulan manapun, termasuk jauh di luar jendela
+`RENTANG_BULAN_SEBELUM`/`RENTANG_BULAN_SESUDAH` (-1/+3 bulan dari
+hari ini). `tanggalJadwalMap()` untuk bulan di luar jendela itu
+selalu kosong total, dan `disabledDates()` jadi array kosong (karena
+`reject()` di collection kosong tetap kosong) — bukan cuma soal
+visual, SEMUA tanggal di bulan itu kelihatan "bisa diklik" padahal
+sama sekali belum ada data.
+
+Lebih parah: `rule()` validasi server-side ikut lolos diam-diam.
+Kondisi lama `if ($existing && $existing->jenis !== JENIS_LIBUR)`
+cuma menolak kalau ADA baris Jadwal yang bukan libur — kalau
+`$existing` null (tidak ada Jadwal SAMA SEKALI di tanggal itu, beda
+dari "libur" yang beneran ada barisnya), validasi dianggap lolos.
+Admin bisa submit pindah ke tanggal yang jadwalnya belum pernah
+digenerate sama sekali.
+
+Fix: `minDate()`/`maxDate()` ditambah ke `tanggal_baru` (pola sama
+dengan `tanggal_pengajuan`/`tanggal_tujuan_pengajuan`), dan `rule()`
+sekarang menolak baik `$existing` null maupun `$existing` yang
+bukan libur (`if (! $existing || $existing->jenis !== JENIS_LIBUR)`).
+
+Test lama "bisa membuat pengajuan mode pindah sendiri dengan data
+valid" ikut diperbaiki — fixture-nya selama ini numpang di bug yang
+sama (`tanggal_baru` nggak pernah dibuatkan baris Libur, kebetulan
+lolos karena `$existing` null dianggap valid).
+
+### BUG DITEMUKAN & DIPERBAIKI: form admin (mode Tukar) belum ikut fix fase 71
+
+`rule()` di `karyawan_tujuan_filter` masih pakai `exists()` biner
+buat cek konflik jadwal di tanggal pasangan — persis masalah yang
+sudah ditutup di `ajukanTukar()` (commit `68bef8f`), tapi tidak ikut
+diupdate di form Filament ini. Akibatnya pengajuan yang seharusnya
+valid (sisi existing-nya LIBUR) ikut ditolak lewat panel admin,
+padahal API karyawan sudah benar menerimanya sejak fase 71. Fix:
+pola per-baris yang sama (`first()`, cek `jenis`, LIBUR lolos &
+diserap saat approve, KERJA tetap ditolak) dipasang di sini juga.
+
+Sempat salah curiga sebagai bug baru untuk satu kasus manual
+(Adiarja↔Daruna) — dikonfirmasi lewat Tinker: pengaju punya baris
+`piket` (shift kerja beneran, bukan libur) sendiri persis di
+tanggal tujuan. Validasinya BENAR menolak, sesuai batasan "dua sisi
+bentrok kerja tetap ditolak" dari fase 71. Bukan bug, cuma perlu
+diverifikasi.
+
+### Pesan error diperjelas
+
+Pesan generik ("salah satu karyawan sudah punya jadwal KERJA
+sendiri di tanggal pasangannya") diganti eksplisit — menyebut nama
+karyawan, jenis jadwal, shift, dan tanggal yang bentrok, termasuk
+kedua sisi sekaligus kalau dua-duanya bentrok. Dikonfirmasi di
+browser: "Agus Pranowo sudah punya jadwal piket (shift malam) di
+tanggal 14 Nov 2026; Elon Elon Lazuardi sudah punya jadwal piket
+(shift pagi) di tanggal 08 Nov 2026."
+
+### Fitur baru: preview konflik sebelum submit
+
+`Placeholder::make('preview_konflik_tukar')` — reaktif begitu
+`jadwal_id` dan `jadwal_tujuan_id` dua-duanya terisi (mode tukar),
+reuse persis logic `rule()` (nggak ada drift antara preview dan
+validasi beneran). 🟢 kalau nggak ada konflik terdeteksi, 🔴 +
+detail spesifik kalau ada. Disclaimer eksplisit ("Kemungkinan") —
+preview, bukan jaminan, validasi beneran tetap di `rule()`.
+
+Murni Filament reaktif, TIDAK pakai Alpine.js — pelajaran dari dua
+percobaan pewarnaan kalender "Pindah ke tanggal" yang DIBATALKAN di
+sesi sebelumnya (`extraAlpineAttributes()`/`extraInputAttributes()`
+Filament nggak konsisten nempel ke DOM node yang sama, `$el` scope
+meleset dari `<input>` yang beneran dipakai Flatpickr; dicoba patch
+config Flatpickr lalu observe DOM langsung, dua-duanya gagal).
+Diganti penanda teks biasa untuk item itu (item todo.md lama
+dihapus, lihat catatan di bawah).
+
+**KEPUTUSAN: tidak diterapkan ke frontend** (absensi_frontapp) —
+dipertimbangkan tapi ditolak, konsisten keputusan fase 70 (menu
+Absen): menduplikasi logic konflik ke Dart adalah kelas masalah
+single-source-of-truth yang sama dengan `KuotaCuti::sisaUntuk()`
+(fase 26) dan `Shift::jamMasukString()` (fase 14/27). FE cukup
+merelay pesan error backend yang sudah diperjelas apa adanya.
+
+### Test
+
+3 test baru di `TukarJadwalResourceTest`: pindah ke tanggal jauh di
+luar jendela (tidak ada Jadwal sama sekali) → ditolak 422;
+`minDate`/`maxDate` `tanggal_baru` ikut jendela Jadwal karyawan
+pengaju; admin bisa membuat pengajuan tukar beda tanggal lewat form
+kalau sisi existing libur (regression guard fase 71 untuk form
+admin, bukan cuma API).
+
+Full suite: **609 test passing (1818 assertions)** — naik dari 605.
+
+### Item todo.md ditutup
+
+"Kalender Pindah ke tanggal tidak punya indikator visual" dihapus —
+percobaan coloring dibatalkan, tapi 2 bug fungsional yang ketemu
+selagi nyoba (minDate/maxDate hilang, form admin belum ikut fase 71)
+sudah ditutup, lebih berharga dari fitur visual yang dicari semula.
+
 ## fase 72: tolak tanggal lewat untuk Izin & Lembur + cleanup Known Gap basi
 
 Menutup item `todo-fr.md` "Izin & Lembur belum dicek apakah bisa

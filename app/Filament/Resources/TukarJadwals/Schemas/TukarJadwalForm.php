@@ -296,6 +296,58 @@ class TukarJadwalForm
                     ->required(fn (Get $get) => $get('mode') !== 'pindah')
                     ->dehydrated(fn (Get $get) => $get('mode') !== 'pindah'),
 
+                Placeholder::make('preview_konflik_tukar')
+                    ->label('')
+                    ->content(function (Get $get) {
+                        $jadwalIdAsal = $get('jadwal_id');
+                        $jadwalIdTujuan = $get('jadwal_tujuan_id');
+
+                        if (! $jadwalIdAsal || ! $jadwalIdTujuan) {
+                            return null;
+                        }
+
+                        $jadwalAsal = Jadwal::find($jadwalIdAsal);
+                        $jadwalTujuan = Jadwal::find($jadwalIdTujuan);
+                        if (! $jadwalAsal || ! $jadwalTujuan) {
+                            return null;
+                        }
+
+                        $existingDiTujuan = Jadwal::where('karyawan_id', $jadwalAsal->karyawan_id)
+                            ->where('tanggal', $jadwalTujuan->tanggal)
+                            ->where('id', '!=', $jadwalAsal->id)
+                            ->first();
+
+                        $existingDiAsal = Jadwal::where('karyawan_id', $jadwalTujuan->karyawan_id)
+                            ->where('tanggal', $jadwalAsal->tanggal)
+                            ->where('id', '!=', $jadwalTujuan->id)
+                            ->first();
+
+                        $bentrok = [];
+                        if ($existingDiTujuan && $existingDiTujuan->jenis !== Jadwal::JENIS_LIBUR) {
+                            $bentrok[] = sprintf(
+                                '%s sudah ada jadwal %s (shift %s) di %s',
+                                $jadwalAsal->karyawan->nama,
+                                $existingDiTujuan->jenis,
+                                $existingDiTujuan->shift->nama_shift ?? '-',
+                                $jadwalTujuan->tanggal->format('d M Y'),
+                            );
+                        }
+                        if ($existingDiAsal && $existingDiAsal->jenis !== Jadwal::JENIS_LIBUR) {
+                            $bentrok[] = sprintf(
+                                '%s sudah ada jadwal %s (shift %s) di %s',
+                                $jadwalTujuan->karyawan->nama,
+                                $existingDiAsal->jenis,
+                                $existingDiAsal->shift->nama_shift ?? '-',
+                                $jadwalAsal->tanggal->format('d M Y'),
+                            );
+                        }
+
+                        return $bentrok
+                            ? '🔴 Kemungkinan DITOLAK: '.implode('; ', $bentrok).'.'
+                            : '🟢 Tidak ada konflik terdeteksi — kombinasi tanggal ini kemungkinan bisa diajukan.';
+                    })
+                    ->visible(fn (Get $get) => $get('mode') === 'tukar' && $get('jadwal_id') && $get('jadwal_tujuan_id')),
+
                 DatePicker::make('tanggal_baru')
                     ->label('Pindah ke tanggal')
                     ->native(false)
