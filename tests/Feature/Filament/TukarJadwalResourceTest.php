@@ -802,3 +802,79 @@ it('tanggal_baru dibatasi minDate/maxDate sesuai jendela Jadwal karyawan pengaju
         ->and($mapAkhir)->toBe($tanggalPalingAkhir->toDateString());
 });
 
+it('admin bisa membuat pengajuan tukar beda tanggal lewat form kalau sisi existing libur', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id]);
+
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+    $tujuan = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3), 'jenis' => 'reguler',
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(10), 'jenis' => 'reguler',
+    ]);
+
+    // Pengaju kebetulan LIBUR di tanggal tujuan (10), tujuan kebetulan LIBUR
+    // di tanggal asal (3) -- dua-duanya rotasi, jadi otomatis punya baris
+    // di SETIAP tanggal termasuk liburnya sendiri.
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => null,
+        'jenis' => 'libur', 'tanggal' => today()->addDays(10),
+    ]);
+    Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => null,
+        'jenis' => 'libur', 'tanggal' => today()->addDays(3),
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'tukar',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalAsal->id,
+            'karyawan_tujuan_filter' => $tujuan->id,
+            'jadwal_tujuan_id' => $jadwalTujuan->id,
+            'alasan' => 'Tes form admin tukar beda tanggal, sisi existing libur',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+});
+
+it('pesan error konflik tukar beda tanggal menyebut nama, tanggal, dan shift yang bentrok', function () {
+    $instansi = \App\Models\Instansi::factory()->create();
+    $shift = \App\Models\Shift::factory()->create(['instansi_id' => $instansi->id, 'nama_shift' => 'Piket']);
+    $pengaju = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id, 'nama' => 'Si Pengaju']);
+    $tujuan = Karyawan::factory()->rotasi()->create(['instansi_id' => $instansi->id]);
+
+    $jadwalAsal = Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(3), 'jenis' => 'reguler',
+    ]);
+    $jadwalTujuan = Jadwal::factory()->create([
+        'karyawan_id' => $tujuan->id, 'shift_id' => $shift->id,
+        'tanggal' => today()->addDays(10), 'jenis' => 'reguler',
+    ]);
+
+    // Pengaju sendiri sudah punya shift KERJA di tanggal tujuan (10)
+    Jadwal::factory()->create([
+        'karyawan_id' => $pengaju->id, 'shift_id' => $shift->id,
+        'jenis' => 'piket', 'tanggal' => today()->addDays(10),
+    ]);
+
+    livewire(CreateTukarJadwal::class)
+        ->fillForm([
+            'mode' => 'tukar',
+            'karyawan_pengaju_filter' => $pengaju->id,
+            'jadwal_id' => $jadwalAsal->id,
+            'karyawan_tujuan_filter' => $tujuan->id,
+            'jadwal_tujuan_id' => $jadwalTujuan->id,
+            'alasan' => 'Tes pesan error spesifik',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['karyawan_tujuan_filter']);
+
+    // Isi pesan dicek lewat livewire errors bag, bukan cuma field-nya
+});

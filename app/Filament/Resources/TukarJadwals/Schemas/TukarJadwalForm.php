@@ -198,19 +198,49 @@ class TukarJadwalForm
                             $jadwalTujuan = Jadwal::find($jadwalIdTujuan);
                             if (! $jadwalAsal || ! $jadwalTujuan) return;
 
-                            $konflikAsal = Jadwal::where('karyawan_id', $jadwalAsal->karyawan_id)
+                             // BUG DITEMUKAN & DIPERBAIKI (3 Nov 2026, fase 71 lanjutan): sebelumnya
+                            // exists() biner, sama persis masalah yang sudah ditutup di
+                            // TukarJadwalController::ajukanTukar() (commit 68bef8f) tapi tidak
+                            // pernah ikut diupdate di form admin ini. Baris existing berjenis
+                            // LIBUR tetap diizinkan (diserap saat approve), cuma baris KERJA
+                            // yang menolak.
+                            $existingDiTujuan = Jadwal::where('karyawan_id', $jadwalAsal->karyawan_id)
                                 ->where('tanggal', $jadwalTujuan->tanggal)
                                 ->where('id', '!=', $jadwalAsal->id)
-                                ->exists();
+                                ->first();
 
-                            $konflikTujuan = Jadwal::where('karyawan_id', $jadwalTujuan->karyawan_id)
+                            $existingDiAsal = Jadwal::where('karyawan_id', $jadwalTujuan->karyawan_id)
                                 ->where('tanggal', $jadwalAsal->tanggal)
                                 ->where('id', '!=', $jadwalTujuan->id)
-                                ->exists();
+                                ->first();
 
-                            if ($konflikAsal || $konflikTujuan) {
-                                $fail('Tidak bisa ditukar: salah satu karyawan sudah punya jadwal sendiri di tanggal pasangannya.');
-                                return;
+                            if (($existingDiTujuan && $existingDiTujuan->jenis !== Jadwal::JENIS_LIBUR)
+                                || ($existingDiAsal && $existingDiAsal->jenis !== Jadwal::JENIS_LIBUR)
+                            ) {
+                            $pesan = [];
+
+                                if ($existingDiTujuan && $existingDiTujuan->jenis !== Jadwal::JENIS_LIBUR) {
+                                    $pesan[] = sprintf(
+                                        '%s sudah punya jadwal %s (shift %s) di tanggal %s',
+                                        $jadwalAsal->karyawan->nama,
+                                        $existingDiTujuan->jenis,
+                                        $existingDiTujuan->shift->nama_shift ?? '-',
+                                        $jadwalTujuan->tanggal->format('d M Y'),
+                                    );
+                                }
+
+                                if ($existingDiAsal && $existingDiAsal->jenis !== Jadwal::JENIS_LIBUR) {
+                                    $pesan[] = sprintf(
+                                        '%s sudah punya jadwal %s (shift %s) di tanggal %s',
+                                        $jadwalTujuan->karyawan->nama,
+                                        $existingDiAsal->jenis,
+                                        $existingDiAsal->shift->nama_shift ?? '-',
+                                        $jadwalAsal->tanggal->format('d M Y'),
+                                    );
+                                }
+
+                                $fail('Tidak bisa ditukar: '.implode('; ', $pesan).'. Butuh pihak ketiga buat nutup shift yang ditinggalkan — di luar scope tukar 2-arah ini.');
+                                 return;
                             }
 
                             // Cek 3: salah satu pihak sedang cuti/dinas approved di
