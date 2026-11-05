@@ -52,7 +52,15 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
-
+- [ ] **Model + endpoint Informasi/Pengumuman** — frontend sudah punya tab
+      "Informasi" di bottom nav (absensi_frontapp, commit [isi setelah
+      commit]) tapi masih empty state karena backend belum punya apa pun.
+      Perlu: model `Informasi` (judul, isi, tanggal terbit, instansi,
+      mungkin lampiran/gambar), Filament Resource buat admin bikin
+      pengumuman, dan endpoint `GET /api/informasi` buat karyawan.
+      Pertimbangkan scoping per instansi seperti resource lain. Referensi
+      tampilan: kartu pengumuman di aplikasi lama (judul + tanggal dibuat).
+      Dicatat 5 Nov 2026.
 
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
