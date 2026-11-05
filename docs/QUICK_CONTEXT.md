@@ -4,14 +4,18 @@
 > Detail alasan desain & endpoint lengkap ada di `PROJECT_CONTEXT.md` — upload terpisah kalau task butuh itu.
 > Skema DB detail (kolom/tipe/FK) ada di `SCHEMA.md` — upload terpisah kalau task nyentuh migration/query langsung. Update file ini (export dump baru) tiap curiga ada migration yang belum kerekap.
 > History per-fase & alasan keputusan lama ada di `CHANGELOG.md` — sebut/upload kalau nelusurin masalah lama, atau kalau butuh angka test/status paling akurat (entri paling atas = paling baru).
+> Rekap per sesi ada di `docs/status-dd-mm-yy.md` (repo frontend) — file paling baru berisi commit sesi itu, item terbuka, dan langkah berikutnya. Lampirkan yang terbaru di awal sesi kerja, lebih ringkas daripada baca ulang CHANGELOG.
 > Task aktif ada di `todo.md` — tempel bareng file ini kalau mulai sesi kerja baru.
 
-**Update terakhir:** 14 Oktober 2026
+**Update terakhir:** 05 November 2026
 
 ## Ringkasan
 Aplikasi absensi karyawan — Laravel + Filament (admin panel) + REST API (Sanctum) untuk mobile app. Studi kasus: RSU Banyumanik 2. Fitur: absensi QR + geolocation + face snapshot, manajemen shift, cuti/izin/lembur/dinas dengan approval workflow, tukar jadwal, hari libur, toleransi keterlambatan (harian/akumulasi bulanan), karyawan umum vs rotasi + generator jadwal rotasi otomatis, laporan presensi admin (Harian/Bulanan/Pelanggaran, Excel+PDF).
 
-**Status:** masih development, belum ada deployment/database production. Backend sekarang jauh lebih solid: review UX 17 Filament Resource SELESAI (fase 25-36), fitur Laporan Presensi SELESAI (fase 56), simulasi rotasi 24/7 realistis (tim tetap per shift, bukan 1 tim muter 3 shift) SELESAI (fase 56). Frontend (Flutter, `absensi_frontapp`) masih freeze sejak fase 5 — auth/absensi/notifikasi/riwayat sudah ada, tapi belum pernah disentuh ulang dan belum ada scan QR + GPS + face gesture. **Fokus berikutnya: mulai lagi kerja frontend**, backend+laporan sekarang cukup stabil untuk dijadikan basis. Detail progres per-fase: cek `CHANGELOG.md` entri teratas.
+**Status:** masih development, belum ada deployment/database production. Backend sekarang jauh lebih solid: review UX 17 Filament Resource SELESAI (fase 25-36), fitur Laporan Presensi SELESAI (fase 56), simulasi rotasi 24/7 realistis (tim tetap per shift, bukan 1 tim muter 3 shift) SELESAI (fase 56). Frontend (Flutter, `absensi_frontapp`) sudah jalan lagi sejak Okt 2026:
+scan QR + GPS + face gesture selesai, layar Jadwal ada, navigasi
+dirombak ke bottom nav 3 tab. **Fokus berikutnya: audit UX frontend
+per modul**, dimulai dari modul Absen.
 
 ## Stack
 Laravel + Filament v4.11.7, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5 (DB testing terpisah `absensi_app_test`).
