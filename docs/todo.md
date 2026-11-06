@@ -51,6 +51,36 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 
 ## Fitur & infrastruktur
+- [ ] **`riwayat()` TukarJadwal tidak mengirim ID pengaju/tujuan** —
+      cuma nama (`jadwal_asal.karyawan`). FE memakai nama itu untuk
+      memutuskan "ini pengajuan saya sendiri" (menentukan tombol batal
+      muncul atau tidak), yang rawan kalau ada dua karyawan bernama sama
+      persis. Tambahkan `karyawan_id` di `formatTukarJadwal()`.
+      Ditemukan saat audit FE 6 Nov 2026.
+
+- [ ] **`rekap()` tidak pernah mengirim `sakit`** — field-nya ada di
+      model `RekapAbsen` di FE dan ditampilkan di kartu rekap Riwayat,
+      jadi angkanya permanen 0 bagi semua orang. Nyambung ke Known Gap
+      #5 (enum `absensi.status` punya opsi `'sakit'` yang belum jelas
+      peruntukannya). Keputusan: backend mulai mengisinya, atau FE
+      menghapusnya dari kartu. Ditemukan saat audit FE 6 Nov 2026.
+      
+- [ ] **Notifikasi TukarJadwal** — belum ada sama sekali.
+      `app/Notifications/` cuma berisi `AbsenTerlambat` dan `BelumAbsen`;
+      `TukarJadwalController::ajukan()`, `responRekan()` dan approve admin
+      tidak memanggil `notify()` sedikit pun. Tiga titik yang perlu:
+      (1) pengajuan masuk → rekan tujuan, (2) rekan setuju/tolak →
+      pengaju, (3) admin approve/tolak → kedua pihak. Infrastrukturnya
+      sudah ada (notifikasi bawaan Laravel; `NotifikasiController`
+      generik, membaca `data['judul'|'pesan'|'tipe']` — ikuti bentuk
+      `data` yang dipakai `AbsenTerlambat`/`BelumAbsen` supaya FE tidak
+      perlu cabang baru).
+
+      Blocker untuk FE: ikon lonceng + badge di `TukarJadwalScreen`
+      (menuju `MenungguResponScreen`) baru boleh dicabut setelah (1)
+      jalan — sebelum itu, mencabutnya menghapus satu-satunya cara rekan
+      tahu ada pengajuan yang menunggu dijawab. Ditemukan saat audit FE
+      6 Nov 2026.
 
 - [ ] **Model + endpoint Informasi/Pengumuman** — frontend sudah punya tab
       "Informasi" di bottom nav (absensi_frontapp, commit [isi setelah
