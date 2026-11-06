@@ -21,6 +21,12 @@ per modul**, dimulai dari modul Absen.
 Laravel + Filament v4.11.7, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5 (DB testing terpisah `absensi_app_test`).
 
 ## Preferensi Kerja
+- Kalau ada perubahan kode, kirim **file utuh** untuk file di bawah
+  ~250 baris, bukan potongan terpisah — menambal per bagian sudah
+  beberapa kali bikin kurung/method kehapus. Untuk file besar, kirim
+  potongan kecil dengan 1-2 baris konteks di sekitarnya, TANPA format
+  diff (`+`/`-` di awal baris), karena tanda itu ikut ter-paste.
+  
 - Scaffolding baru (model/migration/controller/factory/resource) **selalu** `php artisan make:*` — jangan tulis file manual.
 - Commit pakai editor (`git commit`, bukan `-m`) — subject + body. Selalu minta Claude tuliskan draft pesan commit dulu sebelum commit.
 - Iteratif: konfirmasi tiap tahap, testing di antara langkah.
