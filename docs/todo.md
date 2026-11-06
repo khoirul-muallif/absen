@@ -51,6 +51,18 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 
 ## Fitur & infrastruktur
+- [ ] **Login pakai username, bukan email** — `AuthController` sekarang
+      autentikasi lewat email. Karyawan RS belum tentu punya atau ingat
+      email kerjanya, sementara NIP/username lebih dekat ke identitas
+      yang sudah mereka pakai sehari-hari. Menyentuh: kolom baru di
+      `karyawans` (+ migration + `SCHEMA.md`), unique constraint,
+      validasi `AuthController`, Filament Resource Karyawan (field
+      input + kolom tabel + pencarian), seeder/factory, dan test auth.
+      Perlu diputuskan dulu: username bebas atau pakai NIP yang sudah
+      ada? Email tetap dipertahankan untuk notifikasi/reset password,
+      atau ikut dibuang? Migrasi data lama bagaimana (belum ada
+      production, jadi sekarang justru waktu termurah untuk
+      mengubahnya). Diusulkan 6 Nov 2026 saat audit FE login_screen.
 - [ ] **`riwayat()` TukarJadwal tidak mengirim ID pengaju/tujuan** —
       cuma nama (`jadwal_asal.karyawan`). FE memakai nama itu untuk
       memutuskan "ini pengajuan saya sendiri" (menentukan tombol batal
