@@ -110,6 +110,82 @@ yang punya kunci sendiri. Perlu audit menyeluruh, bukan tambal
 per-kolom. Dicatat di `todo.md` dengan tiga opsi beserta
 konsekuensinya.
 
+### Lanjutan: terjemahan ditambal (commit `9776a10`)
+
+Audit menyeluruh lewat `scripts/cek-terjemahan.php` (dibuat di commit
+ini): **41 kunci hilang** — panels 5, forms 29, tables 7, actions 0.
+Selisih `=>` mentah yang terukur sebelumnya (74) ternyata ikut
+menghitung baris array bersarang, bukan kunci sesungguhnya.
+
+**Opsi keempat yang tidak ada di daftar awal, dan itu yang dipilih:**
+file override di `lang/vendor/` yang HANYA berisi kunci yang hilang,
+bukan hasil `vendor:publish` utuh.
+
+Ini berangkat dari koreksi atas premis opsi 1. Catatan awal menulis
+"`lang/vendor/` tidak ikut terupdate saat `composer update`, jadi harus
+diulang tiap upgrade" — benar, tapi menyembunyikan hal yang lebih
+penting: begitu SELURUH file tersalin, Filament berhenti membaca
+terjemahan bawaan untuk paket itu **selamanya**, termasuk perbaikan di
+versi berikutnya. Jadi opsi 1 bukan "lengkapi sekali lalu selesai",
+tapi "ambil alih perawatan ~790 kunci permanen".
+
+Yang membuat opsi 4 mungkin: Laravel menggabungkan file di
+`lang/vendor/` ke atas terjemahan paket **per-kunci**
+(`FileLoader::loadNamespaceOverrides` → `array_replace_recursive`),
+bukan mengganti per-file. Ini **diverifikasi dulu, tidak diasumsikan** —
+file percobaan berisi satu kunci, lalu dicek bahwa kunci itu memakai
+terjemahan kita sementara kunci lain di file yang sama tetap terbaca
+dari paket. Hasilnya: 41 kunci ditambal, 790 sisanya tetap ikut
+upstream.
+
+Sinyal yang ikut mendukung: `filament-actions` selisihnya 0. Terjemahan
+`id` bukan ditinggalkan, cuma tertinggal di sebagian paket — artinya
+upgrade berikutnya memang berpeluang membawa perbaikan gratis, dan
+publish utuh akan membuangnya.
+
+`scripts/cek-terjemahan.php` membandingkan `en` vs `id` langsung di
+`vendor/` dan mencetak kunci yang hilang per paket, supaya audit setelah
+upgrade Filament murah. Script ini membaca paket, bukan override kita,
+jadi daftarnya selalu lengkap — bandingkan manual dengan isi
+`lang/vendor/`. Cara pakai di `runbook.md`.
+
+### Sekalian: runbook dipangkas dan diperbaiki
+
+Dibuang: dua blok arsip `make:model`/`make:filament-resource` (~60
+baris, semua sudah lama jadi), satu command nyasar yang tidak ada
+hubungannya dengan project, template prompt yang sudah tercakup
+QUICK_CONTEXT, satu section kosong, dan beberapa command umum yang
+bukan pengetahuan project.
+
+Dipertahankan meski panjang: peringatan `afterApprove()` massal dan SQL
+backfill KuotaCuti — keduanya berisi pengetahuan yang bisa merusak data
+production kalau hilang, dan keduanya baru dipakai saat deploy pertama.
+
+**BUG DITEMUKAN DI PROSEDUR: SQL backfill KuotaCuti sudah tidak akurat.**
+Ketiga query ditulis di fase 42, sebelum kolom `kuota_cutis.semester`
+ada. Unique-nya sekarang 4 kolom, jadi query lama menggabungkan dua
+semester jadi satu baris — angka `terpakai` salah untuk setiap jenis
+cuti `periode_kuota = 'semesteran'`. Tidak pernah ketahuan karena
+prosedur ini memang belum pernah dijalankan (belum ada production).
+
+Ketiganya diperbaiki dengan menyalin logika `JenisCuti::semesterDari()`
+ke SQL (`0` untuk tahunan, bulan 1–6 = semester 1, 7–12 = semester 2).
+SQL tidak bisa memanggil method PHP, jadi ini duplikasi yang disengaja
+dan sudah ditandai di runbook: kalau `semesterDari()` berubah, ketiga
+query harus ikut.
+
+Dua hal yang diverifikasi ke source sebelum menulis ulang, bukan
+ditebak dari nama kolom: batas semester (`JenisCuti::semesterDari()`
+baris 45) dan perlakuan `default_kuota` untuk baris semesteran
+(`KuotaCuti::pastikanUntuk()` — dipakai apa adanya, tidak dibagi dua).
+
+Catatan yang muncul dari situ dan belum terjawab: jenis cuti semesteran
+dengan `default_kuota = 12` berarti 12 hari PER SEMESTER, total 24
+setahun. Kemungkinan memang disengaja, tapi tidak ada konfirmasinya di
+dokumen manapun — kalau nanti ada jenis cuti semesteran yang
+benar-benar dipakai RS, pastikan dulu ke pihak RS. Masuk kategori yang
+sama dengan `is_cuti_bersama`: keputusan bisnis, bukan kerja teknis.
+
 ### Test
 
 15 test API + 2 test Resource.
