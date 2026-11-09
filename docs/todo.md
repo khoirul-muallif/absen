@@ -60,6 +60,42 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       `AbsenTerlambat`/`BelumAbsen`. Ditemukan 9 Nov 2026.
 
 ## Fitur & infrastruktur
+
+
+- [ ] **Terjemahan Filament `id` tidak lengkap — string teknis bocor
+      ke admin** — kolom `is_aktif` di tabel Informasi menampilkan
+      `filament-tables::table.columns.icon.boolean.true` alih-alih ikon
+      centang. Locale aplikasi `id`, dan terjemahan Indonesia bawaan
+      Filament untuk versi ini tertinggal dari versi Inggrisnya:
+      `lang/vendor/filament-tables/id/` tidak punya kunci `boolean`
+      sama sekali.
+
+      BUKAN bug resource Informasi — ada 11 `IconColumn` di 8 resource
+      lain (Absensis, HariLiburs, Instansis, JenisCutis ×4, Karyawans,
+      PolaRotasis ×2, Shifts) yang kena hal yang sama. Baru ketahuan
+      sekarang karena resource barulah yang pertama kali dibuka dengan
+      mata segar.
+
+      `filament-tables` cuma 1 dari 4 paket (`filament-panels`,
+      `filament-actions`, `filament-forms` punya kunci sendiri), jadi
+      kemungkinan besar masih ada string teknis lain yang bocor di
+      layar yang belum dibuka. Perlu audit menyeluruh, bukan tambal
+      per-kolom.
+
+      Tiga opsi yang sudah dipertimbangkan (9 Nov 2026):
+      (1) publish keempat paket + lengkapi kunci yang hilang — paling
+      rapi, tapi `lang/vendor/` tidak ikut terupdate saat
+      `composer update`, jadi harus diulang tiap upgrade Filament;
+      (2) kembalikan locale ke `en` — nol perawatan, tapi admin RS
+      membaca menu berbahasa Inggris, perlu keputusan;
+      (3) tambal per-kolom pakai `trueIcon()`/`falseIcon()` — murah
+      tapi menyembunyikan masalah di 11 kolom lain.
+
+      Condong ke (1), tapi sebaiknya sekalian pertimbangkan menghapus
+      63 folder bahasa yang tidak terpakai (publish menyalin 64
+      bahasa). Hasil publish percobaan 9 Nov sudah di-revert.
+      Ditemukan 9 Nov 2026 saat membuat Resource Informasi.
+
 - [ ] **Login pakai username, bukan email** — `AuthController` sekarang
       autentikasi lewat email. Karyawan RS belum tentu punya atau ingat
       email kerjanya, sementara NIP/username lebih dekat ke identitas
