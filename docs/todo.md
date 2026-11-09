@@ -4,26 +4,27 @@
 > file ini tetep pendek dan gampang di-scan. Detail alasan/histori tetap di
 > CHANGELOG.md, bukan di sini.
 
-## Prioritas — belum ditetapkan
+## Prioritas
 
-**Review UX 17 Filament Resource SELESAI** (fase 25–36). **Laporan Presensi
-SELESAI** (fase 56: Harian/Bulanan/Pelanggaran, Excel+PDF). **Simulasi
-rotasi 24/7 realistis SELESAI** (redesign terakhir fase 65: rotasi individu
-per unit, bukan tim tetap per shift — lihat CHANGELOG). **Refactor tampilan
-3 halaman Laporan Presensi jadi card Filament SELESAI** (fase 56 lanjutan,
-commit `584d2e8`). **TukarJadwal × rotasi beda tanggal SELESAI** (tukar beda tanggal untuk rotasi sekarang diizinkan kalau sisi existing-nya libur, baris libur diserap saat approve — lihat CHANGELOG. Batasan yang diterima: kalau kedua sisi sama-sama shift kerja, tukar beda tanggal tetap ditolak, butuh pihak ketiga nutup shift, di luar scope tukar 2-arah).
+**Backend sudah jauh lebih solid.** Review UX 17 Filament Resource (fase
+25–36), Laporan Presensi (fase 56), simulasi rotasi 24/7 (fase 65),
+TukarJadwal × rotasi beda tanggal (fase 71–73), notifikasi TukarJadwal
+(fase 74), modul Informasi (fase 75), badge pengajuan menunggu (fase 77),
+login username (fase 79), terjemahan validasi (fase 80) — semuanya
+SELESAI, detail di CHANGELOG.
 
-Fokus berikutnya:
-
-- **Lanjut ke frontend.** Backend sekarang jauh lebih solid daripada saat
-  frontend di-freeze di fase 5, dan sekarang juga sudah ada laporan admin
-  yang jalan di atasnya.
+**Fokus berikutnya: frontend.** Ada DUA blocker rilis di FE yang lahir
+dari pekerjaan backend 9 Nov, keduanya bikin aplikasi tidak bisa dipakai
+sama sekali kalau tidak digarap (lihat `todo-fr.md` di repo frontend):
+1. LoginScreen masih mengirim `email` — tidak ada karyawan yang bisa
+   masuk setelah backend fase 79 dideploy.
+2. NotifikasiScreen belum mengenal `tipe: 'tukar_jadwal'` — notifikasi
+   fase 74 bisa bikin ikon kosong atau crash.
 
 Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
 teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
-  
 ## Kebutuhan masukan dari pihak RS
 
 - [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
@@ -46,7 +47,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 - [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
 
-      
 ## UX yang tersisa
 
 - [ ] **Nilai `data['tipe']` tidak pernah diuji** — helper
@@ -60,36 +60,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       `AbsenTerlambat`/`BelumAbsen`. Ditemukan 9 Nov 2026.
 
 ## Fitur & infrastruktur
-
-- [ ] **Pesan validasi Laravel tampil sebagai kunci mentah** — locale
-      aplikasi `id`, dan `lang/id/validation.php` tidak ada, jadi
-      `trans('validation.required')` mengembalikan string
-      `"validation.required"` apa adanya. SETIAP pesan validasi yang
-      sampai ke karyawan berbentuk kunci mentah: karyawan yang lupa
-      mengisi alasan cuti melihat "validation.required" di layar HP-nya.
-
-      Lebih parah daripada kebocoran terjemahan Filament (fase 75)
-      karena ini kena ke 150 pengguna aplikasi mobile, bukan ke satu
-      admin.
-
-      Beda dari kasus Filament: Laravel memang TIDAK menyertakan `lang/`
-      sejak v9 dan tidak punya terjemahan `id` sama sekali, jadi tidak
-      ada perbaikan upstream yang akan menyusul — file ini memang harus
-      dirawat sendiri. Tidak ada risiko "override menimpa upstream"
-      seperti di Filament, jadi tidak perlu pendekatan override
-      per-kunci.
-
-      Aturan yang benar-benar dipakai di API (hasil pindai 9 Nov):
-      required, required_if, string, integer, boolean, date,
-      date_format, after, after_or_equal, in, exists, different, image,
-      max, nullable. Filament menambah unique, email, min, numeric, dan
-      lainnya — file ini sebaiknya mencakup keduanya, bukan cuma API.
-
-      Dua opsi: `php artisan lang:publish` lalu terjemahkan manual, atau
-      ambil terjemahan komunitas (`laravel-lang/lang`) yang menambah
-      dependensi. Ditemukan 9 Nov 2026 saat memperbaiki test auth —
-      muncul sebagai `"username": ["validation.required"]` di output
-      test.
 
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.
@@ -153,11 +123,13 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       Export Laporan Presensi (fase 56), jadi tinggal pakai sisi
       import-nya.
 
-      Kolom yang perlu di template: nip, nama, email, nomor_telepon,
-      status_pegawai, tipe_jadwal, unit_kerja, jabatan,
-      tanggal_bergabung. Password TIDAK di template — perlu diputuskan
-      apakah di-generate otomatis lalu dikirim, atau diseragamkan dan
-      dipaksa ganti saat login pertama.
+      Kolom yang perlu di template: nip, nama, username, email,
+      nomor_telepon, status_pegawai, tipe_jadwal, unit_kerja, jabatan,
+      tanggal_bergabung. Username boleh dikosongkan — `Karyawan::
+      generateUsername()` (fase 79) sudah jadi sumber aturan tunggal
+      dan bisa dipakai di sini. Password tidak di template: pakai
+      password default yang sama dengan form Filament, dan admin bisa
+      me-resetnya per orang (fase 78).
 
       Yang harus hati-hati, dan ini bagian yang gampang diremehkan:
 
@@ -169,8 +141,8 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
         admin**, bukan gagal total di baris pertama. Admin RS tidak
         punya terminal; kalau 150 baris ditolak tanpa tahu baris mana
         yang salah, fitur ini malah lebih buruk daripada input manual.
-      - **nip & email unique** — baris duplikat di dalam file ITU
-        SENDIRI juga harus ketahuan, bukan cuma bentrok dengan
+      - **nip, username & email unique** — baris duplikat di dalam file
+        ITU SENDIRI juga harus ketahuan, bukan cuma bentrok dengan
         database.
       - **Import harus atomic atau punya mode dry-run.** Gagal di
         baris 120 setelah 119 karyawan terlanjur masuk itu keadaan
@@ -183,76 +155,22 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       (untuk rotasi)? Kalau tidak, admin tetap harus menginput
       assignment shift 150 kali — dan itu memindahkan masalah, bukan
       menyelesaikannya. Dicatat 9 Nov 2026.
-      
 
+- [ ] **Pengajuan TukarJadwal yang macet di `menunggu_rekan` tidak
+      terhitung di mana pun** — badge menu (fase 77) hanya menghitung
+      `menunggu_admin`. Admin tidak punya cara tahu ada pengajuan
+      menggantung berminggu-minggu kecuali membuka menunya dan
+      menghitung manual (terlihat 5 pengajuan macet di data dummy,
+      tertua 5 hari). Butuh filter umur, bukan sekadar status — itu
+      sebabnya sengaja tidak dimasukkan ke badge. Dicatat 9 Nov 2026.
 
-- [ ] **Login pakai username, bukan email** — `AuthController` sekarang
-      autentikasi lewat email. Karyawan RS belum tentu punya atau ingat
-      email kerjanya, sementara NIP/username lebih dekat ke identitas
-      yang sudah mereka pakai sehari-hari. Menyentuh: kolom baru di
-      `karyawans` (+ migration + `SCHEMA.md`), unique constraint,
-      validasi `AuthController`, Filament Resource Karyawan (field
-      input + kolom tabel + pencarian), seeder/factory, dan test auth.
-      Perlu diputuskan dulu: username bebas atau pakai NIP yang sudah
-      ada? Email tetap dipertahankan untuk notifikasi/reset password,
-      atau ikut dibuang? Migrasi data lama bagaimana (belum ada
-      production, jadi sekarang justru waktu termurah untuk
-      mengubahnya). Diusulkan 6 Nov 2026 saat audit FE login_screen.
-
-      
-- [ ] **Notifikasi admin di panel Filament** — belum ada apa pun yang
-      memberi tahu admin bahwa ada pengajuan menunggu approval, di
-      KELIMA modul (Cuti, Izin, Lembur, Dinas, TukarJadwal). Admin harus
-      ingat sendiri membuka menunya. TukarJadwal paling rawan karena
-      punya dua tahap tunggu: mode pindah langsung masuk
-      `menunggu_admin`, mode tukar masuk ke sana setelah rekan setuju —
-      kalau tidak dilihat, pengajuan mengendap sampai tanggalnya lewat.
-
-      Prasyarat: `->databaseNotifications()` belum ada di
-      `AdminPanelProvider` (dicek 9 Nov 2026, kosong), jadi lonceng
-      panelnya sendiri belum aktif.
-
-      Perlu diputuskan dulu: dikirim ke SIAPA? Tidak ada konsep "admin
-      penanggung jawab" — kandidatnya semua `User`, atau `User` yang
-      terkait instansi tertentu. Resource lain sudah scoped per
-      instansi, kemungkinan besar harus ikut. Nyambung ke Known Gap #3
-      (`Karyawan.role='admin'` tidak kepakai di alur approval; penerima
-      notifikasi ini `User`, bukan `Karyawan` — jalur terpisah dari
-      notifikasi karyawan yang dibaca lewat `NotifikasiController`).
-
-      Sengaja TIDAK dikerjakan bersama notifikasi TukarJadwal untuk
-      karyawan (9 Nov 2026): yang itu blocker FE, yang ini tidak
-      memblokir siapa pun, dan mengerjakan TukarJadwal saja justru bikin
-      tidak konsisten dengan 4 modul approval lain.
-
-- [ ] **Model + endpoint Informasi/Pengumuman** — frontend sudah punya tab
-      "Informasi" di bottom nav (absensi_frontapp, commit [isi setelah
-      commit]) tapi masih empty state karena backend belum punya apa pun.
-      Perlu: model `Informasi` (judul, isi, tanggal terbit, instansi,
-      mungkin lampiran/gambar), Filament Resource buat admin bikin
-      pengumuman, dan endpoint `GET /api/informasi` buat karyawan.
-      Pertimbangkan scoping per instansi seperti resource lain. Referensi
-      tampilan: kartu pengumuman di aplikasi lama (judul + tanggal dibuat).
-      Dicatat 5 Nov 2026.
+- [ ] **Fitur ganti email & password** — endpoint belum ada; cek dulu
+      `AuthController`. Pasangannya di FE juga belum ada (menu
+      "Profil"/"Ubah Password" masih placeholder snackbar), jadi tiga
+      hal saling menunggu: endpoint, layar FE, dan "paksa ganti password
+      setelah reset admin" (fase 78) yang baru masuk akal kalau layar
+      itu ada. Yang memutus simpulnya: kerjakan FE-nya.
 
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
       kasus lintas tengah malam (jam_selesai < jam_mulai → +1 hari).
-
-## Ditunda — Sinkronisasi Frontend
-Frontend (Flutter, `absensi_frontapp`) freeze sejak ~fase 5 (auth, absensi,
-notifikasi, riwayat sudah ada). Sengaja belum disentuh selama backend masih
-sering berubah — hindari kerja dobel.
-
-Modul backend yang BELUM ada implementasi frontend-nya sama sekali:
-- Cuti/Izin/Lembur/Dinas (API sejak fase 19)
-- Tukar Jadwal (API sejak fase 20)
-- Laporan Presensi (fase 56) — ini fitur admin panel, kemungkinan memang
-  tidak perlu versi frontend/mobile sama sekali, tapi dicatat di sini biar
-  tidak terlewat kalau ternyata dibutuhkan.
-
-Saat mulai lagi nanti: cek dulu apakah response format API sudah berubah dari
-yang diasumsikan kode frontend existing (auth/absensi/notifikasi), sebelum
-nambah modul baru. Yang sudah PASTI berubah sejak fase 5: format `jam_masuk`
-di `/api/auth/me` & `/api/absensi/riwayat` (fase 27 — dulu timestamp ISO,
-sekarang `H:i`), dan struktur `data.records` di notifikasi (fase 24).

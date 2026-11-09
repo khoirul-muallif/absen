@@ -230,3 +230,14 @@ JOIN (
 SET k.terpakai = a.total, k.updated_at = NOW()
 WHERE k.terpakai <> a.total;
 ```
+### Dua mekanisme terjemahan yang BERBEDA
+
+| | Filament | Laravel (validation, auth, passwords) |
+|---|---|---|
+| Upstream punya `id`? | Ya, tapi tidak lengkap | Tidak sama sekali |
+| Pendekatan | override per-kunci di `lang/vendor/` | file utuh di `lang/id/` |
+| Boleh `vendor:publish` utuh? | **TIDAK** | Boleh (`lang:publish`), tapi `lang/en/` dibuang |
+
+Jangan tertukar. Menyalin file Filament utuh membuang perbaikan upstream
+selamanya; sebaliknya, override per-kunci untuk `lang/id/` tidak ada
+gunanya karena tidak ada yang di-override.

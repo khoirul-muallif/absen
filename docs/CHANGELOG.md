@@ -5,6 +5,84 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 80: pesan validasi Laravel diterjemahkan ke bahasa Indonesia
+
+Commit `daf9730`. Tindak lanjut temuan fase 79.
+
+### Masalahnya
+
+Locale aplikasi `id`, tapi `lang/id/validation.php` tidak pernah ada —
+Laravel tidak menyertakan `lang/` sejak v9 dan tidak punya terjemahan
+`id` sama sekali. Jadi `trans('validation.required')` mengembalikan
+string kuncinya apa adanya, dan **setiap pesan validasi sampai ke
+pengguna sebagai kunci mentah**: karyawan yang lupa mengisi alasan cuti
+melihat `validation.required` di layar HP-nya.
+
+Kena ke seluruh API (Cuti, Izin, Lembur, Dinas, TukarJadwal, Absensi,
+Auth) dan panel admin. Lebih luas daripada kebocoran terjemahan Filament
+(fase 75), dan kena ke 150 pengguna mobile, bukan satu admin.
+
+Ditemukan tidak sengaja dari output error test auth fase 79 yang
+kebetulan mencetak isi response: `"username": ["validation.required"]`.
+
+### Seluruh 150 kunci, bukan hanya yang dipakai
+
+Pindai semua `validate()` di API menunjukkan 15 aturan yang benar-benar
+dipakai (`required`, `required_if`, `string`, `integer`, `boolean`,
+`date`, `date_format`, `after`, `after_or_equal`, `in`, `exists`,
+`different`, `image`, `max`, `nullable`), plus beberapa lagi dari
+Filament (`unique`, `email`, `min`, `numeric`).
+
+Tetap diterjemahkan semuanya. Alasannya: tidak ada perbaikan upstream
+yang akan menyusul untuk `id`, jadi file ini memang dirawat sendiri —
+kalau cuma 15 aturan, suatu saat seseorang menambah `->min(3)` di sebuah
+form dan pesannya keluar sebagai kunci mentah lagi tanpa ada yang tahu
+sampai pengguna mengeluh.
+
+Blok `attributes` yang paling berdampak: tanpa itu pesannya berbunyi
+*"jenis_cuti_id yang dipilih tidak valid"*. Diisi hanya field yang
+benar-benar dikirim lewat API, bukan semua kolom.
+
+`auth.php` dan `passwords.php` ikut dibuat (`passwords.php` untuk
+jaga-jaga kalau reset lewat email nanti dipakai). `pagination.php`
+dilewati — Filament punya sendiri, dan response paging
+`InformasiController` tidak memuat teks Previous/Next.
+
+### KEBALIKAN dari pendekatan Filament — jangan tertukar
+
+| | Filament (fase 75) | Laravel (fase 80) |
+|---|---|---|
+| Upstream punya `id`? | Ya, tapi tidak lengkap | Tidak sama sekali |
+| Pendekatan | override per-kunci di `lang/vendor/` | file utuh di `lang/id/` |
+| `vendor:publish` utuh? | **TIDAK** | Boleh, tapi `lang/en/` dibuang |
+
+`lang/en/` ikut ter-publish lalu dihapus: identik dengan bawaan
+framework, dan menyimpannya berarti perbaikan upstream di `en` tidak
+akan pernah terpakai. Pelajaran yang sama dengan Filament, tapi
+kesimpulannya berbeda untuk `id` karena upstream-nya memang tidak ada.
+Dicatat di runbook supaya tidak tertukar.
+
+### TEMUAN: tidak ada test yang pernah memeriksa isi pesan validasi
+
+Setelah seluruh terjemahan terpasang, suite **tetap 645 hijau, tidak
+satu pun berubah**. Artinya tidak ada satu pun dari 645 test yang pernah
+memeriksa isi pesan validasi — semuanya
+`assertJsonValidationErrors('field')` yang cuma mengecek kunci field-nya
+ada, tidak peduli isinya.
+
+Kebocoran ini bisa bertahan selamanya tanpa ketahuan. Konsisten dengan
+peringatan lama di QUICK_CONTEXT soal `assertStatus(422)` yang hijau
+karena alasan salah — ini variannya untuk isi pesan.
+
+2 test baru di `ValidasiBahasaTest` menutup celah itu. Yang pertama
+assert `not->toStartWith('validation.')`, jadi kalau `lang/id/` terhapus
+atau locale berubah, test merah dengan pesan yang langsung menjelaskan
+sebabnya.
+
+### Test
+
+**647 passed (1917 assertions)**, naik 2 dari 645.
+
 ## fase 79: login pakai username
 
 Commit `1c47719`. Menutup item yang diusulkan 6 Nov saat audit FE
