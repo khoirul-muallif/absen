@@ -5,6 +5,116 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 75: modul Informasi/Pengumuman — model, API, dan Filament Resource
+
+Commit `2523c74`. Menutup blocker FE terakhir yang tersisa: tab
+"Informasi" di bottom nav `absensi_frontapp` sudah ada sejak 5 Nov
+tapi hardcoded empty state, karena backend belum punya apa pun.
+
+Referensi UI dari aplikasi lama (screenshot 9 Nov): kartu dengan
+tanggal, judul, dan cuplikan isi, plus kolom pencarian "Cari berita"
+di atas. Kolom pencarian itu tidak ada di catatan `todo.md` asli —
+baru ketahuan dari screenshot, dan ikut mengubah bentuk endpoint.
+
+### Tabel `informasi` (singular)
+
+instansi_id, judul, isi (text), tanggal_terbit (date), is_aktif,
+created_by (nullable → users). Index (instansi_id, is_aktif,
+tanggal_terbit) sesuai pola query utama endpoint karyawan.
+
+Nama tabel singular lewat `protected $table`, bukan default
+`informasis` — ikut pola instansi/shift/absensi yang memang sengaja
+tidak konsisten, dan "informasi" sudah jamak sendiri di bahasa
+Indonesia.
+
+Belum ada kolom gambar/lampiran, walau `todo.md` menyebutnya sebagai
+kemungkinan. Screenshot menampilkan ikon generik yang SAMA di tiap
+kartu, bukan thumbnail — jadi tidak ada indikasi pengumuman punya
+gambar sendiri. Menambahkannya nanti cuma satu migration, sementara
+memasukkannya sekarang menyeret urusan upload + storage tanpa
+kebutuhan yang jelas.
+
+### Endpoint
+
+GET /api/informasi [?q=] [?page=] — 10 per halaman
+GET /api/informasi/{id}
+
+
+Keduanya auto-scoped ke `instansi_id` karyawan yang login (keputusan
+9 Nov, konsisten dengan resource lain). Konsekuensi yang disadari:
+kalau nanti RS punya lebih dari satu instansi, pengumuman dari pusat
+tidak akan terlihat siapa pun kecuali dibuat ulang per instansi.
+
+**Empat keputusan kontrak dengan FE:**
+
+1. **Pencarian di JUDUL saja**, tidak di isi. Mencari di isi bikin
+   hasilnya penuh pengumuman yang kata kuncinya cuma lewat di tengah
+   paragraf, tanpa petunjuk kenapa baris itu muncul. Ada test yang
+   mengunci ("q TIDAK mencari di isi") supaya tidak "dirapikan" jadi
+   ikut mencari isi.
+2. **List mengirim `ringkasan`** (150 karakter, accessor di model),
+   isi penuh hanya di endpoint detail — supaya payload list tidak
+   membengkak kalau pengumumannya panjang. Accessor memakai
+   `strip_tags()` sebagai pengaman kalau `isi` nanti diisi lewat
+   RichEditor; tanpa itu cuplikan bisa terpotong di tengah tag HTML.
+3. **Paging 10 per halaman.** Ini satu-satunya modul yang datanya
+   menumpuk terus dari tahun ke tahun, jadi sengaja beda dari modul
+   lain yang mengembalikan semua record sekaligus
+   (`data.records` + `total` tanpa paging).
+4. **`tanggal_terbit` format `'d M Y'`**, ikut konvensi FE yang
+   sudah dipakai Dinas/Cuti/Jadwal.
+
+**`orderByDesc('id')` sebagai pengurut kedua BUKAN kosmetik.**
+`tanggal_terbit` bertipe date, jadi dua pengumuman di tanggal yang
+sama urutannya tidak ditentukan — dan urutan tidak stabil bikin baris
+yang sama muncul dua kali di halaman berbeda, atau hilang sama
+sekali. Kelas bug yang baru ketahuan setelah data menumpuk di
+production. Ada test khusus untuk ini.
+
+Informasi non-aktif dan milik instansi lain sama-sama **404** di
+`show()`, bukan 403 — supaya tidak membocorkan bahwa id itu ada.
+
+### Filament Resource
+
+`isi` pakai Textarea biasa, bukan RichEditor — screenshot menunjukkan
+paragraf polos, dan RichEditor berarti `isi` berisi HTML yang harus
+dirender Flutter (butuh paket tambahan di FE).
+
+`created_by` diisi dari `auth()->id()` di
+`mutateFormDataBeforeCreate()`, tidak ada di form sama sekali supaya
+admin tidak bisa mengaku-aku sebagai orang lain. **Sengaja tidak ada
+padanannya di `EditInformasi`** — kolom itu harus tetap menunjuk
+pembuat asli, bukan orang terakhir yang mengedit. Ada test untuk
+keduanya.
+
+`getPluralModelLabel()` di-override jadi "Informasi" — tanpa itu
+Filament menampilkan "Informasis" di menu, judul halaman, dan tombol.
+`navigationGroup` = 'Master Data'; tidak benar-benar pas (isinya
+konten, bukan data acuan) tapi grup baru berisi satu menu lebih
+mengganggu daripada penempatan yang kurang tepat. Pindahkan kalau
+nanti notifikasi admin digarap dan ada penghuni kedua.
+
+### TEMUAN: terjemahan Filament `id` tidak lengkap
+
+Kolom `is_aktif` menampilkan
+`filament-tables::table.columns.icon.boolean.true` alih-alih ikon
+centang. Locale aplikasi `id`, dan terjemahan Indonesia bawaan
+Filament tertinggal dari versi Inggrisnya (125 kunci di `en`, 113 di
+`id`). Publish percobaan tidak memperbaiki apa pun — file yang
+tersalin sama persis dengan yang sebelumnya dibaca dari `vendor/`,
+sudah di-revert.
+
+**BUKAN bug resource ini** — ada 11 `IconColumn` lain di 8 resource
+yang kena hal yang sama, dan `filament-tables` cuma 1 dari 4 paket
+yang punya kunci sendiri. Perlu audit menyeluruh, bukan tambal
+per-kolom. Dicatat di `todo.md` dengan tiga opsi beserta
+konsekuensinya.
+
+### Test
+
+15 test API + 2 test Resource.
+Suite: **640 passed (1904 assertions)**, naik dari 623/1857.
+
 ## fase 74: notifikasi TukarJadwal untuk karyawan — tiga titik alur, plus `karyawan_id` di riwayat API
 
 Dua commit: `16acdbd` (notifikasi) dan `d18f93c` (kontrak API).
