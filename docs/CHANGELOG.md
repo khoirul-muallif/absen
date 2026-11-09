@@ -5,6 +5,131 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 74: notifikasi TukarJadwal untuk karyawan — tiga titik alur, plus `karyawan_id` di riwayat API
+
+Dua commit: `16acdbd` (notifikasi) dan `d18f93c` (kontrak API).
+Keduanya menutup item yang dicatat saat audit FE 6 Nov 2026, dan
+yang pertama adalah blocker untuk perombakan navigasi di frontend.
+
+### Notifikasi TukarJadwal — dibuat dari nol
+
+Sebelum ini `app/Notifications/` cuma berisi `AbsenTerlambat` dan
+`BelumAbsen`. TukarJadwal tidak pernah memanggil `notify()` sedikit
+pun di jalur manapun: rekan tujuan tidak punya cara tahu ada
+pengajuan menunggu dijawab kecuali membuka layar Menunggu Respon
+sendiri, dan pengaju tidak pernah diberi tahu hasilnya.
+
+Tiga kelas, channel `['database']` saja:
+
+| Kelas | Penerima | Kapan |
+|---|---|---|
+| `TukarJadwalDiajukan` | rekan tujuan | pengajuan tukar masuk |
+| `TukarJadwalDiresponRekan` | pengaju | rekan setuju/tolak |
+| `TukarJadwalDiproses` | kedua pihak | admin approve/tolak/batalkan |
+
+Mail sengaja TIDAK dipakai, beda dari `AbsenTerlambat`: email
+karyawan RS belum tentu valid (itu justru alasan di balik item
+"login pakai username" di todo), dan notifikasi ini sifatnya minta
+tindakan cepat, bukan arsip.
+
+Mode pindah tidak punya rekan — tidak ada notifikasi saat ajukan,
+dan hanya pengaju yang diberi tahu hasilnya. `TukarJadwalDiproses`
+sudah aman terhadap `karyawan_tujuan_id` null, ada test-nya.
+
+### Keputusan penempatan hook (tiga, semuanya punya alasan)
+
+**1. Hook "diajukan" di controller, BUKAN di model event `created`.**
+Factory dan `SimulasiMassalSeeder` juga membuat baris TukarJadwal —
+kalau dipasang di model event, seeding memuntahkan notifikasi massal
+ke ratusan karyawan dummy.
+
+**2. Notifikasi hasil admin dikirim DI LUAR `DB::transaction()` di
+`approveAndSwap()`, bukan di dalam `afterApprove()`.** Kalau swap
+gagal di tengah (`TukarJadwalKonflikException`), transaksi rollback
+tapi notifikasi yang terlanjur terkirim tidak bisa ikut ditarik.
+Bentuk method diubah dari `return DB::transaction(...)` jadi
+`$berhasil = DB::transaction(...)` + kirim notifikasi + `return`.
+Ada test yang mengunci ini ("approve GAGAL karena konflik: tidak ada
+notifikasi terkirim sama sekali") — kalau nanti ada yang memindahkan
+pemanggilannya ke dalam transaksi, test itu yang merah duluan.
+
+**3. `reject()` di-override di `TukarJadwal`, bukan ditambahi di
+`HasApprovalWorkflow`.** Trait itu dipakai 5 model (Cuti, Izin,
+Lembur, Dinas, TukarJadwal) dan notifikasi ini khusus TukarJadwal.
+Isinya menduplikasi trait, bukan `parent::` (trait tidak bisa
+dipanggil begitu) — konsekuensinya kalau trait berubah, override ini
+tidak ikut. Diterima karena isi `reject()` di trait cuma satu
+`update()` empat kolom.
+
+Diverifikasi lewat `findstr` bahwa ketiga jalur admin
+(`approveAndSwap`, `reject`, `batalkanOlehAdmin`) cuma dipanggil dari
+`TukarJadwalsTable.php` — tidak ada action kedua di halaman View yang
+terlewat. Ini kelas celah yang sama dengan bug EditAction tanpa guard
+di fase 25.
+
+### Bentuk `data` — satu `tipe` untuk ketiganya
+
+`data['tipe']` sengaja satu nilai `'tukar_jadwal'` untuk ketiga
+kelas, detail kejadian disimpan di field terpisah `'aksi'`
+(`diajukan`/`disetujui_rekan`/`ditolak_rekan`/`approved`/`rejected`/
+`dibatalkan_admin`), plus `'tukar_jadwal_id'`. Alasannya
+`NotifikasiController` generik dan FE memilih ikon/warna dari `tipe`
+— menambah enam nilai `tipe` baru memaksa enam cabang baru di FE.
+Ada test yang mengunci nilai ini.
+
+**Belum diverifikasi di FE:** apakah `NotifikasiScreen` punya
+`default` di switch ikon/warna `tipe`. Nilai `'tukar_jadwal'` belum
+pernah ada sebelumnya; kalau tidak ada `default`, bisa ikon kosong
+atau crash. Satu-satunya hal yang masih bisa menggagalkan fitur ini
+di device.
+
+### TEMUAN: `TukarJadwalFactory` memaksa `status = 'menunggu_admin'`
+
+Lima dari sepuluh test baru merah di percobaan pertama dengan
+"Pengajuan ini bukan lagi tahap menunggu respon rekan." Sebabnya
+factory mengisi `status` eksplisit, dan hook `creating` di model cuma
+mengisi kalau masih kosong (`if (! $tukarJadwal->status)`) — jadi
+nilai factory menang.
+
+Artinya baris TukarJadwal mode tukar yang lahir dari factory selalu
+berada di tahap yang mustahil di dunia nyata (mode tukar seharusnya
+lahir `menunggu_rekan`). Tidak merusak test lama karena semuanya
+memang langsung menguji `approveAndSwap()`, tapi konsekuensinya
+**tidak ada satu pun test lama yang pernah melewati jalur
+`menunggu_rekan` lewat factory**. Ditutup sementara dengan mengisi
+`'status' => 'menunggu_rekan'` eksplisit di helper test baru.
+Membersihkan factory-nya ditunda — berisiko membuat test lama merah,
+lebih baik jadi perubahan terpisah.
+
+### `karyawan_id` di `formatTukarJadwal()` (commit `d18f93c`)
+
+`riwayat()` cuma mengirim nama karyawan, dan FE memakai pencocokan
+nama itu untuk memutuskan "ini pengajuan saya sendiri" — yang
+menentukan tombol batal muncul atau tidak. Dua karyawan bernama sama
+persis bikin tombol batal muncul di pengajuan orang lain. Ditambahkan
+`karyawan_id` di `jadwal_asal` dan `jadwal_tujuan`; field lama tetap
+ada, jadi FE yang belum diupdate tidak pecah.
+
+### Dicatat untuk nanti
+
+- **Notifikasi admin di panel Filament** belum ada, di kelima modul
+  approval. `->databaseNotifications()` juga belum pernah
+  diaktifkan di `AdminPanelProvider`. Sengaja tidak dikerjakan di
+  sini: bukan blocker siapa pun, dan mengerjakan TukarJadwal saja
+  bikin tidak konsisten dengan 4 modul lain. Lihat `todo.md`.
+- **Notifikasi saat pengaju membatalkan sendiri** (`DELETE
+  /api/tukar-jadwal/{id}` selagi status `menunggu_rekan`) belum ada —
+  rekan sudah terlanjur dapat notifikasi "ada permintaan menunggu",
+  lalu membuka layar dan menemukannya kosong. Persis keluhan yang
+  bikin lonceng + badge itu ada.
+- **Nilai `data['tipe']` di notifikasi lama tidak pernah diuji** —
+  helper test memakai `'warning'`, produksi mengirim `'terlambat'`.
+  Lihat `todo.md`.
+
+### Test
+
+10 test baru di `tests/Feature/TukarJadwalNotifikasiTest.php`.
+Suite: **619 passed (1847 assertions)**, naik dari 609/1818.
 
 ## fase 73: TukarJadwal × rotasi beda tanggal — form admin menyusul fix fase 71, pesan error diperjelas, preview konflik
 

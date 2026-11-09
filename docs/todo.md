@@ -49,6 +49,15 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       
 ## UX yang tersisa
 
+- [ ] **Nilai `data['tipe']` tidak pernah diuji** — helper
+      `buatNotifikasi()` di test notifikasi memakai `'tipe' => 'warning'`,
+      padahal `AbsenTerlambat` yang asli mengirim `'tipe' => 'terlambat'`
+      dan `BelumAbsen` mengirim nilainya sendiri. Jadi test selama ini
+      menguji nilai yang tidak pernah ada di produksi. Tidak merusak apa
+      pun (`NotifikasiController` generik, tidak membaca `tipe`), tapi
+      artinya tidak ada yang mengunci field yang justru dipakai FE buat
+      memilih ikon/warna. Tambahkan assertion `tipe` di test
+      `AbsenTerlambat`/`BelumAbsen`. Ditemukan 9 Nov 2026.
 
 ## Fitur & infrastruktur
 - [ ] **Login pakai username, bukan email** — `AuthController` sekarang
@@ -63,12 +72,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       atau ikut dibuang? Migrasi data lama bagaimana (belum ada
       production, jadi sekarang justru waktu termurah untuk
       mengubahnya). Diusulkan 6 Nov 2026 saat audit FE login_screen.
-- [ ] **`riwayat()` TukarJadwal tidak mengirim ID pengaju/tujuan** —
-      cuma nama (`jadwal_asal.karyawan`). FE memakai nama itu untuk
-      memutuskan "ini pengajuan saya sendiri" (menentukan tombol batal
-      muncul atau tidak), yang rawan kalau ada dua karyawan bernama sama
-      persis. Tambahkan `karyawan_id` di `formatTukarJadwal()`.
-      Ditemukan saat audit FE 6 Nov 2026.
 
 - [ ] **`rekap()` tidak pernah mengirim `sakit`** — field-nya ada di
       model `RekapAbsen` di FE dan ditampilkan di kartu rekap Riwayat,
@@ -77,22 +80,30 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       peruntukannya). Keputusan: backend mulai mengisinya, atau FE
       menghapusnya dari kartu. Ditemukan saat audit FE 6 Nov 2026.
       
-- [ ] **Notifikasi TukarJadwal** — belum ada sama sekali.
-      `app/Notifications/` cuma berisi `AbsenTerlambat` dan `BelumAbsen`;
-      `TukarJadwalController::ajukan()`, `responRekan()` dan approve admin
-      tidak memanggil `notify()` sedikit pun. Tiga titik yang perlu:
-      (1) pengajuan masuk → rekan tujuan, (2) rekan setuju/tolak →
-      pengaju, (3) admin approve/tolak → kedua pihak. Infrastrukturnya
-      sudah ada (notifikasi bawaan Laravel; `NotifikasiController`
-      generik, membaca `data['judul'|'pesan'|'tipe']` — ikuti bentuk
-      `data` yang dipakai `AbsenTerlambat`/`BelumAbsen` supaya FE tidak
-      perlu cabang baru).
+- [ ] **Notifikasi admin di panel Filament** — belum ada apa pun yang
+      memberi tahu admin bahwa ada pengajuan menunggu approval, di
+      KELIMA modul (Cuti, Izin, Lembur, Dinas, TukarJadwal). Admin harus
+      ingat sendiri membuka menunya. TukarJadwal paling rawan karena
+      punya dua tahap tunggu: mode pindah langsung masuk
+      `menunggu_admin`, mode tukar masuk ke sana setelah rekan setuju —
+      kalau tidak dilihat, pengajuan mengendap sampai tanggalnya lewat.
 
-      Blocker untuk FE: ikon lonceng + badge di `TukarJadwalScreen`
-      (menuju `MenungguResponScreen`) baru boleh dicabut setelah (1)
-      jalan — sebelum itu, mencabutnya menghapus satu-satunya cara rekan
-      tahu ada pengajuan yang menunggu dijawab. Ditemukan saat audit FE
-      6 Nov 2026.
+      Prasyarat: `->databaseNotifications()` belum ada di
+      `AdminPanelProvider` (dicek 9 Nov 2026, kosong), jadi lonceng
+      panelnya sendiri belum aktif.
+
+      Perlu diputuskan dulu: dikirim ke SIAPA? Tidak ada konsep "admin
+      penanggung jawab" — kandidatnya semua `User`, atau `User` yang
+      terkait instansi tertentu. Resource lain sudah scoped per
+      instansi, kemungkinan besar harus ikut. Nyambung ke Known Gap #3
+      (`Karyawan.role='admin'` tidak kepakai di alur approval; penerima
+      notifikasi ini `User`, bukan `Karyawan` — jalur terpisah dari
+      notifikasi karyawan yang dibaca lewat `NotifikasiController`).
+
+      Sengaja TIDAK dikerjakan bersama notifikasi TukarJadwal untuk
+      karyawan (9 Nov 2026): yang itu blocker FE, yang ini tidak
+      memblokir siapa pun, dan mengerjakan TukarJadwal saja justru bikin
+      tidak konsisten dengan 4 modul approval lain.
 
 - [ ] **Model + endpoint Informasi/Pengumuman** — frontend sudah punya tab
       "Informasi" di bottom nav (absensi_frontapp, commit [isi setelah
