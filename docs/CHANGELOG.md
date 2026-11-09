@@ -5,6 +5,59 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 78: reset password oleh admin, dan index `status` yang menyusul badge
+
+Dua commit kecil, `6007e96` dan `c6dfbbf`.
+
+### Reset password dari panel admin
+
+Jaga-jaga kalau karyawan lupa password.
+
+Dipilih reset oleh admin, **bukan reset lewat email** (mekanisme bawaan
+Laravel, tabel `password_reset_tokens` sudah ada sejak awal). Dua
+alasan: karyawan RS belum tentu punya atau bisa mengakses email
+kerjanya — itu justru alasan di balik item "login pakai username" di
+`todo.md` — dan reset lewat email membuka jalur masuk ke akun lewat
+alamat yang mungkin tidak lagi dikuasai karyawan (email kantor lama,
+email yang dibuatkan HRD). Untuk aplikasi yang mencatat kehadiran,
+risiko itu tidak sebanding dengan kemudahannya.
+
+Password dikembalikan ke default yang sama dengan saat karyawan dibuat.
+Kolom `password` punya cast `'hashed'`, jadi string mentah otomatis
+di-hash — `Hash::make()` manual akan menghasilkan **hash ganda** dan
+mengunci karyawan di luar aplikasi. Ada test yang mengunci ini dari dua
+arah: nilainya benar-benar ter-hash, dan `Hash::check()` lolos.
+
+Action ditaruh di dalam `ActionGroup` bersama View/Edit, di atas dua
+DeleteAction supaya tidak tertukar dengan yang berbahaya. Modal sengaja
+**tidak menyebut nilai passwordnya** di layar — panel admin bisa
+terlihat orang lain yang lewat, dan admin sudah tahu nilainya.
+
+**Tidak ada pemaksaan ganti password saat login berikutnya.** Itu butuh
+kolom baru (`harus_ganti_password`), guard di `AuthController`, dan
+layar ganti password di FE yang belum ada — dan tanpa layar itu,
+memaksa ganti justru mengunci karyawan di luar aplikasi. Digarap
+bersama fitur "ganti email & password" di FE.
+
+Catatan jujur soal test-nya: yang diuji adalah perilaku hash, bukan
+bahwa tombolnya ada. Kalau action-nya dihapus dari tabel, test tetap
+hijau.
+
+### Index `status` di lima tabel approval
+
+Tindak lanjut langsung dari fase 77. `getNavigationBadge()` menjalankan
+`COUNT ... WHERE status = ...` di **setiap page load** panel, dan
+kelima tabel approval tidak punya index di kolom itu — hanya `absensi`
+yang punya, lewat `(karyawan_id, status)`.
+
+Belum terasa dengan data belasan baris, tapi dengan 150 karyawan
+setelah setahun jadi lima full table scan per halaman. Ditambahkan di
+`cutis`, `izins`, `lemburs`, `dinas`, `tukar_jadwals`.
+
+### Test
+
+**641 passed (1906 assertions)**, naik satu dari 640.
+
 ## fase 77: badge jumlah pengajuan menunggu di menu approval
 
 Commit `aad36e0`. Menutup item "notifikasi admin di panel Filament"

@@ -45,6 +45,7 @@
 **kuota_cutis** — karyawan_id, jenis_cuti_id, tahun, **semester (tinyint, default 0 = bukan semesteran)**, kuota, terpakai (default 0). Unique(karyawan_id, jenis_cuti_id, tahun, **semester**)
 
 **cutis** — karyawan_id, jenis_cuti_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan, lampiran (nullable), status, approved_by, approved_at, catatan_approval
+- Index: `status` (dipakai `getNavigationBadge()`, fase 77)
 
 **izins** — karyawan_id, tanggal, jam_keluar, jam_kembali (nullable), keperluan, status, approved_by, approved_at, catatan_approval
 - Tidak sync ke Absensi (sengaja, lihat QUICK_CONTEXT Larangan)
