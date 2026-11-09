@@ -1,198 +1,222 @@
 # RUNBOOK — absensi-app
 
-> Cheatsheet command buat dijalankan di terminal. Ringkasan status project
-> ada di `QUICK_CONTEXT.md` — file ini murni operasional, bukan konteks.
+> Cheatsheet operasional. Konteks project ada di `QUICK_CONTEXT.md`,
+> histori di `CHANGELOG.md`. File ini cuma command + prosedur.
 
-## 🔥 Sering dipakai
-```
+## Sering dipakai
+
 cd E:\laragon\www\absensi-app
 php artisan serve --host=0.0.0.0 --port=8001
 
-php artisan test
 .\vendor\bin\pest
 .\vendor\bin\pest --filter=Cuti
 
 php artisan optimize:clear
-
 php artisan migrate:fresh --seed
 php artisan make:filament-user
-php artisan db:seed --class=AbsensiSimulasiSeeder
-
 Get-ChildItem -Recurse -Depth 2 | Where-Object { $_.FullName -notmatch "node_modules|vendor|storage" }
-
 git stash pop
-```
-## 🧪 Simulasi massal (data besar buat nemuin bug di volume)
-php artisan db:seed --class=SimulasiMassalSeeder
-# 150 karyawan dummy (umum+rotasi), 3 bulan, cuti/dinas acak, absensi acak.
-# Seeded (reproducible), insert chunked. ~1-2 menit jalan. Jalankan SETELAH
-# migrate:fresh --seed biasa, bukan bagian dari DatabaseSeeder.
+## Simulasi data besar
 
-## 📅 Generator jadwal
-```
-# generate bulan depan (default)
+php artisan db:seed --class=SimulasiMassalSeeder
+
+
+150 karyawan dummy (umum + rotasi), 3 bulan, cuti/dinas/absensi acak.
+Seeded (reproducible), insert chunked, ~1-2 menit. Jalankan SETELAH
+`migrate:fresh --seed`, bukan bagian dari `DatabaseSeeder`.
+
+## Generator jadwal
+
 php artisan jadwal:generate-bulanan --dry-run
 php artisan jadwal:generate-bulanan
-
-# atau generate bulan spesifik
 php artisan jadwal:generate-bulanan --bulan=7 --tahun=2026
 
-# rotasi (karyawan tipe_jadwal=rotasi)
 php artisan jadwal:generate-rotasi {bulan} {tahun}
 php artisan jadwal:generate-rotasi 8 2026 --unit=IGD
 php artisan jadwal:generate-rotasi 8 2026 --overwrite-generate
-```
 
-## 🩺 Diagnostik
-```
+
+## Diagnostik
+
 php artisan karyawan:cek-tipe-jadwal
 php artisan absensi:rekap-harian --tanggal=2026-07-15
 php artisan schedule:list
-```
 
-## 🚑 Darurat / one-off fix (jarang tapi butuh)
 
-# Sinkron ulang Jadwal & Absensi dari Cuti/Dinas approved.
-# Idempoten, TIDAK menyentuh kuota. Ada konfirmasi sebelum jalan.
+## Terjemahan Filament (locale `id`)
+
+Terjemahan Indonesia bawaan Filament tidak lengkap — per 9 Nov 2026 ada
+41 kunci hilang, yang tampil sebagai string teknis di panel admin (mis.
+`filament-tables::table.columns.icon.boolean.true` alih-alih ikon
+centang).
+
+Tambalannya di `lang/vendor/`, **sengaja hanya berisi kunci yang
+hilang**, bukan salinan lengkap. Laravel menggabungkan file di
+`lang/vendor/` ke atas terjemahan paket per-kunci
+(`FileLoader::loadNamespaceOverrides` → `array_replace_recursive`), jadi
+kunci yang tidak kita tulis tetap ikut paket — termasuk perbaikan di
+versi Filament berikutnya.
+
+**JANGAN jalankan `vendor:publish --tag=filament-*-translations`.**
+Begitu seluruh file tersalin, perbaikan upstream tidak akan pernah
+terpakai lagi untuk paket itu, dan kita mengambil alih perawatan ~790
+kunci selamanya.
+
+Setelah upgrade Filament:
+
+php scripts\cek-terjemahan.php
+
+
+Mencetak kunci yang hilang per paket (baca `vendor/`, bukan override
+kita). Yang muncul dan belum ada di `lang/vendor/` perlu ditambahkan.
+Yang HILANG dari daftar berarti sudah diterjemahkan upstream — hapus
+dari override biar tidak menimpa versi upstream.
+
+Script belum tahu mana yang sudah ditambal, jadi daftarnya selalu
+lengkap. Bandingkan manual dengan isi `lang/vendor/`.
+
+`filament-actions` tidak punya kunci hilang (selisih 0 per 9 Nov).
+
+## Darurat / one-off
+Sinkron ulang Jadwal & Absensi dari Cuti/Dinas approved.
+Idempoten, TIDAK menyentuh kuota. Ada konfirmasi sebelum jalan.
+
 php artisan absensi:backfill-cuti-dinas
 
-# Audit menit_terlambat & melebihi_toleransi_bulanan pada data lama
-# (tindak lanjut bug fase 14). Default DRY-RUN — aman dijalankan kapan saja.
+Audit menit_terlambat & melebihi_toleransi_bulanan (tindak lanjut
+bug fase 14). Default DRY-RUN.
+
 php artisan absensi:audit-menit-terlambat
 php artisan absensi:audit-menit-terlambat --instansi=1
-php artisan absensi:audit-menit-terlambat --fix   # BACKUP DB DULU
+php artisan absensi:audit-menit-terlambat --fix # BACKUP DB DULU
 
-### ⚠️ JANGAN jalankan massal — afterApprove() sudah TIDAK idempoten
 
-Dua snippet di bawah ini ditulis sekitar fase 10, waktu `afterApprove()`
-cuma menyinkronkan Absensi (aman diulang). Sejak itu perilakunya berubah:
+### JANGAN jalankan `afterApprove()` massal
 
-- **fase 21** — `afterApprove()` juga `updateOrCreate` Jadwal dan SENGAJA
-  menimpa baris yang sumbernya `manual`. Jalan massal = semua edit manual
-  admin di tanggal-tanggal itu ketimpa.
-- **fase 22** — `afterApprove()` menaikkan `KuotaCuti.terpakai`. Jalan
-  massal = **kuota terpakai terhitung ganda**. Kalau di tengah loop ada
-  yang melewati kuota, `KuotaCutiTidakCukupException` dilempar dan loop
-  berhenti di tengah: sebagian sudah ter-increment, sebagian belum, tanpa
-  rollback menyeluruh (transaksinya per-record, bukan per-loop).
+Snippet lama (fase 10) yang memanggil `afterApprove()` dalam loop sudah
+TIDAK aman. Sejak itu perilakunya berubah:
 
-Kalau memang perlu, jalankan untuk SATU record spesifik dan pastikan dulu
-`KuotaCuti.terpakai` untuk kombinasi itu memang belum mencerminkan cuti
-tersebut. Backup DB dulu.
+- **fase 21** — juga `updateOrCreate` Jadwal dan SENGAJA menimpa baris
+  bersumber `manual`. Jalan massal = semua edit manual admin ketimpa.
+- **fase 22** — menaikkan `KuotaCuti.terpakai`. Jalan massal = kuota
+  terhitung ganda. Kalau di tengah loop ada yang melewati kuota,
+  `KuotaCutiTidakCukupException` dilempar dan loop berhenti di tengah:
+  sebagian ter-increment, sebagian tidak, tanpa rollback menyeluruh
+  (transaksinya per-record, bukan per-loop).
 
-```
-# BACA PERINGATAN DI ATAS SEBELUM MENJALANKAN
-\App\Models\Cuti::where('status', 'approved')->get()->each(function ($cuti) { $cuti->afterApprove(); });
+Kalau memang perlu, jalankan untuk SATU record dan pastikan dulu
+`KuotaCuti.terpakai` belum mencerminkan cuti itu. Backup DB dulu.
+Dinas lebih kecil risikonya (tidak menyentuh kuota), tapi penimpaan
+Jadwal manual tetap berlaku.
 
-\App\Models\Dinas::where('status', 'approved')->get()->each(function ($dinas) { $dinas->afterApprove(); });
-```
+## Deploy pertama
 
-Untuk Dinas risikonya lebih kecil (tidak menyentuh kuota sama sekali),
-tapi penimpaan Jadwal manual tetap berlaku.
+Checklist yang gampang terlewat:
 
-## 📦 Setup model + migration awal (arsip — model-model ini udah lama jadi)
-```
-php artisan make:model Instansi -m
-php artisan make:model QrInstansi -m
-php artisan make:model Karyawan -m
-php artisan make:model Shift -m
-php artisan make:model KaryawanShift -m
-php artisan make:model Absensi -m
+1. `php artisan absensi:audit-menit-terlambat --fix` kalau ada data dari
+   sebelum fase 27 — kolom `melebihi_toleransi_bulanan` tidak pernah
+   tersimpan sejak fase 9, jadi SEMUA baris lama salah di kolom itu.
+2. Backfill `KuotaCuti.terpakai` (di bawah) kalau ada Cuti approved dari
+   sebelum fase 42.
 
-php artisan make:migration create_jenis_cutis_table
-php artisan make:migration create_kuota_cutis_table
-php artisan make:migration create_cutis_table
-php artisan make:migration create_izins_table
-php artisan make:migration create_lemburs_table
-php artisan make:migration create_dinas_table
-php artisan make:migration create_jadwals_table
-php artisan make:migration create_tukar_jadwals_table
-php artisan make:migration make_shift_id_nullable_in_jadwals_table
-php artisan make:migration add_hari_kerja_to_shift_table
-php artisan make:migration add_menit_terlambat_to_absensi_table
+### Backfill KuotaCuti.terpakai (fase 42)
 
-php artisan make:model JenisCuti
-php artisan make:model KuotaCuti
-php artisan make:model Cuti
-php artisan make:model Izin
-php artisan make:model Lembur
-php artisan make:model Dinas
-php artisan make:model TukarJadwal
-php artisan make:model HariLibur -m
-```
+BACKUP DB DULU.
 
-## 📦 Setup Filament Resource (arsip — resource ini udah lama jadi)
-```
-php artisan make:filament-resource Instansi --generate
-php artisan make:filament-resource QrInstansi --generate
-php artisan make:filament-resource Karyawan --generate
-php artisan make:filament-resource Shift --generate
-php artisan make:filament-resource KaryawanShift --generate
-php artisan make:filament-resource Absensi --generate
+Ketiga query memperhitungkan `kuota_cutis.semester`, dan logikanya
+MENYALIN `JenisCuti::semesterDari()`: `0` untuk jenis tahunan, dan
+untuk `periode_kuota = 'semesteran'` → bulan 1–6 = semester 1, 7–12 =
+semester 2. SQL tidak bisa memanggil method PHP, jadi ini duplikasi
+yang disengaja — **kalau `semesterDari()` berubah, ketiga query di
+bawah harus ikut diubah.**
 
-php artisan make:filament-resource JenisCuti --generate
-php artisan make:filament-resource KuotaCuti --generate
-php artisan make:filament-resource Cuti --generate
-php artisan make:filament-resource Izin --generate
-php artisan make:filament-resource Lembur --generate
-php artisan make:filament-resource Dinas --generate
-php artisan make:filament-resource Jadwal --generate
-php artisan make:filament-resource TukarJadwal --generate
-php artisan make:filament-resource HariLibur --generate
-php artisan make:filament-resource PolaRotasi
-php artisan make:filament-resource KaryawanPolaRotasi
-```
+Unique `kuota_cutis` ada 4 kolom (karyawan_id, jenis_cuti_id, tahun,
+semester), jadi pengelompokannya wajib ikut semester. Tanpa itu dua
+semester tergabung jadi satu baris dan angkanya salah.
 
-## 🤖 Template prompt lanjut kerjaan (bukan command, tapi kepake)
-```
-[tempel QUICK_CONTEXT.md] + [tempel todo.md]
-[upload ControllerX.php + ControllerXTest.php — sebagai contoh pola]
-"Lanjutin ControllerY, ikutin pola dari ControllerX ini"
-```
+⚠️ **Cuti yang melintasi batas semester** (mis. 28 Jun–3 Jul) dihitung
+seluruhnya ke semester `tanggal_mulai`, karena `semesterDari()` hanya
+menerima satu tanggal dan `afterApprove()` memanggilnya dengan
+`tanggal_mulai`. Konsisten dengan produksi, tapi kalau ada kasus
+seperti itu di data lama, periksa manual.
 
-## 🗑️ Kandidat dihapus (cek dulu sebelum beneran hapus)
-- _(kosongin dulu — isi manual pas nemu command yang emang udah gak
-  relevan sama sekali)_
+**1. Cek selisih — tinjau manusia sebelum lanjut**, terutama baris yang
+`terpakai_sekarang > seharusnya` (kemungkinan koreksi manual admin yang
+akan tertimpa).
 
- npx @deepseek-ai/dsh web
-
-# Backfill KuotaCuti.terpakai dari histori Cuti approved (fase 42)
-# WAJIB dijalankan sekali saat deploy pertama kalau sudah ada Cuti approved
-# dari sebelum fase 42. BACKUP DB DULU.
-
-# 1. Cek selisih dulu — tinjau manusia sebelum lanjut ke langkah 2,
-#    terutama baris yang terpakai_sekarang > seharusnya (kemungkinan
-#    koreksi manual admin yang akan tertimpa).
-SELECT k.id, k.karyawan_id, k.jenis_cuti_id, k.tahun,
+```sql
+SELECT k.id, k.karyawan_id, k.jenis_cuti_id, k.tahun, k.semester,
        k.terpakai AS terpakai_sekarang,
        COALESCE(a.total, 0) AS seharusnya
 FROM kuota_cutis k
 JOIN jenis_cutis j ON j.id = k.jenis_cuti_id AND j.potong_kuota = 1
 LEFT JOIN (
     SELECT c.karyawan_id, c.jenis_cuti_id,
-           YEAR(c.tanggal_mulai) AS thn, SUM(c.jumlah_hari) AS total
-    FROM cutis c WHERE c.status = 'approved'
-    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai)
-) a ON a.karyawan_id = k.karyawan_id AND a.jenis_cuti_id = k.jenis_cuti_id AND a.thn = k.tahun
+           YEAR(c.tanggal_mulai) AS thn,
+           CASE WHEN j2.periode_kuota = 'semesteran'
+                THEN IF(MONTH(c.tanggal_mulai) <= 6, 1, 2)
+                ELSE 0 END AS smt,
+           SUM(c.jumlah_hari) AS total
+    FROM cutis c
+    JOIN jenis_cutis j2 ON j2.id = c.jenis_cuti_id
+    WHERE c.status = 'approved'
+    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai), smt
+) a ON a.karyawan_id = k.karyawan_id
+   AND a.jenis_cuti_id = k.jenis_cuti_id
+   AND a.thn = k.tahun
+   AND a.smt = k.semester
 WHERE k.terpakai <> COALESCE(a.total, 0);
+```
 
-# 2. Isi row yang belum ada
-INSERT IGNORE INTO kuota_cutis (karyawan_id, jenis_cuti_id, tahun, kuota, terpakai, created_at, updated_at)
-SELECT c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai), j.default_kuota, SUM(c.jumlah_hari), NOW(), NOW()
+**2. Isi row yang belum ada**
+
+```sql
+INSERT IGNORE INTO kuota_cutis
+    (karyawan_id, jenis_cuti_id, tahun, semester, kuota, terpakai, created_at, updated_at)
+SELECT c.karyawan_id,
+       c.jenis_cuti_id,
+       YEAR(c.tanggal_mulai),
+       CASE WHEN j.periode_kuota = 'semesteran'
+            THEN IF(MONTH(c.tanggal_mulai) <= 6, 1, 2)
+            ELSE 0 END AS smt,
+       j.default_kuota,
+       SUM(c.jumlah_hari),
+       NOW(), NOW()
 FROM cutis c
 JOIN jenis_cutis j ON j.id = c.jenis_cuti_id
 WHERE c.status = 'approved' AND j.potong_kuota = 1
-GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai);
+GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai), smt;
+```
 
-# 3. Perbaiki row yang sudah ada tapi terpakai-nya tidak cocok
-#    (jalankan SETELAH meninjau hasil query 1)
+`j.default_kuota` dipakai apa adanya untuk baris semesteran juga —
+sama seperti `KuotaCuti::pastikanUntuk()` di produksi, yang tidak
+membagi dua. Artinya jenis cuti semesteran dengan `default_kuota = 12`
+berarti 12 hari PER SEMESTER, total 24 setahun. Query ini sengaja
+mencerminkan perilaku produksi, bukan memperbaikinya — kalau angka itu
+ternyata salah, yang perlu diperbaiki `afterApprove()`, bukan backfill
+ini.
+
+**3. Perbaiki row yang terpakai-nya tidak cocok** (setelah meninjau
+hasil query 1)
+
+```sql
 UPDATE kuota_cutis k
 JOIN jenis_cutis j ON j.id = k.jenis_cuti_id AND j.potong_kuota = 1
 JOIN (
     SELECT c.karyawan_id, c.jenis_cuti_id,
-           YEAR(c.tanggal_mulai) AS thn, SUM(c.jumlah_hari) AS total
-    FROM cutis c WHERE c.status = 'approved'
-    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai)
-) a ON a.karyawan_id = k.karyawan_id AND a.jenis_cuti_id = k.jenis_cuti_id AND a.thn = k.tahun
+           YEAR(c.tanggal_mulai) AS thn,
+           CASE WHEN j2.periode_kuota = 'semesteran'
+                THEN IF(MONTH(c.tanggal_mulai) <= 6, 1, 2)
+                ELSE 0 END AS smt,
+           SUM(c.jumlah_hari) AS total
+    FROM cutis c
+    JOIN jenis_cutis j2 ON j2.id = c.jenis_cuti_id
+    WHERE c.status = 'approved'
+    GROUP BY c.karyawan_id, c.jenis_cuti_id, YEAR(c.tanggal_mulai), smt
+) a ON a.karyawan_id = k.karyawan_id
+   AND a.jenis_cuti_id = k.jenis_cuti_id
+   AND a.thn = k.tahun
+   AND a.smt = k.semester
 SET k.terpakai = a.total, k.updated_at = NOW()
 WHERE k.terpakai <> a.total;
+```

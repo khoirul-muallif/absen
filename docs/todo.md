@@ -61,40 +61,48 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Import karyawan via Excel + template download** — admin
+      mengunduh template .xlsx, mengisinya, lalu mengunggah balik.
+      Tanpa ini, menginput ~150 karyawan RS lewat form Filament satu
+      per satu adalah pekerjaan berjam-jam, dan itu terjadi tepat saat
+      deploy pertama — momen paling sibuk.
 
-- [ ] **Terjemahan Filament `id` tidak lengkap — string teknis bocor
-      ke admin** — kolom `is_aktif` di tabel Informasi menampilkan
-      `filament-tables::table.columns.icon.boolean.true` alih-alih ikon
-      centang. Locale aplikasi `id`, dan terjemahan Indonesia bawaan
-      Filament untuk versi ini tertinggal dari versi Inggrisnya:
-      `lang/vendor/filament-tables/id/` tidak punya kunci `boolean`
-      sama sekali.
+      Infrastruktur sudah ada: `maatwebsite/excel` sudah dipakai untuk
+      Export Laporan Presensi (fase 56), jadi tinggal pakai sisi
+      import-nya.
 
-      BUKAN bug resource Informasi — ada 11 `IconColumn` di 8 resource
-      lain (Absensis, HariLiburs, Instansis, JenisCutis ×4, Karyawans,
-      PolaRotasis ×2, Shifts) yang kena hal yang sama. Baru ketahuan
-      sekarang karena resource barulah yang pertama kali dibuka dengan
-      mata segar.
+      Kolom yang perlu di template: nip, nama, email, nomor_telepon,
+      status_pegawai, tipe_jadwal, unit_kerja, jabatan,
+      tanggal_bergabung. Password TIDAK di template — perlu diputuskan
+      apakah di-generate otomatis lalu dikirim, atau diseragamkan dan
+      dipaksa ganti saat login pertama.
 
-      `filament-tables` cuma 1 dari 4 paket (`filament-panels`,
-      `filament-actions`, `filament-forms` punya kunci sendiri), jadi
-      kemungkinan besar masih ada string teknis lain yang bocor di
-      layar yang belum dibuka. Perlu audit menyeluruh, bukan tambal
-      per-kolom.
+      Yang harus hati-hati, dan ini bagian yang gampang diremehkan:
 
-      Tiga opsi yang sudah dipertimbangkan (9 Nov 2026):
-      (1) publish keempat paket + lengkapi kunci yang hilang — paling
-      rapi, tapi `lang/vendor/` tidak ikut terupdate saat
-      `composer update`, jadi harus diulang tiap upgrade Filament;
-      (2) kembalikan locale ke `en` — nol perawatan, tapi admin RS
-      membaca menu berbahasa Inggris, perlu keputusan;
-      (3) tambal per-kolom pakai `trueIcon()`/`falseIcon()` — murah
-      tapi menyembunyikan masalah di 11 kolom lain.
+      - **`tipe_jadwal` wajib eksplisit di template**, tidak boleh
+        kosong lalu ditebak dari unit_kerja/jabatan — itu larangan
+        eksplisit di QUICK_CONTEXT, dan import massal adalah tempat
+        paling mungkin orang tergoda menebaknya.
+      - **Validasi harus per-baris dengan laporan yang bisa dibaca
+        admin**, bukan gagal total di baris pertama. Admin RS tidak
+        punya terminal; kalau 150 baris ditolak tanpa tahu baris mana
+        yang salah, fitur ini malah lebih buruk daripada input manual.
+      - **nip & email unique** — baris duplikat di dalam file ITU
+        SENDIRI juga harus ketahuan, bukan cuma bentrok dengan
+        database.
+      - **Import harus atomic atau punya mode dry-run.** Gagal di
+        baris 120 setelah 119 karyawan terlanjur masuk itu keadaan
+        yang sulit dibereskan admin.
+      - `instansi_id` di-scope, bukan kolom template (admin tidak
+        seharusnya bisa memasukkan karyawan ke instansi lain).
 
-      Condong ke (1), tapi sebaiknya sekalian pertimbangkan menghapus
-      63 folder bahasa yang tidak terpakai (publish menyalin 64
-      bahasa). Hasil publish percobaan 9 Nov sudah di-revert.
-      Ditemukan 9 Nov 2026 saat membuat Resource Informasi.
+      Pertimbangkan juga: apakah import ini sekalian bisa mengisi
+      `KaryawanShift` (untuk tipe umum) atau `KaryawanPolaRotasi`
+      (untuk rotasi)? Kalau tidak, admin tetap harus menginput
+      assignment shift 150 kali — dan itu memindahkan masalah, bukan
+      menyelesaikannya. Dicatat 9 Nov 2026.
+      
+
 
 - [ ] **Login pakai username, bukan email** — `AuthController` sekarang
       autentikasi lewat email. Karyawan RS belum tentu punya atau ingat
