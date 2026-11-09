@@ -55,7 +55,6 @@ class AbsensiHariIni extends BaseWidget
                         'terlambat'   => 'warning',
                         'alpha'       => 'danger',
                         'izin'        => 'info',
-                        'sakit'       => 'warning',
                         default       => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => match ($state) {
@@ -63,7 +62,6 @@ class AbsensiHariIni extends BaseWidget
                         'terlambat'   => 'Terlambat',
                         'alpha'       => 'Alpha',
                         'izin'        => 'Izin',
-                        'sakit'       => 'Sakit',
                         'cuti'        => 'Cuti',
                         'dinas'       => 'Dinas',
                         'libur'       => 'Libur',

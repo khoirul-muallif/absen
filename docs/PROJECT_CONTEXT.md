@@ -35,9 +35,7 @@ dicatat **alasan desain** yang gak kelihatan dari struktur kolom mentah:
   sifat dari cuti/dinas yang statusnya penuh 1 hari).
 - `cutis`/`dinas` approve → sync ke `absensi` dan `jadwals` (lihat
   CHANGELOG fase 19-21 untuk histori kenapa & bagaimana).
-- `absensi.status` enum punya opsi `'sakit'` yang belum ada modul/controller
-  eksplisit menanganinya — lihat catatan ⚠️ di SCHEMA.md, belum diklarifikasi
-  apakah reserved atau dead value.
+
 
 ## Generator Jadwal Rotasi
 - Command: `php artisan jadwal:generate-rotasi {bulan} {tahun} {--unit=} {--overwrite-generate}`
@@ -94,7 +92,6 @@ mendalam (bukan task checklist biasa — task checklist ada di `todo.md`):
 1. `tipe_jadwal`: backfill pakai heuristik, baru terverifikasi di 5 data dummy — belum di skala production (tidak relevan sekarang, belum ada production).
 2. Assignment `KaryawanShift` di seeder dibatasi per bulan — extend manual `tanggal_berakhir` tiap generate bulan baru.
 3. `Karyawan.role`/`isAdmin()` vs `HasApprovalWorkflow` — `HasApprovalWorkflow::approve()` type-hint eksplisit `User $approver` (guard Filament), bukan `Karyawan`, jadi `Karyawan.role='admin'` saat ini tidak kepake sama sekali di alur approval walau namanya mirip. Perlu dipastikan tidak ada celah kalau nanti ada API approve dari sisi karyawan.
-4. `absensi.status` enum punya opsi `'sakit'` yang belum jelas peruntukannya (lihat catatan di SCHEMA.md).
 5. Error handling sekarang terpusat di `bootstrap/app.php` (`withExceptions()`)
    untuk route `/api/*` — lihat CHANGELOG fase 24 untuk daftar exception
    yang sudah diseragamkan. Error 500 murni sengaja tidak disentuh (tetap

@@ -25,7 +25,6 @@ class RekapBulanIni extends ChartWidget
                         $absensi->where('status', 'terlambat')->count(),
                         $absensi->where('status', 'alpha')->count(),
                         $absensi->where('status', 'izin')->count(),
-                        $absensi->where('status', 'sakit')->count(),
                         $absensi->where('status', 'cuti')->count(),
                         $absensi->where('status', 'dinas')->count(),
                         $absensi->where('status', 'libur')->count(),
@@ -45,7 +44,7 @@ class RekapBulanIni extends ChartWidget
             ],
             'labels' => [
                 'Tepat Waktu', 'Terlambat', 'Alpha',
-                'Izin', 'Sakit', 'Cuti', 'Dinas', 'Libur',
+                'Izin', 'Cuti', 'Dinas', 'Libur',
             ],
         ];
     }

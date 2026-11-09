@@ -35,9 +35,8 @@
 
 ## Transaksi absensi
 
-**absensi** — karyawan_id, shift_id (nullable), qr_instansi_id (nullable), tanggal, waktu_masuk, menit_terlambat (default 0), melebihi_toleransi_bulanan (default false), latitude_masuk/longitude_masuk, foto_masuk, waktu_pulang, latitude_pulang/longitude_pulang, foto_pulang, **status enum: tepat_waktu/terlambat/alpha/izin/**sakit**/cuti/dinas/libur** (default alpha), keterangan
+**absensi** — karyawan_id, shift_id (nullable), qr_instansi_id (nullable), tanggal, waktu_masuk, menit_terlambat (default 0), melebihi_toleransi_bulanan (default false), latitude_masuk/longitude_masuk, foto_masuk, waktu_pulang, latitude_pulang/longitude_pulang, foto_pulang, **status enum: tepat_waktu/terlambat/alpha/izin/cuti/dinas/libur** (default alpha), keterangan
 - Unique(karyawan_id, tanggal). Index tambahan: tanggal, (karyawan_id, status)
-- ⚠️ **`status='sakit'` ada di enum tapi belum ada modul/controller yang eksplisit menanganinya** di dokumentasi manapun (QUICK_CONTEXT/PROJECT_CONTEXT/CHANGELOG). Kemungkinan reserved untuk fitur belum jalan, atau sisa desain awal. Perlu diklarifikasi — apakah rencana ke depan ada modul terpisah, atau ini dead enum value yang aman dibiarkan. Nyambung ke item `rekap()` tidak mengirim `sakit` di todo.md.
 
 ## Cuti/Izin/Lembur/Dinas (approval: pending/approved/rejected, approved_by → users)
 

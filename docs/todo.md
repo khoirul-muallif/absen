@@ -61,6 +61,58 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
+      beberapa kali jadi bug diam-diam, terutama di TukarJadwal.
+      Masalahnya satu kata `libur` dipakai untuk dua hal yang berbeda
+      sifatnya, dan kode tidak bisa membedakannya.
+
+      Yang sudah terlihat janggal dari dokumen (BELUM diverifikasi ke
+      source, ini daftar tempat yang perlu dibuka):
+
+      1. **Karyawan umum vs rotasi tidak simetris.** Generator bulanan
+         SKIP hari yang bukan `hari_kerja` shift — jadi akhir pekan
+         karyawan umum TIDAK punya baris `jadwals` sama sekali.
+         Sementara karyawan rotasi dengan langkah LIBUR di polanya
+         DAPAT baris `jenis='libur'`. Dua keadaan yang secara bisnis
+         sama ("hari libur mingguan saya") terwakili berbeda di DB.
+
+      2. **Libur nasional justru digenerate eksplisit** sebagai
+         `jenis='libur'` — jadi baris `libur` di `jadwals` bisa berarti
+         libur mingguan rotasi ATAU libur nasional, tanpa cara
+         membedakannya. Satu-satunya pembeda ada di tabel lain
+         (`hari_liburs`), yang tidak pernah dicek TukarJadwal.
+
+      3. **TukarJadwal memperlakukan semua `JENIS_LIBUR` sama.**
+         `ajukanPindah()` mengizinkan pindah ke tanggal yang barisnya
+         libur, dan `approveAndSwap()` MENYERAP baris libur itu
+         (ditimpa/dihapus). Kalau baris libur itu ternyata libur
+         nasional, karyawan jadi bekerja di hari libur nasional tanpa
+         ada yang memberi tahu siapa pun. Untuk karyawan umum kasusnya
+         beda lagi: akhir pekannya tidak punya baris, jadi masuk cabang
+         "tidak ada baris sama sekali, tinggal dipindah" — lolos tanpa
+         pengecekan apa pun.
+
+      4. **`PolaRotasi.berlaku_saat_libur_nasional`** sudah mengakui
+         bahwa dua hal ini berbeda, tapi hanya di generator rotasi.
+         TukarJadwal tidak punya padanannya.
+
+      Pertanyaan yang perlu dijawab sebelum menulis kode:
+      - Apakah karyawan boleh menukar/memindah jadwal KE hari libur
+        nasional? (kemungkinan iya untuk RS yang jalan 24/7, tapi harus
+        eksplisit, bukan kebetulan lolos)
+      - Apakah libur mingguan karyawan umum perlu punya baris `jadwals`
+        sendiri supaya simetris dengan rotasi? Itu menambah ~8 baris per
+        karyawan per bulan, tapi menghilangkan dua cabang kode berbeda.
+      - Perlukah `jadwals.jenis` dipecah (`libur_mingguan` vs
+        `libur_nasional`), atau cukup TukarJadwal mengecek
+        `hari_liburs`?
+
+      Hati-hati: ini kelas masalah yang sama dengan keputusan "tidak
+      menambahkan cek jadwal/libur di client" (CHANGELOG fase 43) dan
+      dengan temuan tertunda "tombol Ajukan Tukar/Pindah muncul juga
+      untuk cuti/dinas/libur" (status-06-11-26.md). Garap bertiga
+      sekaligus, jangan satu-satu. Dicatat 9 Nov 2026.
+
 - [ ] **Import karyawan via Excel + template download** — admin
       mengunduh template .xlsx, mengisinya, lalu mengunggah balik.
       Tanpa ini, menginput ~150 karyawan RS lewat form Filament satu

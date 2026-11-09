@@ -97,7 +97,6 @@ baru:
 2. `Karyawan.role` vs sistem approval — belum ditelisik mendalam apakah ada celah kalau nanti ada API approve dari sisi karyawan (lihat PROJECT_CONTEXT.md Known Gap Struktural).
 3. `tipe_jadwal` backfill baru terverifikasi di data dummy, belum di skala production (belum relevan, belum ada production).
 4. Assignment `KaryawanShift` di seeder dibatasi per bulan — extend manual tiap generate bulan baru.
-5. `absensi.status` enum punya opsi `'sakit'` yang belum jelas peruntukannya — belum ada modul/controller yang menanganinya (lihat SCHEMA.md).
 6. Kuota cuti yang belum punya row KuotaCuti tidak pernah menaikkan `terpakai`, jadi batas `default_kuota` di API cuma berlaku terhadap pengajuan pending — bukan terhadap cuti yang sudah dipakai. Lihat `todo.md` (digabung ke item KuotaCuti semesteran).
 7. Karyawan rotasi dengan langkah LIBUR di polanya SUDAH disimulasikan (fase 43/50). `PengingatBelumAbsen`/`PengingatBelumAbsenPulang` masih belum punya test. Lihat `todo.md`.
 8. Simulasi rotasi 24/7 (`SimulasiMassalSeeder`) saat ini membagi staf rata 40/40/40 antar unit/tim — belum proporsional terhadap kebutuhan staf riil RS, butuh keputusan RS. Lihat `todo.md`.
