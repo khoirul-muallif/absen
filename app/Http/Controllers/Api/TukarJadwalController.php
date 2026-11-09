@@ -7,6 +7,7 @@ use App\Models\Jadwal;
 use App\Models\TukarJadwal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Notifications\TukarJadwalDiajukan;
 use Illuminate\Validation\ValidationException;
 
 class TukarJadwalController extends Controller
@@ -188,6 +189,11 @@ class TukarJadwalController extends Controller
             'alasan' => $request->alasan,
         ]);
 
+        // Sengaja di controller, BUKAN di model event `created` — factory dan
+        // SimulasiMassalSeeder juga membuat baris TukarJadwal, dan itu akan
+        // memuntahkan notifikasi massal saat seeding.
+        $tukarJadwal->karyawanTujuan?->notify(new TukarJadwalDiajukan($tukarJadwal));
+
         return response()->json([
             'success' => true,
             'message' => 'Pengajuan tukar jadwal berhasil diajukan, menunggu persetujuan rekan.',
@@ -310,11 +316,13 @@ class TukarJadwalController extends Controller
                 'tanggal' => $t->tanggal_asal->format('d M Y'),
                 'shift' => $t->shiftAsal?->nama_shift,
                 'karyawan' => $t->karyawanPengaju->nama,
+                'karyawan_id' => $t->karyawan_pengaju_id,
             ],
             'jadwal_tujuan' => ! $t->isPindahSendiri() ? [
                 'tanggal' => $t->tanggal_tujuan->format('d M Y'),
                 'shift' => $t->shiftTujuan?->nama_shift,
                 'karyawan' => $t->karyawanTujuan?->nama,
+                'karyawan_id' => $t->karyawan_tujuan_id,
             ] : null,
             'tanggal_baru' => $t->tanggal_baru?->format('d M Y'),
             'catatan_penolakan_rekan' => $t->catatan_penolakan_rekan,
