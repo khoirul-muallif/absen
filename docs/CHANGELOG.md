@@ -5,6 +5,84 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 77: badge jumlah pengajuan menunggu di menu approval
+
+Commit `aad36e0`. Menutup item "notifikasi admin di panel Filament"
+yang dicatat pagi ini — tapi dengan bentuk yang berbeda dari yang
+direncanakan.
+
+### Kenapa badge, bukan notifikasi
+
+Rencana awal: kelas notifikasi yang dikirim ke `User` tiap ada
+pengajuan masuk, plus `->databaseNotifications()` di
+`AdminPanelProvider` (yang ternyata belum pernah diaktifkan).
+
+Dibatalkan setelah memperhitungkan volume. Dengan 150 karyawan,
+pengajuan cuti menjelang Lebaran bisa puluhan dalam sehari — dan
+lonceng berisi 40 "ada pengajuan baru" sama tidak bergunanya dengan
+tidak ada notifikasi sama sekali, karena admin akan berhenti
+membacanya. Notifikasi per-kejadian cocok untuk hal yang jarang dan
+spesifik (seperti notifikasi TukarJadwal ke karyawan di fase 74); untuk
+antrean kerja admin, yang dibutuhkan bukan "ada yang baru" melainkan
+"berapa yang menunggu saya".
+
+Badge menjawab itu, tidak bisa membanjir, dan jauh lebih murah: satu
+method per Resource, tanpa kelas notifikasi, tanpa infrastruktur baru.
+
+### Implementasi
+
+`getNavigationBadge()` di lima Resource (Cuti, Izin, Lembur, Dinas,
+TukarJadwal), memakai `scopePending()` yang sudah ada di
+`HasApprovalWorkflow` — jadi TukarJadwal otomatis benar lewat
+override-nya sendiri (`menunggu_admin`, bukan `pending`).
+
+Mengembalikan **`null` saat nol, bukan `"0"`** — Filament menyembunyikan
+badge-nya, jadi menu yang bersih tetap terlihat bersih. Badge "0" cuma
+menambah bising.
+
+**TukarJadwal: yang macet di `menunggu_rekan` sengaja tidak dihitung.**
+Belum tentu perlu ditindak — rekannya bisa saja baru dikirimi
+notifikasi lima menit lalu. Yang macet berminggu-minggu memang perlu
+perhatian admin (ada tombol "Batalkan — rekan tidak respons" untuk
+itu), tapi membedakannya butuh filter umur, bukan status. Pekerjaan
+lain.
+
+**Izin ikut dipasang** walau izin auto-approve sejak keputusan RS 8 Okt.
+`IzinController` menyiratkan masih ada jalur lain yang bisa menghasilkan
+status pending ("izin tidak pernah berstatus pending **dari jalur
+ini**"), jadi badge-nya akan jarang muncul — dan itu tidak apa-apa,
+karena `null` menyembunyikannya.
+
+### Tidak di-scope ke instansi
+
+KEPUTUSAN 9 Nov 2026: RS cuma punya satu instansi, dan tabel `users`
+belum punya `instansi_id` sama sekali. Menambah scoping nanti lebih
+mudah daripada membongkar kolom yang selalu bernilai sama. Konsekuensi
+yang disadari: begitu ada instansi kedua, badge akan menghitung
+pengajuan semua instansi.
+
+### Dicatat untuk nanti: index `status`
+
+`getNavigationBadge()` menjalankan lima `COUNT ... WHERE status = ...`
+di **setiap page load** panel, dan kelima tabel approval (`cutis`,
+`izins`, `lemburs`, `dinas`, `tukar_jadwals`) **tidak punya index di
+kolom `status`** — hanya `absensi` yang punya, lewat
+`(karyawan_id, status)`.
+
+Tidak terasa sekarang (data belasan baris), tapi dengan 150 karyawan
+setelah setahun jadi lima full table scan per halaman. Dicatat di
+`todo.md`.
+
+### Test
+
+Tidak ada test baru, dan suite tetap **640 passed**. Perlu dicatat
+jujur: **tidak ada test yang menguji badge** — tidak ada yang merender
+navigasi panel, jadi 640 hijau cuma berarti tidak ada yang rusak.
+Verifikasinya manual lewat panel. Kalau nanti badge dianggap cukup
+penting untuk dikunci, perlu test yang memanggil
+`XResource::getNavigationBadge()` langsung dengan data pending yang
+disiapkan.
+
 ## fase 76: `'sakit'` dicabut dari enum `absensi.status` — dead value
 
 Commit `85daf98`. Menutup **Known Gap #5** yang berdiri sejak awal
