@@ -5,6 +5,107 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 79: login pakai username
+
+Commit `1c47719`. Menutup item yang diusulkan 6 Nov saat audit FE
+`login_screen`.
+
+### Tiga keputusan
+
+1. **Username bebas**, defaultnya nama asli tanpa spasi, hanya admin
+   yang bisa mengubahnya. Sempat dipertimbangkan memakai NIP (sudah
+   ada, sudah unique, sudah dipakai sehari-hari) tapi username yang
+   terbaca lebih mudah diingat dan diketik di HP.
+2. **Email dipertahankan**, tetap NOT NULL. Bukan kredensial login
+   lagi, tapi masih dipakai `AbsenTerlambat::toMail()` dan ditampilkan
+   di layar profil FE. Membuangnya berarti mengembalikannya lagi saat
+   fitur ganti email digarap.
+3. **Tidak ada migrasi data lama** — belum ada production.
+
+### Regex pembuang gelar diuji dulu, bukan diasumsikan
+
+`Karyawan::generateUsername()` jadi satu-satunya sumber aturan (dipakai
+backfill, form Filament, nanti import Excel): gelar di akhir dibuang,
+huruf kecil, hanya huruf dan angka, maksimal 30 karakter, bentrok dapat
+angka urut.
+
+Sebelum dipakai membackfill 156 baris, regex-nya dijalankan dulu ke
+seluruh nama dummy lewat script sementara. Hasilnya **156 username
+unik, nol bentrok**, dan semua pola gelar terbuang tepat: `S.Psi`,
+`M.Kom.`, `S.I.Kom`, `S.E.I`, `M.TI.`, `S.Farm`, `S.Ked`, `M.Ak`.
+Yang khusus diperiksa dan aman: nama tanpa gelar tidak ikut terpotong
+(`Kawaya Waskita`, `Nasab Dabukke`) dan nama berulang tetap utuh
+(`Elon Elon Lazuardi`).
+
+Nol bentrok di dummy bukan jaminan untuk data asli — dua "Siti Aminah"
+di RS sungguhan sangat mungkin — tapi setidaknya terbukti regex-nya
+tidak menciptakan bentrok palsu.
+
+### Auto-isi HANYA saat create
+
+Form Filament mengisi username dari nama lewat `live(onBlur: true)` +
+`afterStateUpdated`, dengan guard `$operation !== 'create'`. Saat edit
+sengaja tidak: admin yang memperbaiki typo di nama karyawan lama tidak
+boleh mengganti username yang sudah dipakai login — karyawan akan
+terkunci di luar tanpa tahu sebabnya.
+
+`onBlur`, bukan per-keystroke, karena `generateUsername()` query ke DB
+untuk cek bentrok.
+
+### Factory sengaja TIDAK memakai generateUsername()
+
+Memakai `faker->unique()->userName()`. `SimulasiMassalSeeder` membuat
+150 karyawan, dan `generateUsername()` per baris berarti 150 query
+tambahan plus kemungkinan loop saat bentrok. Username di test tidak
+perlu mencerminkan nama.
+
+### TEMUAN: AbsensiSimulasiSeeder mencari karyawan by email hardcode
+
+Tiga test seeder merah karena `beforeEach`-nya mengganti `email` jadi
+`username`, padahal `AbsensiSimulasiSeeder:15` mencari
+`where('email', 'budi@rsb.com')->firstOrFail()`. Diperbaiki dengan
+menyetel keduanya.
+
+Pelajarannya: *login pindah ke username* tidak berarti *email berhenti
+dipakai di tempat lain*. Dan seeder yang mengandalkan nilai hardcode
+sebagai penanda itu rapuh dengan cara yang sama seperti "deteksi
+pengajuan saya lewat cocok nama" di FE — kalau email itu berubah di
+`DatabaseSeeder`, seeder ini berhenti bekerja dengan
+`ModelNotFoundException` yang tidak menjelaskan apa-apa. Prioritas
+rendah (seeder development, bukan jalur produksi).
+
+### TEMUAN BESAR: pesan validasi Laravel tampil sebagai kunci mentah
+
+Output test memunculkan `"username": ["validation.required"]` — dan
+ternyata `trans('validation.required')` memang mengembalikan string
+kuncinya apa adanya. Locale `id`, dan `lang/id/validation.php` tidak
+ada sama sekali.
+
+Artinya **setiap pesan validasi yang sampai ke karyawan berbentuk kunci
+mentah**: karyawan yang lupa mengisi alasan cuti melihat
+`validation.required` di layar HP-nya. Lebih parah daripada kebocoran
+terjemahan Filament (fase 75) karena kena ke 150 pengguna mobile, bukan
+ke satu admin.
+
+Beda dari kasus Filament: Laravel memang tidak menyertakan `lang/` sejak
+v9 dan tidak punya terjemahan `id` sama sekali, jadi tidak ada
+perbaikan upstream yang akan menyusul — tidak perlu pendekatan override
+per-kunci, file ini memang harus dirawat sendiri. Dicatat di `todo.md`
+beserta daftar 15 aturan yang benar-benar dipakai di API.
+
+### BLOCKER RILIS untuk FE
+
+FE masih mengirim `email` saat login, jadi **tidak ada satu pun
+karyawan yang bisa masuk** setelah backend ini dideploy. Item di
+`todo-fr.md` statusnya berubah dari "menunggu keputusan backend" jadi
+blocker rilis.
+
+### Test
+
+**645 passed (1912 assertions)**, naik 4 dari 641 — semuanya untuk
+`generateUsername()`, termasuk dua jalur yang tidak pernah tersentuh
+data dummy (penanganan bentrok dan `$kecualikanId` saat edit).
+
 ## fase 78: reset password oleh admin, dan index `status` yang menyusul badge
 
 Dua commit kecil, `6007e96` dan `c6dfbbf`.
