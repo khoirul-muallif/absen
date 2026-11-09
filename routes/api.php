@@ -2,14 +2,15 @@
 
 use App\Http\Controllers\Api\AbsensiController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\NotifikasiController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\IzinController;
-use App\Http\Controllers\Api\LemburController;
 use App\Http\Controllers\Api\CutiController;
 use App\Http\Controllers\Api\DinasController;
-use App\Http\Controllers\Api\TukarJadwalController;
+use App\Http\Controllers\Api\InformasiController;
+use App\Http\Controllers\Api\IzinController;
 use App\Http\Controllers\Api\JadwalController;
+use App\Http\Controllers\Api\LemburController;
+use App\Http\Controllers\Api\NotifikasiController;
+use App\Http\Controllers\Api\TukarJadwalController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -95,4 +96,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('{id}/respon-rekan', [TukarJadwalController::class, 'responRekan']);
         Route::delete('{id}', [TukarJadwalController::class, 'batalkan']);
     });
+
+    Route::prefix('informasi')->group(function () {
+        Route::get('/', [InformasiController::class, 'index']);
+        Route::get('/{id}', [InformasiController::class, 'show']);
+    });
+
 });
