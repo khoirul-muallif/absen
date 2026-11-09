@@ -62,20 +62,30 @@ Begitu seluruh file tersalin, perbaikan upstream tidak akan pernah
 terpakai lagi untuk paket itu, dan kita mengambil alih perawatan ~790
 kunci selamanya.
 
-Setelah upgrade Filament:
+### Setelah upgrade Filament
 
 php scripts\cek-terjemahan.php
 
 
-Mencetak kunci yang hilang per paket (baca `vendor/`, bukan override
-kita). Yang muncul dan belum ada di `lang/vendor/` perlu ditambahkan.
-Yang HILANG dari daftar berarti sudah diterjemahkan upstream — hapus
-dari override biar tidak menimpa versi upstream.
+Script membandingkan `en` vs `id` di `vendor/`, lalu mengurangi yang
+sudah ditambal di `lang/vendor/`. Outputnya tiga angka:
 
-Script belum tahu mana yang sudah ditambal, jadi daftarnya selalu
-lengkap. Bandingkan manual dengan isi `lang/vendor/`.
+- **Perlu ditambal** — kunci hilang di paket dan belum ada di override
+  kita. Daftarnya dicetak beserta teks Inggrisnya; terjemahkan dan
+  tambahkan ke file yang ditunjuk.
+- **Sudah ditambal** — hilang di paket, tapi override kita sudah
+  menutupinya. Tidak perlu tindakan.
+- **Override usang** — upstream sudah menerjemahkan kunci yang kita
+  override. Hapus dari override kita, biar versi upstream yang dipakai.
 
-`filament-actions` tidak punya kunci hilang (selisih 0 per 9 Nov).
+Target: perlu ditambal 0, override usang 0.
+
+Angka "sudah ditambal" juga berfungsi sebagai verifikasi: kalau turun
+tanpa kita menghapus apa pun, berarti ada kunci di override yang
+strukturnya tidak lagi cocok dengan paket — bug diam-diam yang tidak
+terlihat di panel sampai layarnya kebetulan dibuka.
+
+Per 9 Nov 2026: **0 perlu ditambal, 41 sudah ditambal, 0 usang.**
 
 ## Darurat / one-off
 Sinkron ulang Jadwal & Absensi dari Cuti/Dinas approved.
