@@ -8,6 +8,7 @@ use App\Models\TukarJadwal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Notifications\TukarJadwalDiajukan;
+use App\Notifications\TukarJadwalDibatalkanPengaju;
 use Illuminate\Validation\ValidationException;
 
 class TukarJadwalController extends Controller
@@ -297,7 +298,19 @@ class TukarJadwalController extends Controller
             ], 422);
         }
 
+        // Relasi di-load dan notifikasi disiapkan SEBELUM delete(): setelah
+        // barisnya hilang, karyawanTujuan/shiftAsal tidak bisa di-load lagi
+        // dan labelJadwalAsal() kehilangan datanya.
+        $tukarJadwal->loadMissing(['karyawanPengaju', 'karyawanTujuan', 'shiftAsal', 'shiftTujuan']);
+
+        $rekan = $tukarJadwal->isPindahSendiri() ? null : $tukarJadwal->karyawanTujuan;
+        $notifikasi = $rekan
+            ? new TukarJadwalDibatalkanPengaju($tukarJadwal, $tukarJadwal->status)
+            : null;
+
         $tukarJadwal->delete();
+
+        $rekan?->notify($notifikasi);
 
         return response()->json([
             'success' => true,

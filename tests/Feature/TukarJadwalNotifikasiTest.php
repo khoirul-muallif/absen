@@ -7,6 +7,7 @@ use App\Models\Shift;
 use App\Models\TukarJadwal;
 use App\Models\User;
 use App\Notifications\TukarJadwalDiajukan;
+use App\Notifications\TukarJadwalDibatalkanPengaju;
 use App\Notifications\TukarJadwalDiproses;
 use App\Notifications\TukarJadwalDiresponRekan;
 use Illuminate\Support\Facades\Notification;
@@ -203,4 +204,75 @@ it('ketiga notifikasi memakai tipe "tukar_jadwal" dan membawa tukar_jadwal_id', 
             ->and($data['judul'])->not->toBeEmpty()
             ->and($data['pesan'])->not->toBeEmpty();
     }
+});
+// ── batalkan() oleh pengaju ──────────────────────────────────────────────
+
+it('pengaju batalkan saat menunggu_rekan: rekan tujuan diberi tahu', function () {
+    $tukar = buatPengajuanTukar($this);
+
+    Sanctum::actingAs($this->pengaju, ['*']);
+
+    $this->deleteJson("/api/tukar-jadwal/{$tukar->id}")->assertOk();
+
+    Notification::assertSentTo(
+        $this->rekan,
+        TukarJadwalDibatalkanPengaju::class,
+        fn ($n) => $n->statusSaatDibatalkan === 'menunggu_rekan'
+    );
+    Notification::assertNotSentTo($this->pengaju, TukarJadwalDibatalkanPengaju::class);
+});
+
+it('pengaju batalkan setelah rekan setuju: pesannya menyebut rekan sudah menyetujui', function () {
+    $tukar = buatPengajuanTukar($this);
+    $tukar->responRekan($this->rekan, true);
+
+    Sanctum::actingAs($this->pengaju, ['*']);
+
+    $this->deleteJson("/api/tukar-jadwal/{$tukar->id}")->assertOk();
+
+    Notification::assertSentTo(
+        $this->rekan,
+        TukarJadwalDibatalkanPengaju::class,
+        function ($n) {
+            $data = $n->toDatabase($this->rekan);
+
+            return $n->statusSaatDibatalkan === 'menunggu_admin'
+                && str_contains($data['pesan'], 'sudah menyetujui');
+        }
+    );
+});
+
+it('pengaju batalkan mode pindah: tidak ada notifikasi (tidak ada rekan)', function () {
+    $tukar = TukarJadwal::factory()->create([
+        'jadwal_id' => $this->jadwalPengaju->id,
+        'tanggal_baru' => '2026-08-20',
+    ]);
+
+    Sanctum::actingAs($this->pengaju, ['*']);
+
+    $this->deleteJson("/api/tukar-jadwal/{$tukar->id}")->assertOk();
+
+    Notification::assertNothingSent();
+});
+
+it('notifikasi pembatalan tetap punya label jadwal meski barisnya sudah dihapus', function () {
+    $tukar = buatPengajuanTukar($this);
+
+    Sanctum::actingAs($this->pengaju, ['*']);
+
+    $this->deleteJson("/api/tukar-jadwal/{$tukar->id}")->assertOk();
+
+    expect(TukarJadwal::find($tukar->id))->toBeNull();
+
+    Notification::assertSentTo(
+        $this->rekan,
+        TukarJadwalDibatalkanPengaju::class,
+        function ($n) {
+            $data = $n->toDatabase($this->rekan);
+
+            return $data['tipe'] === 'tukar_jadwal'
+                && $data['aksi'] === 'dibatalkan_pengaju'
+                && str_contains($data['pesan'], '10 Aug 2026');
+        }
+    );
 });
