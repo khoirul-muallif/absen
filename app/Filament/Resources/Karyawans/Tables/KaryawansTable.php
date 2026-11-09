@@ -16,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Filament\Actions\Action;
 
 class KaryawansTable
 {
@@ -169,6 +170,27 @@ class KaryawansTable
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make(),
+                    Action::make('resetPassword')
+                        ->label('Reset Password')
+                        ->icon('heroicon-o-key')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Reset password karyawan')
+                        ->modalDescription(fn ($record) => "Password {$record->nama} akan dikembalikan ke password default. "
+                            . 'Sampaikan langsung ke yang bersangkutan, dan minta dia segera menggantinya lewat menu Ubah Password di aplikasi.')
+                        ->modalSubmitActionLabel('Ya, reset')
+                        ->action(function ($record) {
+                            // Kolom password punya cast 'hashed', jadi string mentah di sini
+                            // otomatis di-hash. JANGAN Hash::make() manual — ter-hash dua kali
+                            // dan karyawan tidak akan bisa login.
+                            $record->update(['password' => 'password']);
+
+                            Notification::make()
+                                ->title('Password berhasil direset')
+                                ->body("Password {$record->nama} sekarang kembali ke default.")
+                                ->success()
+                                ->send();
+                        }),
 
                     // SELURUH FK ke karyawan_id memakai ON DELETE CASCADE
                     // (SCHEMA.md), jadi satu klik Hapus melenyapkan absensi,

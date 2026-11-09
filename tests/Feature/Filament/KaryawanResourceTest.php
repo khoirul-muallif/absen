@@ -17,6 +17,7 @@ use App\Models\KaryawanPolaRotasi;
 use App\Models\KaryawanShift;
 use App\Models\PolaRotasi;
 use App\Models\Shift;
+use Illuminate\Support\Facades\Hash;
 
 use function Pest\Livewire\livewire;
 
@@ -309,4 +310,13 @@ it('filter tipe_jadwal memisahkan karyawan umum dari rotasi', function () {
         ->filterTable('tipe_jadwal', Karyawan::TIPE_ROTASI)
         ->assertCanSeeTableRecords([$rotasi])
         ->assertCanNotSeeTableRecords([$umum]);
+});
+
+it('reset password mengembalikan ke default dan tetap ter-hash', function () {
+    $karyawan = Karyawan::factory()->create(['password' => 'rahasia-lama']);
+
+    $karyawan->update(['password' => 'password']);
+
+    expect(Hash::check('password', $karyawan->fresh()->password))->toBeTrue()
+        ->and($karyawan->fresh()->password)->not->toBe('password');
 });
