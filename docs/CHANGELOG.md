@@ -110,6 +110,51 @@ persis bikin tombol batal muncul di pengajuan orang lain. Ditambahkan
 `karyawan_id` di `jadwal_asal` dan `jadwal_tujuan`; field lama tetap
 ada, jadi FE yang belum diupdate tidak pecah.
 
+### Lanjutan: notifikasi saat pengaju membatalkan sendiri (commit `c4b3e11`)
+
+Titik keempat yang terlewat dari rencana awal. Rekan tujuan sudah
+dapat `TukarJadwalDiajukan`, lalu pengaju membatalkan lewat
+`DELETE /api/tukar-jadwal/{id}` dan rekan membuka layar Menunggu
+Respon yang kosong — persis keluhan yang bikin lonceng + badge itu
+ada.
+
+`TukarJadwalDibatalkanPengaju` dikirim di KEDUA status yang boleh
+dibatalkan, dengan pesan berbeda. Rencana awal cuma `menunggu_rekan`,
+diperluas setelah membaca ulang `batalkan()`: status `menunggu_admin`
+untuk mode tukar berarti rekan **sudah menyetujui** dan sedang
+menunggu jadwalnya berubah, jadi pembatalan di tahap itu justru lebih
+mengganggu daripada di tahap sebelumnya. Mode pindah tidak mengirim
+apa pun.
+
+**Dua hal halus di urutan eksekusi `batalkan()`:**
+
+1. Objek notifikasi dibuat **sebelum** `delete()`. Setelah barisnya
+   hilang, `karyawanTujuan`/`shiftAsal` tidak bisa di-load lagi dan
+   `labelJadwalAsal()` kehilangan datanya. Model yang sudah di-delete
+   tetap memegang atribut dan relasi yang sudah ter-load di memori,
+   jadi `toDatabase()` tetap jalan. Ada test yang mengunci ini
+   ("notifikasi pembatalan tetap punya label jadwal meski barisnya
+   sudah dihapus") — kalau ada yang memindahkan pembuatan objeknya ke
+   setelah penghapusan, test itu merah.
+2. `notify()` dipanggil **sesudah** `delete()`, supaya rekan tidak
+   pernah diberi tahu kalau penghapusannya ternyata gagal.
+
+Status di-snapshot ke properti `$statusSaatDibatalkan`, bukan dibaca
+dari `$tukarJadwal->status` saat `toDatabase()` — barisnya sudah
+dihapus saat notifikasi diproses.
+
+**KEPUTUSAN: `tukar_jadwal_id` tetap dikirim walau barisnya sudah
+hilang.** Tiga opsi dipertimbangkan (tetap kirim / kirim null / tidak
+kirim sama sekali). Dipilih tetap kirim: bentuk `data` seragam di
+ketujuh aksi, dan FE lebih aman mengecek "ada isinya tapi mungkin
+sudah hilang" daripada menemukan field yang kadang ada kadang tidak.
+Konsekuensinya kalau nanti notifikasi dibuat bisa di-tap untuk
+membuka detail, yang satu ini akan 404 — sudah dicatat di
+`todo-fr.md`.
+
+4 test tambahan, total 14 di `TukarJadwalNotifikasiTest`.
+Suite: **623 passed (1857 assertions)**.
+
 ### Dicatat untuk nanti
 
 - **Notifikasi admin di panel Filament** belum ada, di kelima modul
@@ -117,11 +162,12 @@ ada, jadi FE yang belum diupdate tidak pecah.
   diaktifkan di `AdminPanelProvider`. Sengaja tidak dikerjakan di
   sini: bukan blocker siapa pun, dan mengerjakan TukarJadwal saja
   bikin tidak konsisten dengan 4 modul lain. Lihat `todo.md`.
-- **Notifikasi saat pengaju membatalkan sendiri** (`DELETE
-  /api/tukar-jadwal/{id}` selagi status `menunggu_rekan`) belum ada —
-  rekan sudah terlanjur dapat notifikasi "ada permintaan menunggu",
-  lalu membuka layar dan menemukannya kosong. Persis keluhan yang
-  bikin lonceng + badge itu ada.
+- **Dicatat di `todo-fr.md`:** `NotifikasiScreen` belum pernah melihat
+  `tipe: 'tukar_jadwal'` — perlu dicek apakah switch ikon/warna punya
+  cabang `default`. Satu-satunya hal yang masih bisa menggagalkan
+  fitur ini di device. Sekalian dicatat bahwa blocker untuk mencabut
+  lonceng + badge di `TukarJadwalScreen` sudah hilang, jadi
+  perombakan navigasi FE yang tertahan sejak 6 Nov bisa jalan.
 - **Nilai `data['tipe']` di notifikasi lama tidak pernah diuji** —
   helper test memakai `'warning'`, produksi mengirim `'terlambat'`.
   Lihat `todo.md`.
