@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Exceptions\TukarJadwalKonflikException;
 use App\Traits\HasApprovalWorkflow;
+use App\Notifications\TukarJadwalDiproses;
+use App\Notifications\TukarJadwalDiresponRekan;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -90,6 +92,22 @@ class TukarJadwal extends Model
         return is_null($this->jadwal_tujuan_id);
     }
 
+    public function labelJadwalAsal(): string
+    {
+        return $this->tanggal_asal->format('d M Y')
+            . ' (' . ($this->shiftAsal?->nama_shift ?? 'Libur') . ')';
+    }
+
+    public function labelJadwalTujuan(): ?string
+    {
+        if ($this->isPindahSendiri()) {
+            return null;
+        }
+
+        return $this->tanggal_tujuan?->format('d M Y')
+            . ' (' . ($this->shiftTujuan?->nama_shift ?? 'Libur') . ')';
+    }
+
     public function scopeMenungguRekan(Builder $query): Builder
     {
         return $query->where('status', 'menunggu_rekan');
@@ -125,12 +143,19 @@ class TukarJadwal extends Model
             throw new TukarJadwalKonflikException('Anda bukan pihak yang dituju pada pengajuan ini.');
         }
 
-        return $this->update([
+        $berhasil = $this->update([
             'status' => $setuju ? 'menunggu_admin' : 'ditolak_rekan',
             'direspon_oleh_rekan_id' => $rekan->id,
             'direspon_rekan_at' => now(),
             'catatan_penolakan_rekan' => $setuju ? null : $catatan,
         ]);
+
+        if ($berhasil) {
+            $this->loadMissing(['karyawanPengaju', 'karyawanTujuan', 'shiftAsal', 'shiftTujuan']);
+            $this->karyawanPengaju?->notify(new TukarJadwalDiresponRekan($this, $setuju));
+        }
+
+        return $berhasil;
     }
 
     /**
@@ -149,7 +174,7 @@ class TukarJadwal extends Model
             );
         }
 
-        return DB::transaction(function () use ($approver, $catatan) {
+        $berhasil = DB::transaction(function () use ($approver, $catatan) {
             $jadwalA = Jadwal::lockForUpdate()->findOrFail($this->jadwal_id);
 
             if ($jadwalA->karyawan_id !== $this->karyawan_pengaju_id) {
@@ -253,6 +278,47 @@ class TukarJadwal extends Model
 
             return $this->approve($approver, $catatan);
         });
+
+        // Sengaja DI LUAR transaksi: kalau swap gagal di tengah, transaksi
+        // rollback tapi notifikasi yang sudah terkirim tidak bisa ikut ditarik.
+        if ($berhasil) {
+            $this->kirimNotifikasiHasilAdmin(TukarJadwalDiproses::HASIL_APPROVED);
+        }
+
+        return $berhasil;
+    }
+
+    /**
+     * Override dari HasApprovalWorkflow: trait-nya dipakai 5 model, jadi
+     * notifikasi khusus TukarJadwal dipasang di sini, bukan di trait.
+     */
+    public function reject(User $approver, ?string $catatan = null): bool
+    {
+        $berhasil = $this->update([
+            'status' => 'rejected',
+            'approved_by' => $approver->id,
+            'approved_at' => now(),
+            'catatan_approval' => $catatan,
+        ]);
+
+        if ($berhasil) {
+            $this->kirimNotifikasiHasilAdmin(TukarJadwalDiproses::HASIL_REJECTED);
+        }
+
+        return $berhasil;
+    }
+
+    protected function kirimNotifikasiHasilAdmin(string $hasil): void
+    {
+        $this->refresh()->loadMissing([
+            'karyawanPengaju', 'karyawanTujuan', 'shiftAsal', 'shiftTujuan',
+        ]);
+
+        $this->karyawanPengaju?->notify(new TukarJadwalDiproses($this, $hasil));
+
+        if (! $this->isPindahSendiri()) {
+            $this->karyawanTujuan?->notify(new TukarJadwalDiproses($this, $hasil));
+        }
     }
 
     public static function karyawanCutiDinasApproved(int $karyawanId, \Carbon\Carbon $tanggal): bool
@@ -288,11 +354,17 @@ class TukarJadwal extends Model
             );
         }
 
-        return $this->update([
+        $berhasil = $this->update([
             'status' => 'rejected',
             'approved_by' => $admin->id,
             'approved_at' => now(),
             'catatan_approval' => "[Dibatalkan admin — rekan tidak merespons] {$catatan}",
         ]);
+
+        if ($berhasil) {
+            $this->kirimNotifikasiHasilAdmin(TukarJadwalDiproses::HASIL_DIBATALKAN_ADMIN);
+        }
+
+        return $berhasil;
     }
 }
