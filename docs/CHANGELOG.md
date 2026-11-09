@@ -5,6 +5,101 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 76: `'sakit'` dicabut dari enum `absensi.status` — dead value
+
+Commit `85daf98`. Menutup **Known Gap #5** yang berdiri sejak awal
+project.
+
+### Keputusannya
+
+`'sakit'` bukan fitur yang belum dibuat, melainkan nilai mati. Cuti
+sakit sudah dicover modul Cuti (jenis "Cuti Sakit" + lampiran surat
+dokter), dan `Cuti::afterApprove()` menulis status `'cuti'` ke Absensi,
+bukan `'sakit'`. Tidak ada satu pun controller, command, atau seeder
+yang pernah menulis nilai itu.
+
+Yang menarik: `AbsensiForm` sudah menuliskan keputusan ini di helper
+text-nya sejak lama — *"Cuti sakit sekarang diajukan lewat modul Cuti
+(jenis Cuti Sakit), bukan dipilih di sini."* Jadi keputusannya sudah
+pernah diambil; yang tidak pernah menyusul cuma enumnya, dan tiga
+dokumen yang terus mencatatnya sebagai "perlu diklarifikasi".
+
+### Migration
+
+Diverifikasi sebelum jalan: **0 baris** berstatus `'sakit'`.
+
+Pakai `DB::statement`, bukan `Schema::table()->change()` — doctrine/dbal
+tidak menangani perubahan enum MySQL dengan andal.
+
+`down()` mengembalikan enum dengan **urutan nilai persis seperti
+semula** (`izin`, `sakit`, `cuti`, ...). Itu bukan kosmetik: MySQL
+menyimpan enum sebagai indeks integer, jadi urutan yang berbeda akan
+mengubah arti baris-baris lama saat rollback.
+
+### TEMUAN: widget dashboard menampilkan grafik yang menyesatkan
+
+`RekapBulanIni` menghitung `where('status','sakit')->count()` dan
+memberinya label di chart — artinya admin selama ini melihat segmen
+**"Sakit" yang permanen 0** di dashboard. Bukan sekadar kode mati, tapi
+grafik yang salah.
+
+Dihapus beserta labelnya, dan kedua array dipastikan tetap sejajar (7
+data, 7 label). Ini bagian yang paling mudah merusak diam-diam: kalau
+jumlahnya meleset satu, chart menampilkan angka Cuti dengan label
+Dinas, dan tidak ada yang akan menyadarinya karena angkanya tetap
+"masuk akal".
+
+### Jejak lain yang dibersihkan
+
+`AbsensiInfolist` (warna + label), `AbsensisTable` (3 tempat: warna,
+label kolom, label filter), `AbsensiHariIni` (warna + label).
+
+`AbsensiController::rekap()` ternyata **tidak pernah punya key `sakit`
+sama sekali** — jadi angka 0 yang muncul di kartu rekap FE bukan dari
+backend yang mengirim nol, melainkan dari model FE yang mengisi default
+untuk field yang tidak ada. Konsisten dengan keputusan ini; FE tinggal
+mencabut field-nya (dicatat di `todo-fr.md`).
+
+SCHEMA.md, QUICK_CONTEXT.md (Known Gap #5), dan PROJECT_CONTEXT.md
+(dua tempat) ikut dibersihkan.
+
+### Dicatat untuk nanti: libur mingguan vs libur nasional
+
+Item baru di `todo.md`, diangkat karena sudah beberapa kali jadi bug
+diam-diam di TukarJadwal. Satu kata `libur` dipakai untuk dua hal yang
+berbeda sifatnya, dan kode tidak bisa membedakannya:
+
+- Karyawan **umum** tidak punya baris `jadwals` sama sekali di akhir
+  pekan (generator bulanan skip hari non-`hari_kerja`), sementara
+  karyawan **rotasi** dengan langkah LIBUR mendapat baris
+  `jenis='libur'`. Dua keadaan yang secara bisnis sama, terwakili
+  berbeda di DB.
+- **Libur nasional** justru digenerate eksplisit sebagai
+  `jenis='libur'` — jadi baris `libur` bisa berarti libur mingguan
+  ATAU libur nasional, dan satu-satunya pembeda ada di tabel lain
+  (`hari_liburs`) yang tidak pernah dicek TukarJadwal.
+- `approveAndSwap()` **menyerap** baris libur (ditimpa/dihapus), jadi
+  karyawan bisa berakhir bekerja di hari libur nasional tanpa ada yang
+  memberi tahu siapa pun. Untuk karyawan umum lebih longgar lagi:
+  akhir pekannya tidak punya baris, jadi masuk cabang "tidak ada baris
+  sama sekali, tinggal dipindah" dan lolos tanpa pengecekan apa pun.
+- `PolaRotasi.berlaku_saat_libur_nasional` sudah mengakui kedua hal ini
+  berbeda, tapi hanya di generator rotasi.
+
+Semua poin di atas **belum diverifikasi ke source** — itu daftar tempat
+yang perlu dibuka, bukan kesimpulan. Perlu sesi tersendiri, karena
+jawabannya menentukan bentuk data, bukan sekadar menambah guard. Garap
+bersama dua item sekerabat: keputusan "tidak menambahkan cek
+jadwal/libur di client" (fase 43) dan temuan tertunda "tombol Ajukan
+Tukar/Pindah muncul juga untuk cuti/dinas/libur".
+
+### Test
+
+Tidak ada test baru — tidak ada perilaku baru yang bisa diuji, dan
+suite tetap **640 passed (1904 assertions)**. Itu sendiri informasi:
+tidak satu pun dari 640 test menyentuh `'sakit'`, yang mengonfirmasi
+nilai itu memang tidak pernah dipakai.
+
 ## fase 75: modul Informasi/Pengumuman — model, API, dan Filament Resource
 
 Commit `2523c74`. Menutup blocker FE terakhir yang tersisa: tab

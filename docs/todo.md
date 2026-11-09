@@ -169,12 +169,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       production, jadi sekarang justru waktu termurah untuk
       mengubahnya). Diusulkan 6 Nov 2026 saat audit FE login_screen.
 
-- [ ] **`rekap()` tidak pernah mengirim `sakit`** — field-nya ada di
-      model `RekapAbsen` di FE dan ditampilkan di kartu rekap Riwayat,
-      jadi angkanya permanen 0 bagi semua orang. Nyambung ke Known Gap
-      #5 (enum `absensi.status` punya opsi `'sakit'` yang belum jelas
-      peruntukannya). Keputusan: backend mulai mengisinya, atau FE
-      menghapusnya dari kartu. Ditemukan saat audit FE 6 Nov 2026.
       
 - [ ] **Notifikasi admin di panel Filament** — belum ada apa pun yang
       memberi tahu admin bahwa ada pengajuan menunggu approval, di
