@@ -61,6 +61,14 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Index `status` di lima tabel approval** — `getNavigationBadge()`
+      menjalankan lima `COUNT ... WHERE status = ...` di SETIAP page
+      load panel. `cutis`, `izins`, `lemburs`, `dinas`, dan
+      `tukar_jadwals` tidak punya index di kolom `status` (cek SCHEMA.md).
+      Tidak terasa sekarang (data belasan baris), tapi dengan 150
+      karyawan setelah setahun jadi full table scan lima kali per
+      halaman. Dicatat 9 Nov 2026 saat memasang badge.
+
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.
       Masalahnya satu kata `libur` dipakai untuk dua hal yang berbeda

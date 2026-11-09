@@ -27,6 +27,25 @@ class CutiResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    /**
+     * Badge jumlah pengajuan yang menunggu admin. Dipilih daripada
+     * notifikasi per-pengajuan (9 Nov 2026): dengan 150 karyawan,
+     * puluhan cuti menjelang Lebaran akan membanjiri lonceng sampai
+     * admin berhenti membacanya. Badge tidak pernah membanjir, dan
+     * menjawab pertanyaan yang sebenarnya: "berapa yang menunggu saya".
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $jumlah = static::getModel()::pending()->count();
+
+        return $jumlah > 0 ? (string) $jumlah : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return CutiForm::configure($schema);
