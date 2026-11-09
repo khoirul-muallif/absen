@@ -14,7 +14,9 @@ beforeEach(function () {
     $this->instansi = Instansi::factory()->create();
     $this->karyawan = Karyawan::factory()->umum()->create([
         'instansi_id' => $this->instansi->id,
-        'email'       => 'budi@rsb.com',
+        'username' => 'budi',
+        'email' => 'budi@rsb.com',
+
     ]);
     $this->shift = Shift::factory()->create([
         'instansi_id' => $this->instansi->id,

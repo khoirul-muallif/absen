@@ -20,7 +20,7 @@
 
 **qr_instansi** — instansi_id, kode_qr (unique), is_active, expired_at (null = permanen)
 
-**karyawan** — instansi_id, nip (unique), nama, email (unique), password, nomor_telepon, foto_profil, foto_wajah, status_pegawai (tetap/kontrak/orientasi/magang), role (admin/karyawan), **tipe_jadwal (umum/rotasi)**, unit_kerja, jabatan, tanggal_bergabung, is_active, remember_token
+**karyawan** — instansi_id, nip (unique), nama,username (unique), email (unique), password, nomor_telepon, foto_profil, foto_wajah, status_pegawai (tetap/kontrak/orientasi/magang), role (admin/karyawan), **tipe_jadwal (umum/rotasi)**, unit_kerja, jabatan, tanggal_bergabung, is_active, remember_token
 - Catatan: `role` di sini beda dari sistem approval (lihat PROJECT_CONTEXT.md Known Gap #4 — approval pakai `users`, bukan `karyawan.role`)
 
 **shift** — instansi_id, nama_shift, jam_masuk, jam_pulang, toleransi_menit (default 15), mode_toleransi (harian/akumulasi_bulanan), hari_kerja (json), is_active

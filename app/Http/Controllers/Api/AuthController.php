@@ -15,17 +15,17 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email'    => 'required|email',
+            'username' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $karyawan = Karyawan::where('email', $request->email)
+        $karyawan = Karyawan::where('username', $request->username)
             ->where('is_active', true)
             ->first();
 
         if (! $karyawan || ! Hash::check($request->password, $karyawan->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Email atau password salah.'],
+                'username' => ['Username atau password salah.'],
             ]);
         }
 
@@ -42,6 +42,7 @@ class AuthController extends Controller
                     'nama'           => $karyawan->nama,
                     'nip'            => $karyawan->nip,
                     'email'          => $karyawan->email,
+                    'username'       => $karyawan->username,
                     'jabatan'        => $karyawan->jabatan,
                     'unit_kerja'     => $karyawan->unit_kerja,
                     'status_pegawai' => $karyawan->status_pegawai,
@@ -94,6 +95,7 @@ class AuthController extends Controller
                 'nama'             => $karyawan->nama,
                 'nip'              => $karyawan->nip,
                 'email'            => $karyawan->email,
+                'username'         => $karyawan->username,
                 'jabatan'          => $karyawan->jabatan,
                 'unit_kerja'       => $karyawan->unit_kerja,
                 'status_pegawai'   => $karyawan->status_pegawai,

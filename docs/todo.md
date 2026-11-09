@@ -61,6 +61,35 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Pesan validasi Laravel tampil sebagai kunci mentah** — locale
+      aplikasi `id`, dan `lang/id/validation.php` tidak ada, jadi
+      `trans('validation.required')` mengembalikan string
+      `"validation.required"` apa adanya. SETIAP pesan validasi yang
+      sampai ke karyawan berbentuk kunci mentah: karyawan yang lupa
+      mengisi alasan cuti melihat "validation.required" di layar HP-nya.
+
+      Lebih parah daripada kebocoran terjemahan Filament (fase 75)
+      karena ini kena ke 150 pengguna aplikasi mobile, bukan ke satu
+      admin.
+
+      Beda dari kasus Filament: Laravel memang TIDAK menyertakan `lang/`
+      sejak v9 dan tidak punya terjemahan `id` sama sekali, jadi tidak
+      ada perbaikan upstream yang akan menyusul — file ini memang harus
+      dirawat sendiri. Tidak ada risiko "override menimpa upstream"
+      seperti di Filament, jadi tidak perlu pendekatan override
+      per-kunci.
+
+      Aturan yang benar-benar dipakai di API (hasil pindai 9 Nov):
+      required, required_if, string, integer, boolean, date,
+      date_format, after, after_or_equal, in, exists, different, image,
+      max, nullable. Filament menambah unique, email, min, numeric, dan
+      lainnya — file ini sebaiknya mencakup keduanya, bukan cuma API.
+
+      Dua opsi: `php artisan lang:publish` lalu terjemahkan manual, atau
+      ambil terjemahan komunitas (`laravel-lang/lang`) yang menambah
+      dependensi. Ditemukan 9 Nov 2026 saat memperbaiki test auth —
+      muncul sebagai `"username": ["validation.required"]` di output
+      test.
 
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.

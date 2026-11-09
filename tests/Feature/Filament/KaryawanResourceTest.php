@@ -42,6 +42,7 @@ it('bisa membuat karyawan umum dengan data valid', function () {
             'nama' => 'Budi Santoso',
             'nip' => 'NIP-99001',
             'email' => 'budi.baru@rsb.com',
+            'username' => 'budib',
             'password' => 'rahasia123',
             'status_pegawai' => 'tetap',
             'role' => 'karyawan',
@@ -63,6 +64,7 @@ it('password tersimpan dalam bentuk hash, bukan teks polos', function () {
             'nama' => 'Uji Hash',
             'nip' => 'NIP-99002',
             'email' => 'hash@rsb.com',
+            'username' => 'hash',
             'password' => 'rahasia123',
             'status_pegawai' => 'tetap',
             'role' => 'karyawan',
@@ -84,6 +86,7 @@ it('menolak NIP dan email yang duplikat', function () {
         'instansi_id' => $this->instansi->id,
         'nip' => 'NIP-99003',
         'email' => 'duplikat@rsb.com',
+        'username' => 'duplikat',
     ]);
 
     livewire(CreateKaryawan::class)
@@ -92,6 +95,7 @@ it('menolak NIP dan email yang duplikat', function () {
             'nama' => 'Kembar',
             'nip' => 'NIP-99003',
             'email' => 'duplikat@rsb.com',
+            'username' => 'duplikat',
             'password' => 'rahasia123',
             'status_pegawai' => 'tetap',
             'role' => 'karyawan',
@@ -114,6 +118,7 @@ it('mewajibkan unit_kerja untuk karyawan rotasi', function () {
             'nama' => 'Rotasi Tanpa Unit',
             'nip' => 'NIP-99004',
             'email' => 'rotasi@rsb.com',
+            'username' => 'rotasi',
             'password' => 'rahasia123',
             'status_pegawai' => 'tetap',
             'role' => 'karyawan',
@@ -131,6 +136,7 @@ it('tidak mewajibkan unit_kerja untuk karyawan umum', function () {
             'nama' => 'Umum Tanpa Unit',
             'nip' => 'NIP-99005',
             'email' => 'umum@rsb.com',
+            'username' => 'umum',
             'password' => 'rahasia123',
             'status_pegawai' => 'tetap',
             'role' => 'karyawan',
@@ -319,4 +325,28 @@ it('reset password mengembalikan ke default dan tetap ter-hash', function () {
 
     expect(Hash::check('password', $karyawan->fresh()->password))->toBeTrue()
         ->and($karyawan->fresh()->password)->not->toBe('password');
+});
+
+it('generateUsername membuang gelar dan merapikan nama', function () {
+    expect(Karyawan::generateUsername('Agus Pranowo'))->toBe('aguspranowo')
+        ->and(Karyawan::generateUsername('Ajimin Carub Nainggolan M.Kom.'))->toBe('ajimincarubnainggolan')
+        ->and(Karyawan::generateUsername('Cakrawala Kusumo S.I.Kom'))->toBe('cakrawalakusumo')
+        ->and(Karyawan::generateUsername('Kurnia Rajasa S.E.I'))->toBe('kurniarajasa');
+});
+
+it('generateUsername tidak memotong nama yang tanpa gelar', function () {
+    expect(Karyawan::generateUsername('Kawaya Waskita'))->toBe('kawayawaskita')
+        ->and(Karyawan::generateUsername('Elon Elon Lazuardi'))->toBe('elonelonlazuardi');
+});
+
+it('generateUsername menambah angka urut kalau bentrok', function () {
+    Karyawan::factory()->create(['username' => 'sitiaminah']);
+
+    expect(Karyawan::generateUsername('Siti Aminah'))->toBe('sitiaminah2');
+});
+
+it('generateUsername tidak menganggap username sendiri sebagai bentrok saat edit', function () {
+    $karyawan = Karyawan::factory()->create(['username' => 'sitiaminah']);
+
+    expect(Karyawan::generateUsername('Siti Aminah', $karyawan->id))->toBe('sitiaminah');
 });

@@ -12,13 +12,13 @@ it('bisa login dengan email dan password yang benar', function () {
     $instansi = Instansi::factory()->create();
     $karyawan = Karyawan::factory()->create([
         'instansi_id' => $instansi->id,
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => Hash::make('rahasia123'),
         'is_active' => true,
     ]);
 
     $response = $this->postJson('/api/auth/login', [
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => 'rahasia123',
     ]);
 
@@ -32,39 +32,40 @@ it('bisa login dengan email dan password yang benar', function () {
 
 it('menolak login dengan password salah', function () {
     Karyawan::factory()->create([
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => Hash::make('rahasia123'),
         'is_active' => true,
     ]);
 
     $response = $this->postJson('/api/auth/login', [
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => 'salah',
     ]);
 
     $response->assertUnprocessable()
-        ->assertJsonValidationErrors('email');
+        ->assertJsonPath('errors.username.0', 'Username atau password salah.');
 });
 
 it('menolak login karyawan yang tidak aktif', function () {
     Karyawan::factory()->create([
         'email' => 'nonaktif@rsb.com',
+        'username' => 'nonaktif',
         'password' => Hash::make('rahasia123'),
         'is_active' => false,
     ]);
 
     $response = $this->postJson('/api/auth/login', [
-        'email' => 'nonaktif@rsb.com',
+        'username' => 'nonaktif',
         'password' => 'rahasia123',
     ]);
 
     $response->assertUnprocessable()
-        ->assertJsonValidationErrors('email');
+        ->assertJsonPath('errors.username.0', 'Username atau password salah.');
 });
 
 it('login menghapus token lama sebelum membuat token baru', function () {
     $karyawan = Karyawan::factory()->create([
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => Hash::make('rahasia123'),
         'is_active' => true,
     ]);
@@ -73,7 +74,7 @@ it('login menghapus token lama sebelum membuat token baru', function () {
     expect($karyawan->tokens()->count())->toBe(1);
 
     $this->postJson('/api/auth/login', [
-        'email' => 'budi@rsb.com',
+        'username' => 'budi',
         'password' => 'rahasia123',
     ])->assertOk();
 

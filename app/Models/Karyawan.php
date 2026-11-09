@@ -30,6 +30,7 @@ class Karyawan extends Authenticatable
         'instansi_id',
         'nip',
         'nama',
+        'username',
         'email',
         'password',
         'nomor_telepon',
@@ -287,6 +288,44 @@ class Karyawan extends Authenticatable
     {
         return $this->isRotasi()
             && ! $this->jadwals()->whereDate('tanggal', $tanggal)->exists();
+    }
+
+    /**
+     * Username default dari nama: gelar dibuang, huruf kecil, hanya huruf
+     * dan angka, maksimal 30 karakter. Kalau sudah terpakai, ditambahi
+     * angka urut (aguspranowo, aguspranowo2, ...).
+     *
+     * $kecualikanId dipakai saat EDIT — supaya username milik karyawan
+     * itu sendiri tidak dianggap bentrok dengan dirinya sendiri.
+     */
+    public static function generateUsername(string $nama, ?int $kecualikanId = null): string
+    {
+        // Buang gelar di akhir: S.Kom, M.Kom, S.E, A.Md, S.Kep, Ns, dll.
+        // Polanya: satu-dua huruf, titik, lalu huruf — berulang di akhir nama.
+        $bersih = preg_replace('/[\s,]+(?:[A-Za-z]{1,4}\.)+[A-Za-z]*\.?$/u', '', trim($nama));
+        $bersih = $bersih !== '' ? $bersih : $nama;
+
+        $dasar = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $bersih));
+        $dasar = substr($dasar, 0, 30);
+
+        if ($dasar === '') {
+            $dasar = 'karyawan';
+        }
+
+        $kandidat = $dasar;
+        $urutan = 1;
+
+        while (static::query()
+            ->where('username', $kandidat)
+            ->when($kecualikanId, fn ($q) => $q->where('id', '!=', $kecualikanId))
+            ->exists()
+        ) {
+            $urutan++;
+            // Potong dasarnya supaya total tetap <= 30 setelah ditambah angka.
+            $kandidat = substr($dasar, 0, 30 - strlen((string) $urutan)) . $urutan;
+        }
+
+        return $kandidat;
     }
 
 }

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Instansi;
+use App\Models\Karyawan;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class KaryawanFactory extends Factory
@@ -13,6 +14,11 @@ class KaryawanFactory extends Factory
             'instansi_id'       => Instansi::factory(),
             'nip'               => $this->faker->unique()->numerify('##########'),
             'nama'              => $this->faker->name(),
+            // Unik per baris: generateUsername() mengecek bentrok ke DB,
+            // jadi factory yang membuat banyak karyawan tetap aman.
+            'username' => fn (array $attributes) => Karyawan::generateUsername(
+                $attributes['nama'] ?? fake()->name()
+            ),
             'email'             => $this->faker->unique()->safeEmail(),
             'password'          => 'password', // otomatis di-hash karena cast 'hashed' di model
             'nomor_telepon'     => '08'.fake()->numerify('##########'),

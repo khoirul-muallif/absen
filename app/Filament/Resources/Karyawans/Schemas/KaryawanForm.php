@@ -12,6 +12,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
 class KaryawanForm
@@ -30,7 +31,18 @@ class KaryawanForm
                             ->placeholder('Khoirul Muallif, A.Md.')
                             ->required()
                             ->maxLength(255)
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function (?string $state, Set $set, string $operation) {
+                                // HANYA saat create. Mengubah nama karyawan lama tidak boleh
+                                // diam-diam mengganti username yang sudah dipakai login —
+                                // karyawan akan terkunci di luar tanpa tahu sebabnya.
+                                if ($operation !== 'create' || blank($state)) {
+                                    return;
+                                }
+
+                                $set('username', Karyawan::generateUsername($state));
+                            }),
 
                         TextInput::make('nip')
                             ->label('NIP')
@@ -38,6 +50,12 @@ class KaryawanForm
                             ->required()
                             ->unique(ignoreRecord: true)
                             ->maxLength(50),
+                        TextInput::make('username')
+                            ->label('Username')
+                            ->required()
+                            ->maxLength(30)
+                            ->unique(ignoreRecord: true)
+                            ->helperText('Dipakai karyawan untuk login. Terisi otomatis dari nama, boleh diubah kalau karyawan menghendaki.'),
 
                         TextInput::make('email')
                             ->label('Email')
