@@ -5,6 +5,73 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 85: kunci kontrak `tipe` & `aksi` notifikasi
+
+Commit ini. Tindak lanjut temuan 9 Nov.
+
+### Masalahnya
+
+Helper `buatNotifikasi()` di test notifikasi memakai `'tipe' => 'warning'`,
+nilai yang **tidak pernah ada di produksi**. Jadi test selama ini menguji
+bentuk yang tidak pernah dikirim siapa pun.
+
+Tidak merusak apa-apa — `NotifikasiController` generik, meneruskan `data`
+apa adanya tanpa membacanya. Tapi artinya tidak ada yang mengunci field
+yang justru dipakai FE untuk memilih ikon, warna, dan tujuan tap.
+
+### Daftar lengkapnya adalah kontrak dengan FE
+
+Empat nilai `tipe`:
+
+| `tipe` | Asal |
+|---|---|
+| `terlambat` | `AbsenTerlambat` |
+| `belum_absen_masuk` | `BelumAbsen('masuk', ...)` |
+| `belum_absen_pulang` | `BelumAbsen('pulang', ...)` |
+| `tukar_jadwal` | keempat notifikasi TukarJadwal |
+
+Dan tujuh nilai `aksi`, semuanya di bawah `tipe: 'tukar_jadwal'`:
+`diajukan`, `approved`, `rejected`, `dibatalkan_admin`,
+`disetujui_rekan`, `ditolak_rekan`, `dibatalkan_pengaju`.
+
+`aksi` lebih berkonsekuensi daripada `tipe` untuk FE: tanpa membacanya,
+"disetujui admin" dan "ditolak admin" tampil identik — dua hal yang
+berlawanan arti. Keduanya sekarang dikunci.
+
+### Satu file, bukan assertion tersebar
+
+Catatan 9 Nov menyarankan menambah assertion di test `AbsenTerlambat` dan
+`BelumAbsen`. Dibuat satu file terpisah (`KontrakNotifikasiTest`) karena
+yang sebenarnya perlu dikunci bukan "dua test punya assertion", tapi
+**daftar lengkap nilai yang bisa sampai ke FE**. Tersebar di beberapa
+file, daftarnya tidak pernah terlihat utuh oleh siapa pun.
+
+Satu test sengaja dibuat rapuh: dia membandingkan kumpulan `tipe` dari
+semua notifikasi dengan daftar literal. Kalau ada notifikasi baru dengan
+tipe baru, dia merah — dan itu yang diinginkan, karena nilai yang tidak
+dikenal `NotifikasiScreen` berarti ikon kosong atau crash di HP 150 orang.
+Pesannya: kalau merah, tambahkan nilainya di test **dan** di `todo-fr.md`
+sekaligus.
+
+### `BelumAbsen` membangun `tipe` lewat interpolasi
+
+`"belum_absen_{$label}"` dari `$jenisAbsen`, yang cuma didokumentasikan
+lewat komentar `// 'masuk' | 'pulang'` — tidak ada enum, tidak ada
+validasi. Kalau ada pemanggil yang mengirim nilai lain, `tipe`-nya jadi
+sesuatu yang tidak dikenal FE dan tidak ada yang mencegahnya. Kedua nilai
+dikunci eksplisit, bukan satu lalu menganggap yang lain beres.
+
+### Yang ternyata sudah benar
+
+Catatan `todo.md` menyebut keempat notifikasi TukarJadwal mengirim
+`tipe: 'tukar_jadwal'` — terkonfirmasi, desainnya memang konsisten, dan
+`todo-fr.md` sudah memuat ketujuh nilai `aksi` beserta catatan bahwa
+`dibatalkan_pengaju` membawa `tukar_jadwal_id` yang barisnya sudah
+dihapus. Tidak ada kejutan di sisi FE.
+
+704 → 717 test (2019 → 2064 assertions).
+
+---
 ## fase 84: riwayat() 500 kalau ada baris absensi tanpa shift
 
 Commit ini. Ditemukan 10 Nov 2026 saat membaca `AbsensiController` untuk

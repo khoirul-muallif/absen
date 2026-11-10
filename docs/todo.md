@@ -92,16 +92,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       admin tanpa diminta — bukan keputusan sepele, dan kelas masalahnya
       sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
 
-- [ ] **Nilai `data['tipe']` tidak pernah diuji** — helper
-      `buatNotifikasi()` di test notifikasi memakai `'tipe' => 'warning'`,
-      padahal `AbsenTerlambat` yang asli mengirim `'tipe' => 'terlambat'`
-      dan `BelumAbsen` mengirim nilainya sendiri. Jadi test selama ini
-      menguji nilai yang tidak pernah ada di produksi. Tidak merusak apa
-      pun (`NotifikasiController` generik, tidak membaca `tipe`), tapi
-      artinya tidak ada yang mengunci field yang justru dipakai FE buat
-      memilih ikon/warna. Tambahkan assertion `tipe` di test
-      `AbsenTerlambat`/`BelumAbsen`. Ditemukan 9 Nov 2026.
-
 ## Fitur & infrastruktur
 - [ ] **Bulk action assignment belum punya test modal** — fase 83 punya 16
       test untuk `PerencanaAssignment` (seluruh logika keputusan), tapi dua
