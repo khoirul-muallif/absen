@@ -5,6 +5,265 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+
+## fase 82: import karyawan massal dari Excel
+
+Commit `f038944` (template) + commit ini (importer, pratinjau, test).
+
+### Masalahnya
+
+Menginput ~150 karyawan RS lewat form Filament satu per satu adalah
+pekerjaan berjam-jam, dan itu terjadi tepat saat deploy pertama — momen
+paling sibuk, oleh admin yang baru pertama kali melihat panelnya.
+
+Infrastruktur sudah ada: `maatwebsite/excel` dipakai Export Laporan
+Presensi sejak fase 56, jadi tinggal sisi import-nya.
+
+### Keputusan: import TIDAK mengisi assignment shift/pola
+
+Pertanyaan terbuka di `todo.md` adalah apakah import sekalian mengisi
+`KaryawanShift`/`KaryawanPolaRotasi` — kalau tidak, admin tetap input
+assignment 150 kali dan masalahnya pindah tempat.
+
+Jawabannya tidak, untuk keduanya. Alasannya: **assignment homogen per
+unit, bukan per orang.** Karyawan umum praktis cuma pakai 1–2 shift jam
+kantor (dikonfirmasi pihak RS), dan karyawan rotasi satu unit memakai
+SATU pola yang sama sejak fase 65. Jadi 150 assignment sebetulnya ~3
+operasi lewat bulk action, dan 150 sel Excel untuk 3 nilai berbeda cuma
+menambah tempat salah ketik.
+
+Untuk rotasi ada alasan kedua yang lebih keras.
+`karyawan_pola_rotasis.tanggal_mulai` adalah anchor siklus — satu-satunya
+hal yang membedakan karyawan dalam satu unit, dan yang menentukan jadwal
+24/7 benar-benar tertutup. Kalau diisi tangan, admin akan mengisi tanggal
+yang sama untuk semua orang; itu salah, dan **tidak ada satu baris pun
+yang bisa divalidasi sebagai salah** karena tiap baris valid
+sendiri-sendiri. Rusaknya baru kelihatan sebulan kemudian waktu generate
+rotasi menghasilkan shift malam kosong. Stagger anchor itu perhitungan,
+bukan entri data.
+
+Catatan: rekomendasi awal memasukkan kolom `shift` untuk tipe umum,
+dengan alasan assignment umum "ringan". Dibantah — ringan bukan alasan,
+dan kalau diuji dengan logika yang dipakai menolak rotasi, kolom `shift`
+juga gugur. Dua kasus identik diperlakukan berbeda cuma karena yang satu
+datanya lebih sederhana.
+
+### Prasyarat deploy ternyata TIGA langkah
+
+`AbsensiController::masuk()` langkah 5 membaca `KaryawanShift` dulu, lalu
+fallback ke baris `Jadwal` hari ini — **bukan** ke `KaryawanPolaRotasi`.
+Jadi untuk rotasi, punya baris `karyawan_pola_rotasis` belum cukup:
+
+1. Import karyawan (fase ini)
+2. Bulk action assignment (belum ada)
+3. `jadwal:generate-rotasi` — khusus rotasi, setelah langkah 2
+
+Karyawan rotasi yang berhenti di langkah 2 tetap tidak bisa absen, dengan
+pesan error IDENTIK dengan yang belum di-assign sama sekali ("Tidak ada
+shift aktif untuk hari ini"). Admin tidak punya cara membedakan keduanya.
+
+### Koreksi: panel ini TIDAK multi-tenant
+
+Catatan lama menulis "`instansi_id` di-scope, bukan kolom template (admin
+tidak seharusnya bisa memasukkan karyawan ke instansi lain)". Itu
+menggambarkan sistem yang tidak ada: `KaryawanForm` memakai
+`Select::make('instansi_id')->relationship(...)` biasa, admin bebas
+memilih instansi mana pun, tidak ada global scope.
+
+Yang benar: instansi dipilih sekali di modal import. Hasilnya sama (tidak
+ada 150 sel yang bisa salah instansi), tapi alasannya berbeda — jangan
+sampai ada yang mengira ada tenancy yang perlu dijaga.
+
+### Template: dua sheet
+
+`KaryawanTemplateExport` (`WithMultipleSheets`) → `KaryawanTemplateDataSheet`
++ `KaryawanTemplatePetunjukSheet`. 10 kolom, dropdown enum untuk
+`status_pegawai` dan `tipe_jadwal`, format TEXT untuk `nip`,
+`nomor_telepon` dan `tanggal_bergabung` supaya nol di depan tidak hilang.
+
+Tiga keputusan yang diambil sadar:
+
+- **Header memakai nama kolom DB apa adanya** (`nip`, bukan "NIP").
+  Importer mencocokkan lewat nama ini; label manusiawi berarti ada
+  pemetaan yang harus dijaga sinkron, dan admin yang mengetik ulang header
+  menghasilkan file tidak terbaca tanpa pesan yang jelas.
+- **TIDAK ada contoh baris di sheet data** — kebalikan dari kebiasaan
+  umum. Admin yang lupa menghapusnya mengimpor karyawan fiktif, dan tidak
+  ada cara andal membedakan contoh dari data asli; menyaring NIP sentinel
+  cuma memindahkan masalah ke admin yang kebetulan memakai NIP itu.
+  Contohnya ditaruh di kolom D sheet Petunjuk, di sebelah penjelasan.
+- **`unit_kerja` sengaja tidak di-dropdown** walaupun daftarnya ada. Unit
+  baru itu sah, dan dropdown ketat akan menolaknya. Pengawasannya pindah
+  ke peringatan saat pratinjau.
+
+Jebakan: `KaryawanTemplateExport` perlu `implements Export` selain
+`WithMultipleSheets`. `WithMultipleSheets` TIDAK meng-extend `Export`
+(dia pengubah perilaku, bukan sumber data), jadi tanpa itu
+`Excel::download()` menolak dengan TypeError.
+
+### Importer: ToCollection, dua mode, satu kelas
+
+`ToCollection`, bukan `ToModel` — duplikat **di dalam file itu sendiri**
+cuma bisa ditangkap kalau semua baris terlihat sekaligus. Daftar NIP /
+username / email "dipesan" dibawa antar baris.
+
+Dry-run dan commit dalam **satu kelas**, dibedakan flag konstruktor.
+Kalau dua kelas, aturan validasinya bisa menyimpang — pratinjau bilang
+148 siap, commit menerima jumlah lain.
+
+Commit **membaca ulang berkasnya**, tidak memakai hasil dry-run yang
+disimpan. Kalau hasil dry-run yang ditulis, pengecekan unik jadi bohong
+begitu ada admin lain menambah karyawan di sela-sela pratinjau. Harganya:
+berkas perlu disimpan sementara dan dibersihkan — dilakukan berbasis umur
+saat import berikutnya, bukan lewat scheduler baru.
+
+**Impor sebagian diizinkan.** 2 baris salah tidak menolak 148 yang benar:
+deploy pertama, admin tanpa terminal, dan tiap siklus unggah-perbaiki
+adalah kesempatan baru merusak baris yang tadinya benar. Atomicity tetap
+terjaga — yang 148 itu satu `DB::transaction()`. Syaratnya tombol
+konfirmasi menyebut angkanya ("Impor 148 baris, lewati 2") supaya admin
+tidak bisa tidak sadar ada yang tertinggal.
+
+### `generateUsername()` tidak aman untuk batch — dan sengaja tidak diubah
+
+Loop-nya cuma mengecek DB, jadi dalam satu import dua "Agus Pranowo"
+sama-sama dapat `aguspranowo` dan yang kedua meledak di INSERT dengan SQL
+mentah, bukan laporan per-baris.
+
+Bukan kelemahan fungsinya — dirancang untuk form satu-per-satu, dan untuk
+itu benar. Dia sumber aturan tunggal sejak fase 79 dan dipakai
+`KaryawanForm`; menambah parameter mengubah arti pemanggilan yang sudah
+ada. Penyesuaiannya di importer: daftar username "dipesan" dicek
+bersamaan dengan DB.
+
+### Parser tanggal: menerima cara admin menulis, bukan sebaliknya
+
+Uji coba pertama menolak **keenam baris** dengan "tanggal bergabung bukan
+tanggal yang valid" — admin menulis `12 desember 2024`, dan PHP tidak
+mengenal nama bulan Indonesia.
+
+Itu kesalahan desain, bukan kesalahan admin. Petunjuk memang bilang
+`YYYY-MM-DD`, tapi menyuruh orang mengetik ulang 150 tanggal dalam format
+asing membuat fitur ini kalah berguna dibanding input manual.
+
+Diterima: ISO, nama bulan Indonesia (penuh & singkatan), berangka dengan
+`/ . -`, dan serial number Excel. Format berangka dibaca **HARI DULU**
+(`12/01/2024` = 12 Januari) — konteksnya Indonesia, dan ini asumsi yang
+ditulis eksplisit di kode dan di sheet Petunjuk, bukan dibiarkan diam:
+salah tebak menghasilkan tanggal yang terlihat masuk akal.
+`checkdate()` menolak tanggal mustahil (31 Februari) alih-alih
+menggesernya diam-diam jadi 2 Maret, yang akan dilakukan Carbon.
+
+### `tanggal_bergabung` dipertahankan karena hak cuti
+
+Sempat dipertimbangkan dikeluarkan dari template — satu kolom hilang,
+satu sumber kegagalan hilang. Dibatalkan setelah pihak RS menyebut cuti
+baru didapat setelah bekerja satu tahun.
+
+Aturan itu belum ada di kode sama sekali (dicatat terpisah di `todo.md`),
+tapi justru itu alasannya: mengeluarkan kolomnya berarti 150 karyawan
+masuk tanpa tanggal, dan saat aturan masa kerja dibuat nanti tidak ada
+data untuk menjalankannya.
+
+### `collection()` dipanggil SEKALI PER SHEET
+
+Bug yang baru ketahuan saat uji coba: template punya sheet "Petunjuk",
+jadi `collection()` jalan dua kali. `$this->hasil->siap` masih berisi
+baris dari sheet pertama, `simpan()` jalan lagi, dan baris yang sama
+di-insert ulang → duplicate NIP.
+
+Ditangani penjaga `$sudahDiproses`. Asumsi yang dipegang: sheet pertama
+adalah sheet data — dicatat di `todo.md` sebagai kelemahan yang perlu
+diperbaiki kalau admin mengirim file dengan urutan sheet berbeda.
+
+### Test
+
+26 test (`KaryawanImportTest`), memanggil `collection()` langsung dengan
+Collection buatan — bukan lewat file .xlsx. Yang perlu dikunci adalah
+aturan validasinya; membaca file biner di tiap test bikin suite lambat
+dan fixture-nya tidak bisa dibaca saat review.
+
+Satu test terpisah mengunci `KaryawanTemplateDataSheet::headings()` cocok
+persis dengan `KaryawanImport::KOLOM` — kalau keduanya menyimpang, admin
+mengisi kolom yang diabaikan dan importer mencari kolom yang tidak ada,
+keduanya gagal diam-diam tanpa error.
+
+Suite 652 → 678 test (1925 → 1966 assertions).
+
+Yang BELUM diuji: modal Filament dua langkah, baca-ulang berkas saat
+commit, pembersihan berkas yatim, dan pembacaan .xlsx sungguhan. Dicatat
+di `todo.md`.
+
+---
+## fase 81: email karyawan jadi nullable, notifikasi mail keterlambatan dicabut
+
+Commit `62ae765`. Prasyarat fase 82.
+
+### Masalahnya
+
+Pihak RS mengonfirmasi tidak semua karyawan punya email — kira-kira 40
+dari 150. Selama kolomnya `required`, import Excel akan menolak ~110 baris
+dan admin terpaksa mengarang alamat.
+
+Email karangan lebih buruk daripada email kosong: notifikasi terkirim ke
+alamat yang tidak ada, dan tidak ada yang tahu. Gejalanya adalah
+**ketiadaan** email, dan ketiadaan tidak pernah muncul di log.
+
+### Baru bisa dikerjakan setelah fase 79
+
+Selama email masih kredensial login, membuatnya kosong berarti ada
+karyawan yang terkunci di luar. Setelah login pindah ke username, email
+turun jadi data profil biasa dan tidak ada yang bergantung padanya untuk
+masuk.
+
+### Unique index dipertahankan
+
+MySQL mengizinkan banyak `NULL` dalam unique index, jadi 110 baris kosong
+tidak saling bentrok sementara dua email terisi yang sama tetap ditolak.
+Itu persis perilaku yang dibutuhkan, bukan kompromi — dan dikunci test,
+karena perilaku NULL dalam unique index berbeda antar database dan kalau
+asumsinya runtuh, runtuhnya saat import 110 baris di hari deploy.
+
+`routeNotificationForMail(): string` → `?string`. Return type
+non-nullable melempar TypeError begitu ada satu karyawan tanpa email;
+`MailChannel` sudah berhenti sendiri kalau route-nya kosong.
+
+### `AbsenTerlambat` berhenti mengirim email
+
+`grep "'mail'" app/Notifications/` menemukan satu pemakai:
+`AbsenTerlambat::via()` mengembalikan `['database', 'mail']`. Satu-satunya
+notifikasi yang mengirim email, dan kebetulan yang paling sering terkirim.
+
+Dicabut jadi `['database']` saja. Dua alasan:
+
+1. Email tiap kali seseorang terlambat 3 menit itu spam, dan spam punya
+   efek yang lebih buruk daripada tidak berguna — orang berhenti membaca
+   email dari sistem sama sekali, termasuk yang nanti penting.
+2. Setelah email nullable, ~110 dari 150 karyawan tidak punya alamat. Satu
+   channel untuk semua orang lebih baik daripada dua channel untuk
+   sebagian; notifikasinya tetap muncul di aplikasi.
+
+`toMail()` **sengaja dibiarkan** sebagai kode mati. Kalau keputusan ini
+dibalik, mengembalikan satu baris `via()` jauh lebih murah daripada
+menulis ulang template emailnya.
+
+Akibatnya `routeNotificationForMail()` sekarang tidak dipanggil siapa pun.
+Perubahan tipenya jadi murni jaga-jaga — tetap dipertahankan supaya
+notifikasi mail berikutnya yang ditambahkan orang lain langsung aman.
+
+### Konsekuensi FE
+
+Response profil `AuthController` bisa mengirim `email: null`. Kalau model
+Dart-nya `String` bukan `String?`, parsing melempar dan layar profil mati
+untuk ~110 orang. Dicatat di `todo-fr.md` (commit FE `aa74f68`).
+
+Urutan deploy: perbaiki FE **sebelum** import pertama jalan. Migration
+sendiri tidak memicu apa-apa selama baris existing masih punya email.
+
+Suite 647 → 652 test (1917 → 1925 assertions).
+
+---
+
 ## fase 80: pesan validasi Laravel diterjemahkan ke bahasa Indonesia
 
 Commit `daf9730`. Tindak lanjut temuan fase 79.
