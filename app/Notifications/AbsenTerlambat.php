@@ -18,7 +18,13 @@ class AbsenTerlambat extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        // 'mail' dicabut fase 81. Dua alasan:
+        // 1. Email per keterlambatan itu spam — terkirim tiap kali seseorang
+        //    telat 3 menit, dan orang berhenti membaca email dari sistem.
+        // 2. Setelah email jadi nullable, ~110 dari 150 karyawan tidak punya
+        //    alamat. Satu channel untuk semua orang lebih baik daripada dua
+        //    channel untuk sebagian — notifikasinya sudah muncul di aplikasi.
+        return ['database'];
     }
 
     public function toMail(object $notifiable): MailMessage

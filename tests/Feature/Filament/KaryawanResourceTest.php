@@ -350,3 +350,53 @@ it('generateUsername tidak menganggap username sendiri sebagai bentrok saat edit
 
     expect(Karyawan::generateUsername('Siti Aminah', $karyawan->id))->toBe('sitiaminah');
 });
+
+
+// ── Email nullable (fase 81) ─────────────────────────────────────────────
+
+it('bisa membuat karyawan tanpa email', function () {
+    $karyawan = Karyawan::factory()->create(['email' => null]);
+
+    expect($karyawan->fresh()->email)->toBeNull();
+});
+
+it('mengizinkan banyak karyawan sama-sama tanpa email', function () {
+    // Unique index dipertahankan, dan NULL tidak dianggap duplikat oleh
+    // MySQL. Kalau asumsi ini salah, import 110 baris tanpa email gagal di
+    // baris kedua — dan gagalnya di DB, bukan di validasi.
+    Karyawan::factory()->create(['email' => null]);
+    Karyawan::factory()->create(['email' => null]);
+
+    expect(Karyawan::whereNull('email')->count())->toBe(2);
+});
+
+it('tetap menolak dua email terisi yang sama', function () {
+    Karyawan::factory()->create(['email' => 'budi@rs.test']);
+
+    Karyawan::factory()->create(['email' => 'budi@rs.test']);
+})->throws(\Illuminate\Database\QueryException::class);
+
+it('routeNotificationForMail mengembalikan null untuk karyawan tanpa email', function () {
+    $karyawan = Karyawan::factory()->create(['email' => null]);
+
+    expect($karyawan->routeNotificationForMail())->toBeNull();
+});
+
+it('form menerima karyawan tanpa email', function () {
+    livewire(CreateKaryawan::class)
+        ->fillForm([
+            'instansi_id' => $this->instansi->id,
+            'nama' => 'Tanpa Email',
+            'nip' => 'NIP-99006',
+            'email' => null,
+            'username' => 'tanpaemail',
+            'password' => 'rahasia123',
+            'status_pegawai' => 'tetap',
+            'role' => 'karyawan',
+            'tipe_jadwal' => Karyawan::TIPE_UMUM,
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(Karyawan::where('nip', 'NIP-99006')->first()->email)->toBeNull();
+});

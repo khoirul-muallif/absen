@@ -60,9 +60,9 @@ class KaryawanForm
                         TextInput::make('email')
                             ->label('Email')
                             ->email()
-                            ->required()
                             ->unique(ignoreRecord: true)
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->helperText('Boleh dikosongkan kalau karyawan tidak punya email. Login memakai username, jadi mengosongkan ini tidak membuat karyawan terkunci — tapi dia tidak akan menerima notifikasi lewat email.'),
 
                         TextInput::make('nomor_telepon')
                             ->label('Nomor Telepon')

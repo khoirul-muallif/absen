@@ -61,6 +61,24 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **`riwayat()` 500 kalau ada baris absensi tanpa shift** —
+      `AbsensiController::riwayat()` memanggil `$a->shift->nama_shift` dan
+      `$a->shift->jam_masuk` tanpa null check, padahal `absensi.shift_id`
+      nullable. Perlu dicek: apakah sync Dinas (`status = 'dinas'`) dan
+      baris cuti mengisi `shift_id`? Kalau null, maka setiap karyawan yang
+      pernah cuti atau dinas dalam sebulan membuat
+      `GET /api/absensi/riwayat` untuk bulan itu melempar 500 — bukan
+      menampilkan baris dengan shift kosong. Bukan skenario langka: cuti
+      pasti terjadi.
+
+      Yang perlu dilihat: observer/service yang membuat `Absensi` saat
+      Dinas di-approve, dan yang serupa untuk Cuti. `rekap()` aman (tidak
+      menyentuh relasi shift), jadi kalaupun bug ini nyata, gejalanya cuma
+      di satu endpoint. Catatan: `menitTerlambat()` di model juga memanggil
+      `$this->shift->hitungMenitTerlambat()` di jalur fallback, tapi hanya
+      kalau atribut `menit_terlambat` tidak di-set — jarang. Dicatat
+      10 Nov 2026.
+
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.
       Masalahnya satu kata `libur` dipakai untuk dua hal yang berbeda
@@ -123,8 +141,11 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       Export Laporan Presensi (fase 56), jadi tinggal pakai sisi
       import-nya.
 
-      Kolom yang perlu di template: nip, nama, username, email,
-      nomor_telepon, status_pegawai, tipe_jadwal, unit_kerja, jabatan,
+      **Import TIDAK mengisi assignment shift/pola** — diputuskan
+      10 Nov 2026, lihat item berikutnya. Import murni data karyawan.
+
+      Kolom template (10): nip, nama, username, email, nomor_telepon,
+      status_pegawai, tipe_jadwal, unit_kerja, jabatan,
       tanggal_bergabung. Username boleh dikosongkan — `Karyawan::
       generateUsername()` (fase 79) sudah jadi sumber aturan tunggal
       dan bisa dipakai di sini. Password tidak di template: pakai
@@ -136,7 +157,8 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       - **`tipe_jadwal` wajib eksplisit di template**, tidak boleh
         kosong lalu ditebak dari unit_kerja/jabatan — itu larangan
         eksplisit di QUICK_CONTEXT, dan import massal adalah tempat
-        paling mungkin orang tergoda menebaknya.
+        paling mungkin orang tergoda menebaknya. Tetap berlaku
+        walaupun assignment-nya sendiri tidak diimpor.
       - **Validasi harus per-baris dengan laporan yang bisa dibaca
         admin**, bukan gagal total di baris pertama. Admin RS tidak
         punya terminal; kalau 150 baris ditolak tanpa tahu baris mana
@@ -147,15 +169,87 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       - **Import harus atomic atau punya mode dry-run.** Gagal di
         baris 120 setelah 119 karyawan terlanjur masuk itu keadaan
         yang sulit dibereskan admin.
-      - `instansi_id` di-scope, bukan kolom template (admin tidak
-        seharusnya bisa memasukkan karyawan ke instansi lain).
+      - **Instansi dipilih sekali di modal import**, bukan kolom template.
+        KOREKSI 10 Nov 2026: catatan lama menulis "di-scope" — itu salah,
+        panel ini TIDAK multi-tenant. `KaryawanForm` memakai
+        `Select::make('instansi_id')->relationship(...)` biasa, admin bebas
+        memilih instansi mana pun, tidak ada global scope. Satu Select di
+        samping file upload: hasilnya sama (tidak ada 150 sel yang bisa
+        salah instansi), tapi alasannya beda — jangan sampai ada yang
+        mengira ada tenancy yang perlu dijaga.
 
-      Pertimbangkan juga: apakah import ini sekalian bisa mengisi
-      `KaryawanShift` (untuk tipe umum) atau `KaryawanPolaRotasi`
-      (untuk rotasi)? Kalau tidak, admin tetap harus menginput
-      assignment shift 150 kali — dan itu memindahkan masalah, bukan
-      menyelesaikannya. Dicatat 9 Nov 2026.
+      - **`generateUsername()` tidak aman untuk batch.** Loop-nya cuma
+        mengecek DB (`static::query()->where('username', $kandidat)`), jadi
+        dalam satu import dua "Agus Pranowo" sama-sama dapat `aguspranowo`
+        dan yang kedua baru meledak di INSERT — SQL mentah, bukan laporan
+        per-baris. Bukan kelemahan fungsinya (dirancang untuk form
+        satu-per-satu, dan untuk itu benar); sisi import perlu daftar
+        username yang sudah "dipesan" selama proses, dicek bersamaan dengan
+        DB. JANGAN ubah `generateUsername()` — dipakai KaryawanForm sejak
+        fase 79, menambah parameter mengubah arti pemanggilan yang ada.
 
+      - **`unit_kerja` dicocokkan dengan daftar unit yang sudah ada**
+        (gabungan Karyawan + PolaRotasi, sama seperti datalist di form).
+        Tidak memblokir — unit baru itu sah — tapi dilaporkan sebagai
+        peringatan. Alasannya di komentar fase 33: satu typo bikin karyawan
+        rotasi tidak bisa di-assign pola apa pun, dan di import typo itu
+        tersalin ke 20 baris sekaligus.
+
+      - **PRASYARAT: `email` harus nullable dulu** — lihat item terpisah.
+        Pihak RS mengonfirmasi 10 Nov 2026 bahwa tidak semua karyawan punya
+        email. Selama kolomnya `required`, import akan menolak ~110 baris
+        dan admin terpaksa mengarang alamat — lebih buruk daripada kosong,
+        karena notifikasi terkirim ke alamat yang tidak ada.
+      - **Setelah import, tampilkan jumlah karyawan tanpa assignment**
+        dan sediakan filternya di daftar karyawan — supaya langkah
+        kedua tidak bisa terlupa diam-diam.
+
+      KOREKSI 10 Nov 2026 — prasyarat deploy ternyata TIGA langkah, bukan
+      dua. `AbsensiController::masuk()` langkah 5 membaca `KaryawanShift`
+      dulu, lalu fallback ke baris `Jadwal` hari ini — BUKAN ke
+      `KaryawanPolaRotasi`. Jadi untuk karyawan rotasi, punya baris
+      `karyawan_pola_rotasis` belum cukup; `jadwal:generate-rotasi` harus
+      sudah jalan juga.
+
+      1. Import karyawan
+      2. Bulk action assignment
+      3. `jadwal:generate-rotasi` — khusus rotasi, setelah langkah 2
+
+      Karyawan umum selesai di langkah 2. Karyawan rotasi yang berhenti di
+      langkah 2 tetap tidak bisa absen, dengan pesan error yang IDENTIK
+      dengan karyawan yang belum di-assign sama sekali ("Tidak ada shift
+      aktif untuk hari ini") — admin tidak punya cara membedakan keduanya.
+
+      Karena itu filter di daftar karyawan bukan "tanpa assignment" (itu
+      meloloskan rotasi yang polanya sudah ada tapi jadwalnya belum
+      digenerate), melainkan **"tidak bisa absen hari ini"**: tidak punya
+      `KaryawanShift` aktif DAN tidak punya baris `Jadwal` hari ini. Salin
+      persis kondisi di langkah 5 controller supaya filter tidak bisa
+      menyimpang dari kenyataan.
+
+- [ ] **`email` karyawan jadi nullable** — prasyarat import Excel. Pihak RS
+      mengonfirmasi tidak semua karyawan punya email (10 Nov 2026). Baru
+      bisa dikerjakan sekarang: selama email masih kredensial login,
+      membuatnya kosong berarti ada karyawan yang tidak bisa masuk. Setelah
+      fase 79 (login username), email turun jadi data profil biasa.
+
+      - Migration: `email` nullable. Unique index DIPERTAHANKAN — MySQL
+        mengizinkan banyak NULL dalam unique index, jadi banyak baris kosong
+        tidak saling bentrok tapi dua email terisi yang sama tetap ditolak.
+      - `Karyawan::routeNotificationForMail(): string` → `?string`. Return
+        type non-nullable = TypeError begitu ada satu karyawan tanpa email.
+        MailChannel sudah berhenti sendiri kalau route-nya kosong.
+      - CEK DULU: adakah notifikasi yang `via()`-nya memuat 'mail'? Kalau
+        semua `['database']`, perubahan tipe itu murni jaga-jaga. Kalau ada,
+        perlu diputuskan apa artinya ~110 karyawan diam-diam tidak menerima
+        notifikasi — itu keputusan, bukan perbaikan tipe.
+      - `KaryawanForm`: cabut `->required()`, pertahankan `->unique()`,
+        tambah helper text soal konsekuensinya.
+      - KONSEKUENSI FE: response profil `AuthController` bisa mengirim
+        `email: null`. Kalau model Dart-nya `String` bukan `String?`,
+        parsing melempar. Cek SEBELUM migration jalan di data nyata, bukan
+        sesudah. Catat juga di todo-fr.md.
+        
 - [ ] **Pengajuan TukarJadwal yang macet di `menunggu_rekan` tidak
       terhitung di mana pun** — badge menu (fase 77) hanya menghitung
       `menunggu_admin`. Admin tidak punya cara tahu ada pengajuan

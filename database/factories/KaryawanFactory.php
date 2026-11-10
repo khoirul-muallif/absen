@@ -19,7 +19,7 @@ class KaryawanFactory extends Factory
             'username' => fn (array $attributes) => Karyawan::generateUsername(
                 $attributes['nama'] ?? fake()->name()
             ),
-            'email'             => $this->faker->unique()->safeEmail(),
+            'email'             => null,
             'password'          => 'password', // otomatis di-hash karena cast 'hashed' di model
             'nomor_telepon'     => '08'.fake()->numerify('##########'),
             'foto_profil'       => null,

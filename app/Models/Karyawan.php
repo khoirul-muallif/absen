@@ -59,7 +59,13 @@ class Karyawan extends Authenticatable
 
     // ── Routing notifikasi ───────────────────────────────────────────────
 
-    public function routeNotificationForMail(): string
+    /**
+     * Null = karyawan tidak punya email. Laravel MailChannel berhenti
+     * sendiri kalau route-nya kosong, jadi notifikasi mail dilewati
+     * tanpa error. Return type sebelumnya `string` — begitu ada satu
+     * karyawan tanpa email, memanggil ini melempar TypeError.
+     */
+    public function routeNotificationForMail(): ?string
     {
         return $this->email;
     }
