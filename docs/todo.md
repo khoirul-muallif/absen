@@ -177,23 +177,6 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
       Butuh fixture .xlsx + `livewire()`. Dicatat 10 Nov 2026.
 
-- [ ] **`riwayat()` 500 kalau ada baris absensi tanpa shift** —
-      `AbsensiController::riwayat()` memanggil `$a->shift->nama_shift` dan
-      `$a->shift->jam_masuk` tanpa null check, padahal `absensi.shift_id`
-      nullable. Perlu dicek: apakah sync Dinas (`status = 'dinas'`) dan
-      baris cuti mengisi `shift_id`? Kalau null, maka setiap karyawan yang
-      pernah cuti atau dinas dalam sebulan membuat
-      `GET /api/absensi/riwayat` untuk bulan itu melempar 500 — bukan
-      menampilkan baris dengan shift kosong. Bukan skenario langka: cuti
-      pasti terjadi.
-
-      Yang perlu dilihat: observer/service yang membuat `Absensi` saat
-      Dinas di-approve, dan yang serupa untuk Cuti. `rekap()` aman (tidak
-      menyentuh relasi shift), jadi kalaupun bug ini nyata, gejalanya cuma
-      di satu endpoint. Catatan: `menitTerlambat()` di model juga memanggil
-      `$this->shift->hitungMenitTerlambat()` di jalur fallback, tapi hanya
-      kalau atribut `menit_terlambat` tidak di-set — jarang. Dicatat
-      10 Nov 2026.
 
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.

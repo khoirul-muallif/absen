@@ -87,6 +87,9 @@ trait HasApprovalWorkflow
             );
 
             $absensi->status = $status;
+            $absensi->shift_id = null;   // ← baris cuti/dinas tidak punya shift,
+                                         //    termasuk kalau sebelumnya sudah ada
+                                         //    baris absen yang shift-nya terisi
             $absensi->waktu_masuk = null;
             $absensi->waktu_pulang = null;
             $absensi->menit_terlambat = 0;

@@ -5,6 +5,98 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 84: riwayat() 500 kalau ada baris absensi tanpa shift
+
+Commit ini. Ditemukan 10 Nov 2026 saat membaca `AbsensiController` untuk
+keperluan lain — bukan dari laporan pengguna, karena belum ada pengguna.
+
+### Masalahnya
+
+`riwayat()` memanggil `$a->shift->nama_shift` dan `$a->shift->jam_masuk`
+tanpa penjagaan, padahal `absensi.shift_id` nullable. Satu baris tanpa
+shift membuat **seluruh endpoint 500 untuk bulan itu** — bukan
+menampilkan satu baris dengan shift kosong.
+
+Dan barisnya bukan hipotetis. Data dummy saja sudah punya 39:
+
+cuti 28
+dinas 11
+
+
+Artinya setiap karyawan yang pernah cuti atau dinas dalam sebulan tidak
+bisa membuka riwayat bulan itu sama sekali. Cuti pasti terjadi.
+
+### Tiga sumber, bukan satu
+
+1. **Cuti/dinas** — `HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi()`
+   memakai `firstOrNew` lalu mengosongkan hampir semua field, tapi tidak
+   pernah menyentuh `shift_id`. Untuk baris baru, nilainya tidak pernah
+   di-set.
+2. **Libur nasional** — `RekapHarian` membuat baris `status = 'libur'`
+   tanpa `shift_id`. Belum muncul di data dummy (rekap belum pernah
+   dijalankan pada tanggal merah), tapi pasti muncul di produksi.
+3. **Baris lama** yang sudah terlanjur ada.
+
+Ketiganya benar secara bisnis — hari cuti memang tidak punya shift. Yang
+salah bukan datanya, tapi pembacanya.
+
+### Bug kedua di sinkronisasi, lebih halus
+
+`firstOrNew` berarti baris yang **sudah ada** ikut dipakai ulang. Kalau
+karyawan sudah absen pagi lalu cutinya di-approve belakangan, `shift_id`
+lama tertinggal — baris berstatus `cuti` dengan shift dari absen yang
+seluruh datanya sudah dihapus.
+
+Tidak menyebabkan 500, tapi tidak konsisten: sebagian baris cuti punya
+shift, sebagian tidak, tergantung urutan kejadian. Diperbaiki dengan
+`$absensi->shift_id = null;` eksplisit.
+
+### Label, bukan strip kosong
+
+`'shift' => $a->shift?->nama_shift ?? $this->labelTanpaShift($a->status)`
+— baris cuti menampilkan "Cuti", dinas "Dinas", dan seterusnya. Karyawan
+yang membuka riwayat di HP lebih terbantu oleh label yang menyebutkan
+alasannya daripada `-` kosong yang tidak menjelaskan apa-apa.
+
+`jam_masuk` tetap `-`: tidak ada jam yang bisa ditampilkan.
+
+### `menitTerlambat()` ikut dijaga
+
+Jalur fallback di model juga memanggil `$this->shift->` tanpa penjagaan.
+Jarang terpicu (hanya kalau atribut `menit_terlambat` tidak di-set), tapi
+`riwayat()` memanggilnya untuk tiap baris, jadi murah dijaga.
+
+### Yang ternyata aman
+
+`rekap()` tidak menyentuh relasi shift sama sekali. `LaporanBulananExport`
+murni agregasi `COUNT`. `LaporanHarianExport` sudah punya
+`$shift ? ... : '-'` sejak fase 56 — jadi masalah ini pernah disadari di
+satu tempat dan tidak di tempat lain. Gejalanya memang cuma di satu
+endpoint, tapi endpoint yang dipakai 150 orang di HP mereka.
+
+### Backfill
+
+`php artisan absensi:backfill-cuti-dinas` dijalankan untuk merapikan baris
+lama: 16 Cuti dan 8 Dinas approved diproses ulang. Baris yang `shift_id`
+sudah null tidak berubah; yang tertinggal ikut dibereskan oleh perbaikan
+di atas.
+
+### Test
+
+10 test. Selain menguji endpoint-nya tidak lagi 500, dua di antaranya
+mengunci **asal-usul** barisnya: bahwa approve cuti memang menghasilkan
+`shift_id` null, dan bahwa baris lama yang shift-nya terisi ikut
+dikosongkan. Tanpa itu, kalau suatu saat sinkronisasi mulai mengisi
+`shift_id`, test endpoint tetap hijau tapi alasannya hilang.
+
+Satu test memastikan perbaikan null-safety tidak diam-diam mengganti
+semua nama shift jadi label status, dan satu lagi menguji bulan bercampur
+— bentuk yang sebenarnya terjadi: sebulan kerja normal dengan beberapa
+hari cuti, bukan bulan yang isinya cuti semua.
+
+694 → 704 test (2000 → 2019 assertions).
+
+---
 ## fase 83: bulk action assign shift & pola rotasi
 
 Commit `37a90c5` + commit ini (test). Pasangan wajib fase 82.

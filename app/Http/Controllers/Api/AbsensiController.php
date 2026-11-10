@@ -325,8 +325,12 @@ class AbsensiController extends Controller
                 'id'           => $a->id,
                 'tanggal'      => $a->tanggal->format('d M Y'),
                 'hari'         => $a->tanggal->locale('id')->isoFormat('dddd'),
-                'shift'        => $a->shift->nama_shift,
-                'jam_masuk'    => $a->shift->jam_masuk->format('H:i'),
+                // Baris cuti/dinas/libur lahir tanpa shift — itu benar secara
+                // bisnis (hari itu memang tidak punya shift), tapi kolomnya
+                // nullable dan sebelumnya dibaca tanpa penjagaan: satu baris
+                // cuti saja membuat seluruh endpoint ini 500 untuk bulan itu.
+                'shift'        => $a->shift?->nama_shift ?? $this->labelTanpaShift($a->status),
+                'jam_masuk'    => $a->shift?->jam_masuk->format('H:i') ?? '-',
                 'waktu_masuk'  => $a->waktu_masuk?->format('H:i') ?? '-',
                 'waktu_pulang' => $a->waktu_pulang?->format('H:i') ?? '-',
                 'durasi'       => $a->durasiMenit() ? $a->durasiMenit() . ' menit' : '-',
@@ -344,6 +348,21 @@ class AbsensiController extends Controller
                 'records' => $absensi,
             ],
         ]);
+    }
+    
+    /**
+     * Label pengganti nama shift untuk baris yang memang tidak punya shift.
+     * Menyebutkan alasannya lebih berguna bagi karyawan daripada "-" kosong.
+     */
+    private function labelTanpaShift(string $status): string
+    {
+        return match ($status) {
+            'cuti'  => 'Cuti',
+            'dinas' => 'Dinas',
+            'libur' => 'Libur',
+            'izin'  => 'Izin',
+            default => '-',
+        };
     }
 
     /**

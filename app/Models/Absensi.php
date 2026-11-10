@@ -102,7 +102,7 @@ class Absensi extends Model
             return (int) $this->menit_terlambat;
         }
 
-        if (! $this->waktu_masuk) {
+        if (! $this->waktu_masuk || ! $this->shift) {
             return 0;
         }
 

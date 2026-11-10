@@ -1,15 +1,18 @@
 <?php
 
 use App\Models\Absensi;
+use App\Models\Cuti;
 use App\Models\Instansi;
 use App\Models\Jadwal;
 use App\Models\Karyawan;
 use App\Models\KaryawanShift;
 use App\Models\QrInstansi;
 use App\Models\Shift;
+use App\Models\User;
 use App\Notifications\AbsenTerlambat;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -862,4 +865,161 @@ it('masuk: karyawan rotasi dengan Jadwal libur ditolak dengan pesan yang jelas, 
         'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Hari ini jadwal Anda libur, tidak perlu absen masuk.');
+});
+
+// ── riwayat() dengan baris tanpa shift (fase 84) ─────────────────────────
+//
+// absensi.shift_id nullable dan ADA ISINYA: baris cuti/dinas lahir dari
+// HasApprovalWorkflow::sinkronisasiJadwalDanAbsensi() yang tidak pernah
+// menyentuh shift_id, dan baris libur nasional dari RekapHarian juga tidak.
+// Sebelum fase 84, riwayat() membaca $a->shift->nama_shift tanpa penjagaan —
+// satu baris cuti saja membuat seluruh endpoint 500 untuk bulan itu.
+
+it('riwayat tidak 500 kalau ada baris cuti tanpa shift', function () {
+    $karyawan = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => null,
+        'tanggal'     => '2026-11-05',
+        'status'      => 'cuti',
+        'waktu_masuk' => null,
+    ]);
+
+    $this->actingAs($karyawan, 'sanctum')
+        ->getJson('/api/absensi/riwayat?bulan=11&tahun=2026')
+        ->assertOk()
+        ->assertJsonPath('data.records.0.shift', 'Cuti')
+        ->assertJsonPath('data.records.0.jam_masuk', '-');
+});
+
+it('riwayat memberi label yang sesuai statusnya untuk baris tanpa shift', function (string $status, string $label) {
+    $karyawan = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => null,
+        'tanggal'     => '2026-11-05',
+        'status'      => $status,
+        'waktu_masuk' => null,
+    ]);
+
+    $this->actingAs($karyawan, 'sanctum')
+        ->getJson('/api/absensi/riwayat?bulan=11&tahun=2026')
+        ->assertOk()
+        ->assertJsonPath('data.records.0.shift', $label);
+})->with([
+    ['cuti', 'Cuti'],
+    ['dinas', 'Dinas'],
+    ['libur', 'Libur'],
+    ['izin', 'Izin'],
+]);
+
+it('riwayat tetap menampilkan nama shift untuk baris kehadiran biasa', function () {
+    // Memastikan perbaikan null-safety tidak diam-diam mengganti semua
+    // nama shift jadi label status.
+    $shift = Shift::factory()->create(['nama_shift' => 'Pagi']);
+    $karyawan = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => $shift->id,
+        'tanggal'     => '2026-11-05',
+        'status'      => 'tepat_waktu',
+    ]);
+
+    $this->actingAs($karyawan, 'sanctum')
+        ->getJson('/api/absensi/riwayat?bulan=11&tahun=2026')
+        ->assertOk()
+        ->assertJsonPath('data.records.0.shift', 'Pagi');
+});
+
+it('riwayat menangani bulan bercampur: baris kehadiran dan baris cuti sekaligus', function () {
+    // Bentuk yang sebenarnya terjadi di produksi — bukan bulan yang isinya
+    // cuti semua, tapi sebulan kerja normal dengan beberapa hari cuti.
+    $shift = Shift::factory()->create(['nama_shift' => 'Pagi']);
+    $karyawan = Karyawan::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => $shift->id,
+        'tanggal'     => '2026-11-03',
+        'status'      => 'tepat_waktu',
+    ]);
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => null,
+        'tanggal'     => '2026-11-04',
+        'status'      => 'cuti',
+        'waktu_masuk' => null,
+    ]);
+
+    $this->actingAs($karyawan, 'sanctum')
+        ->getJson('/api/absensi/riwayat?bulan=11&tahun=2026')
+        ->assertOk()
+        ->assertJsonCount(2, 'data.records');
+});
+
+// ── Sumber barisnya ──────────────────────────────────────────────────────
+
+it('sinkronisasi cuti approved membuat baris absensi tanpa shift', function () {
+    // Mengunci asal-usulnya, bukan cuma gejalanya. Kalau suatu saat
+    // sinkronisasi mulai mengisi shift_id, test riwayat di atas tetap hijau
+    // tapi alasannya hilang.
+    $karyawan = Karyawan::factory()->create();
+    $admin = User::factory()->create();
+
+    $cuti = Cuti::factory()->create([
+        'karyawan_id'     => $karyawan->id,
+        'tanggal_mulai'   => '2026-11-05',
+        'tanggal_selesai' => '2026-11-05',
+        'status'          => 'pending',
+    ]);
+
+    $cuti->approve($admin);
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)
+        ->whereDate('tanggal', '2026-11-05')
+        ->first())
+        ->status->toBe('cuti')
+        ->shift_id->toBeNull();
+});
+
+it('cuti approved mengosongkan shift_id baris absensi yang sudah ada', function () {
+    // Karyawan sudah absen pagi, lalu cutinya di-approve belakangan.
+    // Sebelum fase 84, shift_id lama tertinggal — baris berstatus cuti
+    // dengan shift terisi dari absen yang datanya sudah dihapus.
+    $shift = Shift::factory()->create();
+    $karyawan = Karyawan::factory()->create();
+    $admin = User::factory()->create();
+
+    Absensi::factory()->create([
+        'karyawan_id' => $karyawan->id,
+        'shift_id'    => $shift->id,
+        'tanggal'     => '2026-11-05',
+        'status'      => 'tepat_waktu',
+    ]);
+
+    Cuti::factory()->create([
+        'karyawan_id'     => $karyawan->id,
+        'tanggal_mulai'   => '2026-11-05',
+        'tanggal_selesai' => '2026-11-05',
+        'status'          => 'pending',
+    ])->approve($admin);
+
+    expect(Absensi::where('karyawan_id', $karyawan->id)
+        ->whereDate('tanggal', '2026-11-05')
+        ->first()->shift_id)->toBeNull();
+});
+
+it('menitTerlambat mengembalikan 0 untuk baris tanpa shift', function () {
+    // Jalur fallback di model juga memanggil $this->shift-> tanpa penjagaan.
+    // Jarang terpicu, tapi riwayat() memanggilnya untuk TIAP baris.
+    $absensi = new Absensi([
+        'status'      => 'cuti',
+        'waktu_masuk' => null,
+    ]);
+
+    expect($absensi->menitTerlambat())->toBe(0);
 });
