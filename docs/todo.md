@@ -27,6 +27,33 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
 
 ## Kebutuhan masukan dari pihak RS
 
+- [ ] **Aturan masa kerja untuk hak cuti belum ada di kode** — pihak RS
+      menyebut (10 Nov 2026) bahwa cuti baru didapat setelah bekerja satu
+      tahun. Tidak ada satu pun bagian sistem yang menjalankan aturan itu:
+      `kuota_cutis` berisi karyawan_id, jenis_cuti_id, tahun, semester,
+      kuota, terpakai — tidak ada yang merujuk masa kerja, dan
+      `tanggal_bergabung` di KaryawanForm cuma DatePicker tanpa konsekuensi.
+
+      Dugaan (BELUM diverifikasi): karyawan yang baru sebulan tetap bisa
+      mengajukan cuti tahunan dan sistem meluluskannya, asalkan kuotanya
+      sudah digenerate.
+
+      Yang perlu diperiksa: perintah/seeder yang membuat KuotaCuti — apakah
+      dia menyaring berdasarkan tanggal_bergabung? Lalu CutiController /
+      validasi pengajuan — apakah ada cek masa kerja?
+
+      Pertanyaan untuk pihak RS sebelum menulis kode:
+      - "Setahun" dihitung dari tanggal_bergabung ke tanggal pengajuan,
+        atau karyawan baru dapat kuota penuh di tahun berikutnya?
+      - Apakah berlaku untuk semua jenis cuti atau cuti tahunan saja?
+        (Cuti sakit dan melahirkan biasanya tidak menunggu setahun.)
+      - Karyawan kontrak/magang: beda aturan?
+
+      Konsekuensi ke import Excel: `tanggal_bergabung` DIPERTAHANKAN di
+      template justru karena ini. Mengeluarkannya berarti 150 karyawan masuk
+      tanpa tanggal, dan saat aturan ini dibuat tidak ada data untuk
+      menjalankannya. Dicatat 10 Nov 2026.
+
 - [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
       membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU).
       Belum tentu realistis (Rawat Inap biasanya butuh lebih banyak staf

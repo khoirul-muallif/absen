@@ -45,7 +45,7 @@ class KaryawanTemplatePetunjukSheet implements FromArray, WithTitle, WithHeading
             ['tipe_jadwal', 'Wajib', 'Pilih dari dropdown. umum = jadwal tetap lewat penugasan shift. rotasi = jadwal harian dari pola siklus. TIDAK ditebak dari unit atau jabatan — harus diisi sadar.', 'umum'],
             ['unit_kerja', 'Wajib untuk rotasi', 'Harus sama PERSIS dengan unit pada Pola Rotasi, kalau tidak karyawan rotasi tidak bisa di-assign pola apa pun. Unit baru boleh, tapi akan ditandai peringatan saat pratinjau. ' . $daftarUnit, 'IGD'],
             ['jabatan', 'Boleh kosong', 'Posisi karyawan di unitnya.', 'Pelaksana'],
-            ['tanggal_bergabung', 'Boleh kosong', 'Format YYYY-MM-DD. Tidak boleh tanggal di masa depan. Kolom ini diformat sebagai teks — jangan diubah jadi format tanggal Excel.', '2026-01-15'],
+            ['tanggal_bergabung', 'Sebaiknya diisi', 'Diterima: 2024-12-12, 12/12/2024, atau 12 Desember 2024. Format berangka dibaca HARI dulu — 12/01/2024 berarti 12 Januari. Dipakai untuk menghitung masa kerja (hak cuti tahunan).', '12 Desember 2024'],
             ['', '', '', ''],
             ['CATATAN', '', 'Instansi TIDAK ada di template. Dipilih sekali di layar import, berlaku untuk semua baris.', ''],
             ['', '', 'Password tidak ada di template. Semua karyawan hasil import mendapat password default yang sama, dan admin bisa meresetnya per orang lewat tombol Reset Password.', ''],
