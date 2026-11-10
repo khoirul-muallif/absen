@@ -5,6 +5,140 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 83: bulk action assign shift & pola rotasi
+
+Commit `37a90c5` + commit ini (test). Pasangan wajib fase 82.
+
+### Kenapa ini harus ada bersama import
+
+Import sendirian menghasilkan 150 karyawan tanpa shift. Tanpa bulk action,
+admin tetap assign 150 kali — masalah yang justru mau dihilangkan, cuma
+pindah tempat.
+
+Dua action terpisah, bukan satu bercabang: umum dan rotasi punya masukan
+berbeda (shift vs pola), validasi berbeda, dan cuma rotasi yang butuh
+stagger. Modal bercabang akan lebih sulit dibaca daripada dua action yang
+masing-masing lurus.
+
+### Stagger anchor — inti seluruh fase ini
+
+`karyawan_pola_rotasis.tanggal_mulai` adalah satu-satunya hal yang
+membedakan karyawan dalam satu unit sejak redesign fase 65, dan yang
+menentukan jadwal 24/7 benar-benar tertutup. Kalau semua orang di ICU
+punya anchor sama, mereka semua masuk shift yang sama di hari yang sama
+dan tidak ada yang jaga malam.
+
+Itu sebabnya anchor tidak boleh jadi kolom Excel di fase 82: admin akan
+mengisi tanggal yang sama untuk semua orang atau tanggal bergabung
+masing-masing, dan **tidak ada satu baris pun yang bisa divalidasi sebagai
+salah** karena tiap baris valid sendiri-sendiri. Rusaknya baru kelihatan
+sebulan kemudian waktu generate rotasi menghasilkan shift malam kosong.
+Penyebaran anchor itu perhitungan, bukan entri data.
+
+### Arah stagger: mundur, bukan maju
+
+`KaryawanPolaRotasi::posisiSiklusPada()` menghitung
+`diffInDays(tanggal_mulai -> tanggal)` dengan tanda — jadi anchor lebih
+awal berarti posisi lebih maju.
+
+```php
+$anchor = $tanggalMulai->copy()->subDays($urutan % $panjangSiklus);
+```
+
+Kalau arahnya dibalik jadi `addDays`, `berlakuPada()` menolak orang ke-n
+selama n hari pertama dan generator melewatinya diam-diam — sementara
+sebaran di pratinjau tetap terlihat merata. Arah mundur juga kebetulan
+aman untuk `berlakuPada()`: semua anchor jatuh pada atau sebelum tanggal
+yang dipilih admin.
+
+Urutan stagger memakai `id`: deterministik, dan untuk karyawan hasil
+import berarti urutan baris di file Excel. Urutan `nama` terlihat lebih
+netral tapi mengelompokkan orang berdasarkan abjad, yang tidak ada
+hubungannya dengan apa pun.
+
+### Diverifikasi dengan menjalankan generator, bukan melihat pratinjau
+
+Pratinjau yang merata belum membuktikan apa-apa — orang bisa tersebar rata
+tapi berada di langkah yang bukan seharusnya.
+
+php artisan jadwal:generate-rotasi 12 2026 --unit=IGD
+
+
+Hasilnya 10/10/10/10 (pagi/siang/malam/libur) **persis setiap hari**,
+tujuh hari berturut-turut, pada bulan yang benar-benar baru digenerate.
+Itu bukti yang dicari.
+
+Catatan: menjalankan untuk November menghasilkan 0 dibuat, 1200 dilewati —
+baris November sudah ada dari seeder dan generator tidak menimpa tanpa
+`--overwrite-generate`. Jadi angka November bukan hasil assignment ini.
+
+### Pratinjau di modal yang sama
+
+Bukan modal kedua seperti import. Begitu admin memilih pola, pratinjau
+muncul di bawahnya dan ikut berubah kalau pilihannya diganti.
+
+Konsekuensinya: tidak ada state di properti Livewire, dihitung ulang tiap
+render dari pilihan yang sedang aktif, jadi tidak ada yang bisa basi.
+Sekaligus menghindari `replaceMountedAction` yang untuk bulk action punya
+nama berbeda lagi — fase 82 sudah kena sekali.
+
+`PerencanaAssignment` dipakai pratinjau **dan** eksekusi. Kalau keduanya
+menghitung sendiri-sendiri, admin melihat satu hal lalu mendapat hal lain.
+
+Yang ditampilkan: jumlah yang akan di-assign, **sebaran per langkah**
+(itu yang sebenarnya ingin dilihat admin — apakah malam terisi), anchor
+tiap orang, dan daftar yang dilewati beserta alasannya.
+
+### Assignment yang sudah ada: ditolak, bukan ditimpa
+
+Tiga pilihan dipertimbangkan: tolak, tutup-yang-lama-otomatis, atau
+lewati diam-diam. Dipilih tolak.
+
+Menutup otomatis lebih canggih tapi membuat bulk action bisa mengubah
+riwayat 40 orang sekaligus, dan ini fitur yang dipakai beberapa kali
+seumur hidup aplikasi. Menolak lalu menyuruh admin melepas manual jauh
+lebih mudah dipahami daripada penutupan otomatis yang salah tanggal.
+
+### Penolakan lain
+
+- Tipe jadwal tidak cocok. Bulk action memilih baris apa adanya — admin
+  bisa mencentang campuran umum dan rotasi. Kalau diloloskan, hasilnya
+  anomali yang guard fase 18 anggap mustahil, dan
+  `karyawan:cek-tipe-jadwal` (fase 13) baru menemukannya belakangan.
+- Instansi berbeda. Dua instansi bisa sama-sama punya shift "Pagi".
+- Unit kerja tidak sama persis, termasuk kapitalisasi (fase 33). Terbukti
+  menolak karyawan ber-unit `igd` dari pola `IGD`; pesannya menyebut kedua
+  ejaan supaya admin tahu persis apa yang salah.
+- Pola tanpa langkah. `minItems(1)` cuma berlaku di form, jadi seeder atau
+  insert langsung bisa membuatnya; tanpa guard, modulo nol melempar
+  `DivisionByZeroError` di tengah pratinjau.
+
+Karyawan yang ditolak **tidak menggeser posisi** karyawan berikutnya —
+`$urutan` cuma naik untuk yang lolos. Kalau ikut naik, akan ada posisi
+yang bolong dan sebarannya pincang.
+
+Untuk karyawan umum, `tanggal_bergabung` dipakai kalau lebih lambat dari
+tanggal yang dipilih: assignment tidak boleh berlaku sebelum orangnya
+bekerja.
+
+### Test
+
+16 test di `PerencanaAssignmentTest`, menyasar `PerencanaAssignment`
+langsung, bukan modal Filament — di situlah seluruh keputusannya berada,
+dan dia murni fungsi. Karena pratinjau dan eksekusi dua-duanya memanggil
+kelas ini, menguncinya mengunci keduanya sekaligus.
+
+Yang paling berharga: *"anchor hasil stagger menghasilkan posisi siklus
+yang benar"* — anchor yang ditulis perencana, dibaca balik oleh
+`posisiSiklusPada()` milik model, harus menghasilkan posisi yang
+dijanjikan pratinjau. Dua perhitungan terpisah yang harus sepakat, dan
+persis tempat bug arah akan bersembunyi.
+
+678 → 694 test (1966 → 2000 assertions).
+
+Yang belum diuji: modal Filament dan bulk action-nya sendiri.
+
+---
 
 ## fase 82: import karyawan massal dari Excel
 

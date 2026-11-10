@@ -103,6 +103,13 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       `AbsenTerlambat`/`BelumAbsen`. Ditemukan 9 Nov 2026.
 
 ## Fitur & infrastruktur
+- [ ] **Bulk action assignment belum punya test modal** — fase 83 punya 16
+      test untuk `PerencanaAssignment` (seluruh logika keputusan), tapi dua
+      bulk action Filament-nya sendiri belum pernah diuji: apakah modal
+      terbuka, apakah pratinjau ikut berubah saat pilihan diganti, apakah
+      `getSelectedTableRecords()` mengembalikan yang dicentang, dan apakah
+      transaksi benar-benar menulis. Butuh `livewire()` +
+      `callTableBulkAction()`. Dicatat 10 Nov 2026.
 
 - [ ] **`AbsenTerlambat::toMail()` sudah jadi kode mati** sejak fase 81
       mencabut 'mail' dari `via()`. Dibiarkan sengaja supaya keputusan itu
