@@ -7,6 +7,7 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Infolists\Components\ImageEntry;
 
 class InstansiInfolist
 {
@@ -27,6 +28,11 @@ class InstansiInfolist
                             ->helperText('Dikirim ke aplikasi mobile lewat endpoint profil. TIDAK dipakai untuk pemindaian QR — itu memakai kode QR tersendiri.'),
                         TextEntry::make('telepon')
                             ->placeholder('-'),
+                        ImageEntry::make('logo')
+                            ->label('Logo')
+                            ->disk('public')
+                            ->height(60)
+                            ->placeholder('Belum ada logo'),
                         IconEntry::make('is_active')
                             ->label('Aktif')
                             ->boolean(),

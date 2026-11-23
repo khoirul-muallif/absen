@@ -20,6 +20,7 @@ class Instansi extends Model
         'radius_meter',
         'alamat',
         'telepon',
+        'logo',
         'is_active',
     ];
 

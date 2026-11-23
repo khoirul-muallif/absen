@@ -9,6 +9,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Forms\Components\FileUpload;
 use Filament\Schemas\Schema;
 
 class InstansiForm
@@ -53,6 +54,18 @@ class InstansiForm
                             ->placeholder('024-xxxxxxx')
                             ->tel()
                             ->maxLength(20),
+                            
+                        FileUpload::make('logo')
+                            ->label('Logo Instansi')
+                            ->image()
+                            ->disk('public')
+                            // Samakan dengan foto_profil karyawan: disk
+                            // public, path relatif tersimpan di DB, URL
+                            // dirakit di API pakai asset('storage/'.$path).
+                            ->directory('logo-instansi')
+                            ->maxSize(1024)
+                            ->imagePreviewHeight('80')
+                            ->helperText('PNG atau JPG, maksimal 1 MB. Tampil di layar aplikasi karyawan.'),
 
                         Textarea::make('alamat')
                             ->label('Alamat Lengkap')

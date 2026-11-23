@@ -54,6 +54,9 @@ class AuthController extends Controller
                     'instansi' => [
                         'id'   => $karyawan->instansi->id,
                         'nama' => $karyawan->instansi->nama,
+                        'logo' => $karyawan->instansi->logo
+                            ? asset('storage/' . $karyawan->instansi->logo)
+                            : null,
                     ],
                 ],
             ],
@@ -153,6 +156,9 @@ class AuthController extends Controller
                     'id'            => $karyawan->instansi->id,
                     'nama'          => $karyawan->instansi->nama,
                     'kode_instansi' => $karyawan->instansi->kode_instansi,
+                    'logo'          => $karyawan->instansi->logo
+                        ? asset('storage/' . $karyawan->instansi->logo)
+                        : null,
                 ],
                 'shift_aktif' => $shiftAktif ? [
                     'nama_shift' => $shiftAktif->shift->nama_shift,

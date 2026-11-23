@@ -16,7 +16,7 @@
 
 ## Master data
 
-**instansi** — nama, kode_instansi (unique), latitude/longitude, radius_meter (default 100), alamat, telepon, is_active
+**instansi** — nama, kode_instansi (unique), latitude, longitude, radius_meter, alamat (nullable), telepon (nullable), logo (nullable), is_active
 
 **qr_instansi** — instansi_id, kode_qr (unique), is_active, expired_at (null = permanen)
 

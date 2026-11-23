@@ -250,3 +250,27 @@ it('menolak ubah password tanpa token', function () {
         'password_confirmation' => 'rahasiaBaru456',
     ])->assertUnauthorized();
 });
+
+it('mengirim URL logo instansi kalau ada', function () {
+    $instansi = Instansi::factory()->create(['logo' => 'logo-instansi/rs.png']);
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $instansi->id]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/auth/me')
+        ->assertOk()
+        // URL penuh, bukan path mentah — FE memasangnya langsung ke
+        // NetworkImage tanpa merakit apa pun.
+        ->assertJsonPath('data.instansi.logo', asset('storage/logo-instansi/rs.png'));
+});
+
+it('mengirim logo null kalau instansi belum punya logo', function () {
+    $instansi = Instansi::factory()->create(['logo' => null]);
+    $karyawan = Karyawan::factory()->create(['instansi_id' => $instansi->id]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/auth/me')
+        ->assertOk()
+        ->assertJsonPath('data.instansi.logo', null);
+});
