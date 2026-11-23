@@ -70,6 +70,51 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Ganti password sendiri dari aplikasi.
+     *
+     * Password lama WAJIB dikirim: tanpa itu, token yang bocor cukup untuk
+     * mengambil alih akun secara permanen.
+     *
+     * Token tidak disentuh. login() sudah menghapus semua token lama tiap
+     * kali login, jadi tidak pernah ada sesi lain yang perlu dicabut.
+     */
+    public function ubahPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'password_lama' => 'required|string',
+            'password'      => 'required|string|min:8|confirmed',
+        ], [
+            'password.confirmed' => 'Konfirmasi password tidak cocok.',
+            'password.min'       => 'Password baru minimal 8 karakter.',
+        ]);
+
+        $karyawan = $request->user();
+
+        if (! Hash::check($request->password_lama, $karyawan->password)) {
+            throw ValidationException::withMessages([
+                'password_lama' => ['Password lama salah.'],
+            ]);
+        }
+
+        if (Hash::check($request->password, $karyawan->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['Password baru harus berbeda dari password lama.'],
+            ]);
+        }
+
+        // String mentah, BUKAN Hash::make(). Kolom password punya cast
+        // 'hashed' — hash manual di sini menghasilkan hash ganda dan
+        // mengunci karyawan di luar aplikasi (CHANGELOG fase 78).
+        $karyawan->password = $request->password;
+        $karyawan->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password berhasil diubah.',
+        ]);
+    }
+
     public function me(Request $request): JsonResponse
     {
         $karyawan = $request->user()->load('instansi');

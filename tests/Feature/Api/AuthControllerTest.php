@@ -132,3 +132,121 @@ it('mengembalikan data karyawan yang sedang login lewat /me', function () {
 it('menolak akses /me tanpa token', function () {
     $this->getJson('/api/auth/me')->assertUnauthorized();
 });
+
+
+// ── Ubah Password ──────────────────────────────────────────────────────
+
+it('bisa mengganti password sendiri', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'rahasiaBaru456',
+        ])
+        ->assertOk()
+        ->assertJsonPath('success', true);
+
+    expect(Hash::check('rahasiaBaru456', $karyawan->fresh()->password))->toBeTrue();
+});
+
+it('password baru benar-benar bisa dipakai login, bukan hash ganda', function () {
+    $karyawan = Karyawan::factory()->create([
+        'username'  => 'budi',
+        'password'  => Hash::make('rahasia123'),
+        'is_active' => true,
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'rahasiaBaru456',
+        ])->assertOk();
+
+    // Inti test ini: hash ganda lolos Hash::check() di atas kalau yang
+    // dicek nilai yang salah, tapi TIDAK pernah lolos login sungguhan.
+    $this->postJson('/api/auth/login', [
+        'username' => 'budi',
+        'password' => 'rahasiaBaru456',
+    ])->assertOk();
+});
+
+it('menolak ubah password kalau password lama salah', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'bukan-ini',
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'rahasiaBaru456',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('password_lama');
+
+    expect(Hash::check('rahasia123', $karyawan->fresh()->password))->toBeTrue();
+});
+
+it('menolak kalau konfirmasi password tidak cocok', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'beda-sendiri',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('password');
+});
+
+it('menolak password baru kurang dari 8 karakter', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'pendek',
+            'password_confirmation' => 'pendek',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('password');
+});
+
+it('menolak password baru yang sama dengan password lama', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'rahasia123',
+            'password_confirmation' => 'rahasia123',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('password');
+});
+
+it('menolak ubah password tanpa token', function () {
+    $this->postJson('/api/auth/ubah-password', [
+        'password_lama'         => 'rahasia123',
+        'password'              => 'rahasiaBaru456',
+        'password_confirmation' => 'rahasiaBaru456',
+    ])->assertUnauthorized();
+});
