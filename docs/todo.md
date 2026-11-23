@@ -228,12 +228,24 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       tertua 5 hari). Butuh filter umur, bukan sekadar status — itu
       sebabnya sengaja tidak dimasukkan ke badge. Dicatat 9 Nov 2026.
 
-- [ ] **Fitur ganti email & password** — endpoint belum ada; cek dulu
-      `AuthController`. Pasangannya di FE juga belum ada (menu
-      "Profil"/"Ubah Password" masih placeholder snackbar), jadi tiga
-      hal saling menunggu: endpoint, layar FE, dan "paksa ganti password
-      setelah reset admin" (fase 78) yang baru masuk akal kalau layar
-      itu ada. Yang memutus simpulnya: kerjakan FE-nya.
+- [ ] **Paksa ganti password setelah reset admin** — sekarang simpulnya
+      sudah putus: endpoint `POST /api/auth/ubah-password` ada (fase 86)
+      dan layar FE ada (`e2ff9b3`). Tinggal kolom `harus_ganti_password`
+      + guard di `AuthController`. JANGAN digarap sebelum layar FE-nya
+      terbukti jalan di device — tanpa itu, memaksa ganti justru
+      mengunci karyawan di luar aplikasi. Butuh migration, jadi
+      `SCHEMA.md` ikut di-update.
+
+- [ ] **`min:8` belum diadu dengan password default admin** — endpoint
+      ubah password mewajibkan minimal 8 karakter, tapi password default
+      yang dipakai reset admin (fase 78) belum dicek panjangnya. Kalau
+      di bawah 8, karyawan yang baru di-reset punya password lebih lemah
+      daripada yang boleh dia pilih sendiri. Tidak merusak apa pun,
+      cuma janggal. Dicatat 23 Nov 2026.
+
+- [ ] **Nama test usang di `AuthControllerTest`** — "bisa login dengan
+      email dan password yang benar", isinya login pakai `username`.
+      Sisa dari sebelum pindah ke username (fase 79). Dicatat 23 Nov 2026.
 
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware

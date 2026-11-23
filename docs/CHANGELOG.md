@@ -5,6 +5,56 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 86: endpoint ganti password sendiri
+
+Satu commit, `f3eacf8`.
+
+`POST /api/auth/ubah-password`, di belakang `auth:sanctum`.
+
+Memutus simpul tiga hal yang saling menunggu sejak fase 78: endpoint,
+layar FE, dan "paksa ganti password setelah reset admin" — yang terakhir
+baru masuk akal kalau dua yang pertama ada. `todo.md` sudah menyimpulkan
+yang memutusnya adalah mengerjakan FE-nya, dan itu yang dilakukan hari
+yang sama (`e2ff9b3` di repo frontend).
+
+### Scope dipersempit jadi password saja
+
+"Ganti email" dibuang. Email tidak dipakai untuk login (username sejak
+fase 79), tidak dipakai untuk reset (ditolak fase 78), tidak dipakai
+untuk notifikasi, dan sejak fase 81 nullable karena ~110 dari 150
+karyawan RS tidak punya. Mengedit field yang tidak melakukan apa-apa
+bukan fitur.
+
+### Yang dijaga
+
+Password lama WAJIB dikirim dan dicek `Hash::check()`. Tanpa itu, token
+yang bocor cukup untuk mengambil alih akun secara permanen — dan karena
+`login()` menghapus semua token lama tiap login, korban tidak punya cara
+melihat ada sesi lain.
+
+Password baru `min:8`, `confirmed`, dan ditolak kalau sama dengan yang
+lama supaya karyawan tidak mengira sudah mengganti padahal tidak.
+
+Disimpan sebagai string mentah. Kolom `password` punya cast `'hashed'`;
+`Hash::make()` manual menghasilkan hash ganda dan mengunci karyawan di
+luar aplikasi — risiko yang sama yang sudah dicatat di fase 78.
+
+Token tidak disentuh: tidak pernah ada sesi lain untuk dicabut.
+
+Tidak ada migration — menulis ke kolom yang sudah ada, `SCHEMA.md` tidak
+berubah.
+
+### Test
+
+**724 passed (2083 assertions)**, naik 7. `AuthControllerTest` 8 → 15.
+
+Yang sebenarnya menjaga bukan test `Hash::check()`, tapi test yang
+benar-benar memanggil `/api/auth/login` dengan password baru: hash ganda
+bisa lolos pemeriksaan yang salah arah, tapi tidak pernah lolos login
+sungguhan. Tiga test penolakan pakai `assertJsonValidationErrors`, bukan
+`assertUnprocessable()` saja — endpoint ini punya empat sebab penolakan,
+dan assert 422 polos bisa hijau karena sebab yang salah (fase 26).
+
 ## fase 85: kunci kontrak `tipe` & `aksi` notifikasi
 
 Commit ini. Tindak lanjut temuan 9 Nov.
