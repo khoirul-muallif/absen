@@ -6,24 +6,33 @@
 
 ## Prioritas
 
-**Backend sudah jauh lebih solid.** Review UX 17 Filament Resource (fase
-25–36), Laporan Presensi (fase 56), simulasi rotasi 24/7 (fase 65),
-TukarJadwal × rotasi beda tanggal (fase 71–73), notifikasi TukarJadwal
-(fase 74), modul Informasi (fase 75), badge pengajuan menunggu (fase 77),
-login username (fase 79), terjemahan validasi (fase 80), email nullable (fase 81), import karyawan Excel (fase 82) — semuanya
+**Backend solid.** Review UX 17 Filament Resource (fase 25–36), Laporan
+Presensi (fase 56), simulasi rotasi 24/7 (fase 65), TukarJadwal × rotasi
+beda tanggal (fase 71–73), notifikasi TukarJadwal (fase 74), modul
+Informasi (fase 75), badge pengajuan menunggu (fase 77), login username
+(fase 79), terjemahan validasi (fase 80), email nullable (fase 81),
+import karyawan Excel (fase 82), bulk action assignment (fase 83),
+riwayat() tanpa shift (fase 84), kunci kontrak notifikasi (fase 85),
+ganti password sendiri (fase 86), logo instansi (fase 87) — semuanya
 SELESAI, detail di CHANGELOG.
 
-**Fokus berikutnya: frontend.** Ada DUA blocker rilis di FE yang lahir
-dari pekerjaan backend 9 Nov, keduanya bikin aplikasi tidak bisa dipakai
-sama sekali kalau tidak digarap (lihat `todo-fr.md` di repo frontend):
-1. LoginScreen masih mengirim `email` — tidak ada karyawan yang bisa
-   masuk setelah backend fase 79 dideploy.
-2. NotifikasiScreen belum mengenal `tipe: 'tukar_jadwal'` — notifikasi
-   fase 74 bisa bikin ikon kosong atau crash.
+**Dua blocker rilis FE yang dicatat di sini sudah ditutup 20 Nov 2026**
+(LoginScreen `username`, NotifikasiScreen `tipe: 'tukar_jadwal'`).
+Tidak ada lagi yang memblokir deploy dari sisi FE.
+
+**Yang tersisa di FE** adalah penyempurnaan, dan per 23 Nov 2026 ada
+enam hal yang sudah ditulis tapi BELUM pernah dijalankan di perangkat —
+lihat `status-23-11-26.md` di repo frontend. Verifikasi itu dulu sebelum
+menambah modul baru.
+
+**Prasyarat deploy pertama** masih tiga langkah, bukan dua: import
+karyawan (fase 82) → bulk action assignment (fase 83) →
+`jadwal:generate-rotasi` khusus rotasi. Lihat item di bawah.
 
 Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
-TukarJadwal, `is_cuti_bersama`) butuh masukan dari pihak RS, bukan kerja
-teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
+TukarJadwal, `is_cuti_bersama`, aturan masa kerja cuti) butuh masukan
+dari pihak RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa
+pun yang dipilih.
 
 ## Kebutuhan masukan dari pihak RS
 
@@ -93,6 +102,13 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
 
 ## Fitur & infrastruktur
+
+- [ ] **`logo` instansi tidak dibersihkan saat diganti** — FileUpload
+      menyimpan file baru tapi yang lama tetap menumpuk di
+      `storage/app/public/logo-instansi`. Masalah yang sama kemungkinan
+      ada di `foto_profil` karyawan. Kecil selama cuma satu instansi, tapi
+      catat sebelum lupa. Dicatat 23 Nov 2026.
+
 - [ ] **Bulk action assignment belum punya test modal** — fase 83 punya 16
       test untuk `PerencanaAssignment` (seluruh logika keputusan), tapi dua
       bulk action Filament-nya sendiri belum pernah diuji: apakah modal
@@ -105,42 +121,19 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       mencabut 'mail' dari `via()`. Dibiarkan sengaja supaya keputusan itu
       murah dibalik. Hapus kalau sudah yakin tidak akan dikembalikan.
 
-- [ ] **Bulk action assignment shift & pola rotasi di panel admin** —
-      pasangan wajib import Excel (fase 82). Import sendirian menghasilkan
-      150 karyawan tanpa shift; dua-duanya harus ada sebelum deploy pertama.
+- [ ] **Filter "tidak bisa absen hari ini" di daftar karyawan** — sisa dari
+      item bulk action yang ditutup fase 83. Bulk action-nya sendiri sudah
+      ada, termasuk stagger anchor dan semua penolakannya; yang belum:
+      cara admin MELIHAT siapa yang masih tertinggal.
 
-      Kenapa bukan kolom di template (diputuskan 10 Nov 2026): assignment
-      homogen per unit, bukan per orang. Karyawan umum praktis cuma pakai
-      1–2 shift jam kantor (dikonfirmasi pihak RS), dan karyawan rotasi satu
-      unit memakai SATU pola yang sama sejak fase 65. Jadi 150 assignment
-      sebetulnya ~3 operasi, dan 150 sel Excel untuk 3 nilai berbeda cuma
-      menambah tempat salah ketik.
-
-      Untuk rotasi ada alasan kedua yang lebih keras:
-      `karyawan_pola_rotasis.tanggal_mulai` adalah anchor siklus — satu-
-      satunya hal yang membedakan karyawan dalam satu unit, dan yang
-      menentukan jadwal 24/7 benar-benar tertutup. Kalau diisi tangan, admin
-      akan mengisi tanggal yang sama untuk semua orang; itu salah, dan TIDAK
-      ADA satu baris pun yang bisa divalidasi sebagai salah karena tiap baris
-      valid sendiri-sendiri. Rusaknya baru kelihatan sebulan kemudian waktu
-      generate rotasi menghasilkan shift malam kosong. Stagger anchor itu
-      perhitungan (offset per indeks dalam unit), bukan entri data.
-
-      - Umum: pilih karyawan → pilih shift → satu baris `karyawan_shift` per
-        orang, `tanggal_berlaku` = `tanggal_bergabung`, `tanggal_berakhir` null
-      - Rotasi: pilih karyawan satu unit → pilih pola → anchor di-stagger
-        otomatis. Pola harus cocok `unit_kerja` karyawan (fase 33)
-      - Lookup shift/pola di-scope ke instansi — dua instansi bisa sama-sama
-        punya shift "Pagi"
-
-      PRASYARAT DEPLOY ADA TIGA LANGKAH, bukan dua.
+      Prasyarat deploy pertama ada TIGA langkah, bukan dua.
       `AbsensiController::masuk()` langkah 5 membaca `KaryawanShift` dulu,
       lalu fallback ke baris `Jadwal` hari ini — BUKAN ke
       `KaryawanPolaRotasi`. Jadi untuk rotasi, punya baris
       `karyawan_pola_rotasis` belum cukup:
 
       1. Import karyawan (fase 82, SELESAI)
-      2. Bulk action assignment (item ini)
+      2. Bulk action assignment (fase 83, SELESAI)
       3. `jadwal:generate-rotasi` — khusus rotasi, setelah langkah 2
 
       Karyawan rotasi yang berhenti di langkah 2 tetap tidak bisa absen,
@@ -148,14 +141,15 @@ teknis — bisa ditanyakan paralel dengan apa pun yang dipilih.
       ("Tidak ada shift aktif untuk hari ini") — admin tidak punya cara
       membedakan keduanya.
 
-      Karena itu filter di daftar karyawan bukan "tanpa assignment" (itu
-      meloloskan rotasi yang polanya ada tapi jadwalnya belum digenerate),
-      melainkan **"tidak bisa absen hari ini"**: tidak punya `KaryawanShift`
-      aktif DAN tidak punya baris `Jadwal` hari ini. Salin persis kondisi di
-      langkah 5 controller supaya filter tidak bisa menyimpang dari
-      kenyataan. Tampilkan juga hitungannya setelah import selesai, supaya
-      langkah 2 tidak bisa terlupa diam-diam.
+      Karena itu filternya bukan "tanpa assignment" (itu meloloskan rotasi
+      yang polanya ada tapi jadwalnya belum digenerate), melainkan **"tidak
+      bisa absen hari ini"**: tidak punya `KaryawanShift` aktif DAN tidak
+      punya baris `Jadwal` hari ini. Salin persis kondisi di langkah 5
+      controller supaya filter tidak bisa menyimpang dari kenyataan.
 
+      Tampilkan juga hitungannya setelah import selesai, supaya langkah 2
+      dan 3 tidak bisa terlupa diam-diam.
+      
 - [ ] **Bagian import yang masih tidak diuji** — fase 82 punya 26 test untuk
       aturan validasi (`KaryawanImportTest`), tapi semuanya memanggil
       `collection()` langsung dengan Collection buatan. Yang belum pernah

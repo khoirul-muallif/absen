@@ -5,6 +5,44 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 87: logo instansi
+
+Satu commit, `bd514e0`.
+
+Kolom `logo` (string, nullable) di tabel `instansi`, `FileUpload` di
+`InstansiForm`, `ImageEntry` di `InstansiInfolist`, dan `instansi.logo`
+ikut dikirim di `login()` serta `me()` sebagai URL penuh lewat
+`asset('storage/'...)`.
+
+Nullable karena instansi yang sudah ada tidak punya logo — memaksanya
+berarti migration gagal di data yang sudah jalan. Disk `public` dengan
+directory `logo-instansi`, mengikuti pola `foto_profil` karyawan: path
+relatif tersimpan di DB, URL dirakit di API.
+
+### Keputusan di sisi FE yang membentuk ini
+
+LoginScreen dan SplashScreen tampil sebelum ada yang login, jadi aplikasi
+belum punya token. Tiga jalan dipertimbangkan; dipilih **menyimpan
+identitas instansi secara lokal setelah login pertama**, bukan endpoint
+publik — walau jawaban "selamanya satu instansi" sebenarnya membuat
+endpoint publik sah.
+
+Alasannya: endpoint publik tanpa cara memilih instansi memaksa asumsi
+instansi tunggal masuk ke API, asumsi yang justru ingin dihindari. Karena
+itu **tidak ada endpoint baru di fase ini** — logo cukup menumpang
+response `login()` dan `me()` yang sudah ada.
+
+### Test
+
+**726 passed (2087 assertions)**, naik 2. `AuthControllerTest` 15 → 17.
+
+Yang menjaga adalah test kedua: `logo` harus `null`, bukan URL, saat
+instansi belum punya logo. `asset(null)` mengembalikan URL ke root
+storage — lolos tanpa ketahuan, dan bikin FE menampilkan ikon gambar
+rusak alih-alih placeholder.
+
+`SCHEMA.md` ikut diperbarui.
+
 ## fase 86: endpoint ganti password sendiri
 
 Satu commit, `f3eacf8`.
