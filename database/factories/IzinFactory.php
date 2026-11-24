@@ -13,7 +13,8 @@ class IzinFactory extends Factory
             'karyawan_id' => Karyawan::factory(),
             'tanggal' => now()->addDay()->toDateString(),
             'jam_keluar' => '10:00:00',
-            'jam_kembali' => '12:00:00',
+            'jam_kembali_rencana' => '12:00:00',
+            'jam_kembali_aktual'  => null,
             'keperluan' => $this->faker->sentence(),
             'status' => 'pending',
         ];

@@ -128,6 +128,12 @@ Checklist yang gampang terlewat:
    tersimpan sejak fase 9, jadi SEMUA baris lama salah di kolom itu.
 2. Backfill `KuotaCuti.terpakai` (di bawah) kalau ada Cuti approved dari
    sebelum fase 42.
+3. `php artisan storage:link` — WAJIB, dan tidak otomatis. Tanpa ini
+      semua gambar dari disk `public` (logo instansi, foto profil
+      karyawan) gagal dimuat tanpa pesan error apa pun: request sampai ke
+      server, Laravel mencatatnya, lalu membalas 404. FE jatuh ke
+      placeholder, jadi tidak ada yang terlihat rusak — dan itu justru
+      yang bikin lama ketahuan (23 Nov 2026).
 
 ### Backfill KuotaCuti.terpakai (fase 42)
 

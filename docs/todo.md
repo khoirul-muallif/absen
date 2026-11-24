@@ -102,6 +102,19 @@ pun yang dipilih.
       sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
 
 ## Fitur & infrastruktur
+- [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
+      dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
+      konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.
+      Untuk sekarang murni catatan.
+
+      Kalau sampai beberapa bulan tidak ada yang memakai selisihnya,
+      pertimbangkan menggabungkan balik jadi satu kolom. Kalau dipakai,
+      tempat termurah memunculkannya: kolom "Molor" di Laporan Presensi,
+      atau badge di daftar Izin panel admin.
+
+      Pertanyaan untuk pihak RS: apakah karyawan yang sering molor dari
+      perkiraannya sendiri perlu ditandai? Kalau ya, berapa menit
+      toleransinya, dan siapa yang melihatnya?
 
 - [ ] **`logo` instansi tidak dibersihkan saat diganti** — FileUpload
       menyimpan file baru tapi yang lama tetap menumpuk di

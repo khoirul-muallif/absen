@@ -20,9 +20,13 @@ class IzinInfolist
                             ->date(),
                         TextEntry::make('jam_keluar')
                             ->time(),
-                        TextEntry::make('jam_kembali')
+                        TextEntry::make('jam_kembali_rencana')
                             ->time()
                             ->placeholder('-'),
+                        TextEntry::make('jam_kembali_aktual')
+                            ->time()
+                            ->placeholder('Belum kembali'),
+                            
                         TextEntry::make('keperluan')
                             ->columnSpanFull(),
                         TextEntry::make('status')

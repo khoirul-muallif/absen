@@ -47,7 +47,7 @@
 **cutis** — karyawan_id, jenis_cuti_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan, lampiran (nullable), status, approved_by, approved_at, catatan_approval
 - Index: `status` (dipakai `getNavigationBadge()`, fase 77)
 
-**izins** — karyawan_id, tanggal, jam_keluar, jam_kembali (nullable), keperluan, status, approved_by, approved_at, catatan_approval
+**izins** — karyawan_id, tanggal, jam_keluar, jam_kembali_rencana (wajib, diisi karyawan saat mengajukan), jam_kembali_aktual (nullable, diisi now() server saat karyawan menandai sudah kembali), keperluan, status, approved_by, approved_at, catatan_approval
 - Tidak sync ke Absensi (sengaja, lihat QUICK_CONTEXT Larangan)
 
 **lemburs** — karyawan_id, tanggal, jam_mulai, jam_selesai, alasan (nullable), status, approved_by, approved_at, catatan_approval

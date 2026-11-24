@@ -12,7 +12,8 @@ class Izin extends Model
     use HasApprovalWorkflow, HasFactory;
 
     protected $fillable = [
-        'karyawan_id', 'tanggal', 'jam_keluar', 'jam_kembali', 'keperluan',
+        'karyawan_id', 'tanggal', 'jam_keluar',
+        'jam_kembali_rencana', 'jam_kembali_aktual', 'keperluan',
         'status', 'approved_by', 'approved_at', 'catatan_approval',
     ];
 
@@ -37,10 +38,17 @@ class Izin extends Model
         return \Carbon\Carbon::parse($this->jam_keluar)->format('H:i');
     }
 
-    public function jamKembaliString(): ?string
+    public function jamKembaliRencanaString(): ?string
     {
-        return $this->jam_kembali
-            ? \Carbon\Carbon::parse($this->jam_kembali)->format('H:i')
+        return $this->jam_kembali_rencana
+            ? \Carbon\Carbon::parse($this->jam_kembali_rencana)->format('H:i')
+            : null;
+    }
+
+    public function jamKembaliAktualString(): ?string
+    {
+        return $this->jam_kembali_aktual
+            ? \Carbon\Carbon::parse($this->jam_kembali_aktual)->format('H:i')
             : null;
     }
 }

@@ -30,9 +30,16 @@ class IzinsTable
                 TextColumn::make('jam_keluar')
                     ->time()
                     ->sortable(),
-                TextColumn::make('jam_kembali')
+                TextColumn::make('jam_kembali_rencana')
                     ->time()
+                    ->label('Rencana')
                     ->placeholder('-')
+                    ->sortable(),
+
+                TextColumn::make('jam_kembali_aktual')
+                    ->time()
+                    ->label('Kembali')
+                    ->placeholder('Belum kembali')
                     ->sortable(),
                 TextColumn::make('keperluan')
                     ->limit(30)

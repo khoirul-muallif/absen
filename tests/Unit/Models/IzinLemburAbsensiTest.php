@@ -27,7 +27,7 @@ it('approve izin tidak menyentuh tabel absensi sama sekali', function () {
         'karyawan_id' => $this->karyawan->id,
         'tanggal' => '2026-08-05',
         'jam_keluar' => '10:00:00',
-        'jam_kembali' => '12:00:00',
+        'jam_kembali_rencana' => '12:00:00',
     ]);
 
     $izin->approve($this->admin);
@@ -45,7 +45,7 @@ it('approve izin tidak membuat row absensi baru kalau belum ada', function () {
         'karyawan_id' => $this->karyawan->id,
         'tanggal' => '2026-08-06',
         'jam_keluar' => '10:00:00',
-        'jam_kembali' => '12:00:00',
+        'jam_kembali_rencana' => '12:00:00',
     ]);
 
     $izin->approve($this->admin);
@@ -114,7 +114,7 @@ it('izin bisa diajukan dan di-approve untuk tanggal yang absensinya sudah bersta
         'karyawan_id' => $this->karyawan->id,
         'tanggal' => '2026-08-08',
         'jam_keluar' => '10:00:00',
-        'jam_kembali' => '12:00:00',
+        'jam_kembali_rencana' => '12:00:00',
     ]);
 
     expect(fn () => $izin->approve($this->admin))->not->toThrow(\Throwable::class);

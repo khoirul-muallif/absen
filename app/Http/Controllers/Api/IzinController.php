@@ -27,23 +27,28 @@ class IzinController extends Controller
     public function ajukan(Request $request): JsonResponse
     {
         $request->validate([
-            'tanggal'     => 'required|date|after_or_equal:today',
-            'jam_keluar'  => 'required|date_format:H:i',
-            'jam_kembali' => 'nullable|date_format:H:i|after:jam_keluar',
-            'keperluan'   => 'required|string|max:1000',
+            'tanggal'             => 'required|date|after_or_equal:today',
+            'jam_keluar'          => 'required|date_format:H:i',
+            // WAJIB sejak 24 Nov 2026. Ini perkiraan yang diisi sebelum
+            // pergi, bukan catatan setelah kembali — jadi selalu bisa
+            // diisi. Karyawan yang benar-benar tidak tahu kapan kembali
+            // diarahkan menghubungi admin, yang bisa mengisi lewat
+            // Filament tanpa batasan ini.
+            'jam_kembali_rencana' => 'required|date_format:H:i|after:jam_keluar',
+            'keperluan'           => 'required|string|max:1000',
         ]);
 
         $karyawan = $request->user();
 
         $izin = Izin::create([
-            'karyawan_id' => $karyawan->id,
-            'tanggal'     => $request->tanggal,
-            'jam_keluar'  => $request->jam_keluar,
-            'jam_kembali' => $request->jam_kembali,
-            'keperluan'   => $request->keperluan,
-            'status'      => 'approved',
-            'approved_by' => null,
-            'approved_at' => now(),
+            'karyawan_id'         => $karyawan->id,
+            'tanggal'             => $request->tanggal,
+            'jam_keluar'          => $request->jam_keluar,
+            'jam_kembali_rencana' => $request->jam_kembali_rencana,
+            'keperluan'           => $request->keperluan,
+            'status'              => 'approved',
+            'approved_by'         => null,
+            'approved_at'         => now(),
         ]);
 
         return response()->json([
@@ -59,12 +64,20 @@ class IzinController extends Controller
 
     /**
      * PATCH /api/izin/{id}/jam-kembali
-     * Karyawan mengisi jam_kembali sendiri setelah balik dari izin.
+     * Karyawan menandai dirinya sudah kembali. TANPA BODY.
      *
-     * Cuma bisa diisi SEKALI lewat endpoint ini (jam_kembali harus masih
-     * null) — supaya "siapa & kapan mengisi" jelas dari updated_at tanpa
-     * perlu kolom/tabel log terpisah. Koreksi setelah terisi harus lewat
-     * admin (Filament).
+     * Waktunya dari now() di server, bukan dari client: kalau jamnya
+     * dikirim client, jam kembali bisa dikarang dan seluruh gunanya
+     * sebagai catatan hilang. Konsekuensinya karyawan yang lupa menekan
+     * sampai besok tercatat kembali besok — terlihat salah, tapi jujur.
+     *
+     * Cuma bisa diisi SEKALI (jam_kembali_aktual harus masih null) —
+     * supaya "siapa & kapan mengisi" jelas dari updated_at tanpa kolom
+     * log terpisah. Koreksi harus lewat admin (Filament).
+     *
+     * TIDAK divalidasi harus setelah jam_keluar: waktunya dari server,
+     * jadi satu-satunya cara lebih awal adalah jam server yang salah —
+     * dan menolaknya berarti karyawan tidak bisa mencatat apa pun.
      */
     public function isiJamKembali(Request $request, string $id): JsonResponse
     {
@@ -77,32 +90,21 @@ class IzinController extends Controller
             ], 404);
         }
 
-        if ($izin->jam_kembali !== null) {
+        if ($izin->jam_kembali_aktual !== null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Jam kembali sudah terisi. Hubungi admin kalau perlu dikoreksi.',
+                'message' => 'Anda sudah tercatat kembali. Hubungi admin kalau perlu dikoreksi.',
             ], 422);
         }
 
-        $request->validate([
-            'jam_kembali' => 'required|date_format:H:i',
-        ]);
-
-        if (Carbon::parse($request->jam_kembali)->lessThanOrEqualTo(Carbon::parse($izin->jam_keluar))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Jam kembali harus setelah jam keluar.',
-            ], 422);
-        }
-
-        $izin->update(['jam_kembali' => $request->jam_kembali]);
+        $izin->update(['jam_kembali_aktual' => now()->format('H:i:s')]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Jam kembali berhasil dicatat.',
+            'message' => 'Selamat datang kembali. Jam kembali tercatat.',
             'data'    => [
-                'id'          => $izin->id,
-                'jam_kembali' => $izin->jamKembaliString(),
+                'id'                  => $izin->id,
+                'jam_kembali_aktual'  => $izin->jamKembaliAktualString(),
             ],
         ]);
     }
@@ -123,7 +125,8 @@ class IzinController extends Controller
             'id'               => $i->id,
             'tanggal'          => $i->tanggal->format('d M Y'),
             'jam_keluar'       => $i->jamKeluarString(),
-            'jam_kembali'      => $i->jamKembaliString(),
+            'jam_kembali_rencana' => $i->jamKembaliRencanaString(),
+            'jam_kembali_aktual'  => $i->jamKembaliAktualString(),
             'keperluan'        => $i->keperluan,
             'status'           => $i->status,
             'catatan_approval' => $i->catatan_approval,
@@ -160,10 +163,10 @@ class IzinController extends Controller
             ], 404);
         }
 
-        if ($izin->jam_kembali !== null) {
+        if ($izin->jam_kembali_aktual !== null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Izin yang sudah ada jam kembalinya tidak bisa dibatalkan sendiri. Hubungi admin.',
+                'message' => 'Izin yang sudah tercatat kembali tidak bisa dibatalkan sendiri. Hubungi admin.',
             ], 422);
         }
 

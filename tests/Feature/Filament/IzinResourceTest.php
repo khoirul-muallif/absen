@@ -21,20 +21,17 @@ it('menampilkan daftar izin', function () {
         ->assertCanSeeTableRecords($records);
 });
 
-it('bisa membuat izin dengan jam_kembali kosong (belum balik)', function () {
+it('menolak izin tanpa rencana jam kembali', function () {
     livewire(CreateIzin::class)
         ->fillForm([
             'karyawan_id' => $this->karyawan->id,
             'tanggal' => today()->toDateString(),
             'jam_keluar' => '13:00',
-            'jam_kembali' => null,
+            'jam_kembali_rencana' => null,
             'keperluan' => 'Urusan keluarga mendadak',
         ])
         ->call('create')
-        ->assertHasNoFormErrors();
-
-    expect(Izin::where('karyawan_id', $this->karyawan->id)->first())
-        ->jam_kembali->toBeNull();
+        ->assertHasFormErrors(['jam_kembali_rencana']);
 });
 
 it('menolak jam_kembali sebelum atau sama dengan jam_keluar', function () {
@@ -43,11 +40,11 @@ it('menolak jam_kembali sebelum atau sama dengan jam_keluar', function () {
             'karyawan_id' => $this->karyawan->id,
             'tanggal' => today()->toDateString(),
             'jam_keluar' => '13:00',
-            'jam_kembali' => '12:00',
+            'jam_kembali_rencana' => '12:00',
             'keperluan' => 'Tes validasi',
         ])
         ->call('create')
-        ->assertHasFormErrors(['jam_kembali']);
+        ->assertHasFormErrors(['jam_kembali_rencana']);
 
     expect(Izin::where('karyawan_id', $this->karyawan->id)->exists())->toBeFalse();
 });
@@ -58,7 +55,7 @@ it('menerima jam_kembali setelah jam_keluar', function () {
             'karyawan_id' => $this->karyawan->id,
             'tanggal' => today()->toDateString(),
             'jam_keluar' => '13:00',
-            'jam_kembali' => '15:00',
+            'jam_kembali_rencana' => '15:00',
             'keperluan' => 'Tes validasi normal',
         ])
         ->call('create')
@@ -90,4 +87,24 @@ it('approve izin pending berhasil tanpa exception', function () {
     expect($izin->fresh())
         ->status->toBe('approved')
         ->approved_by->toBe($admin->id);
+});
+
+it('menyimpan jam_kembali_rencana ke DB, bukan membuangnya diam-diam', function () {
+    livewire(CreateIzin::class)
+        ->fillForm([
+            'karyawan_id' => $this->karyawan->id,
+            'tanggal' => today()->toDateString(),
+            'jam_keluar' => '13:00',
+            'jam_kembali_rencana' => '15:00',
+            'keperluan' => 'Tes simpan',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    // assertHasNoFormErrors saja TIDAK cukup: sebelum fase ini, form
+    // menulis ke kolom yang sudah tidak ada di $fillable dan nilainya
+    // hilang tanpa error apa pun. Testnya tetap hijau.
+    expect(Izin::where('karyawan_id', $this->karyawan->id)->first())
+        ->jam_kembali_rencana->toBe('15:00:00')
+        ->jam_kembali_aktual->toBeNull();
 });

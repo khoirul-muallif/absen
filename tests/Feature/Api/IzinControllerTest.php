@@ -13,10 +13,10 @@ beforeEach(function () {
 
 test('bisa mengajukan izin baru, langsung approved tanpa approval admin', function () {
     $response = $this->postJson('/api/izin', [
-        'tanggal'     => '2026-08-01',
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => '12:00',
-        'keperluan'   => 'Ke bank',
+        'tanggal'             => '2026-08-01',
+        'jam_keluar'          => '10:00',
+        'jam_kembali_rencana' => '12:00',
+        'keperluan'           => 'Ke bank',
     ]);
 
     $response->assertStatus(201)
@@ -25,25 +25,28 @@ test('bisa mengajukan izin baru, langsung approved tanpa approval admin', functi
     $izin = Izin::where('karyawan_id', $this->karyawan->id)->first();
 
     expect($izin->status)->toBe('approved')
-        ->and($izin->approved_by)->toBeNull() // bukan admin yang approve
-        ->and($izin->approved_at)->not->toBeNull();
+        ->and($izin->approved_by)->toBeNull()
+        ->and($izin->approved_at)->not->toBeNull()
+        // Aktual TIDAK ikut terisi saat submit — itu inti pemisahan ini.
+        ->and($izin->jam_kembali_aktual)->toBeNull();
 });
 
-test('menolak pengajuan tanpa keperluan', function () {
+test('menolak pengajuan tanpa rencana jam kembali', function () {
     $response = $this->postJson('/api/izin', [
         'tanggal'    => '2026-08-01',
         'jam_keluar' => '10:00',
+        'keperluan'  => 'Ke bank',
     ]);
 
-    $response->assertStatus(422);
+    $response->assertStatus(422)->assertJsonValidationErrors('jam_kembali_rencana');
 });
 
-test('menolak jam_kembali sebelum jam_keluar', function () {
+test('menolak rencana kembali sebelum jam_keluar', function () {
     $response = $this->postJson('/api/izin', [
-        'tanggal'     => '2026-08-01',
-        'jam_keluar'  => '12:00',
-        'jam_kembali' => '10:00',
-        'keperluan'   => 'Tes',
+        'tanggal'             => '2026-08-01',
+        'jam_keluar'          => '12:00',
+        'jam_kembali_rencana' => '10:00',
+        'keperluan'           => 'Tes',
     ]);
 
     $response->assertStatus(422);
@@ -72,141 +75,119 @@ test('riwayat bisa difilter berdasarkan status', function () {
     $response->assertStatus(200)
         ->assertJsonCount(1, 'data.records');
 });
-test('riwayat: jam_keluar dan jam_kembali format H:i, bukan H:i:s mentah dari DB', function () {
+
+test('riwayat: jam format H:i, bukan H:i:s mentah dari DB', function () {
     Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => '12:30',
+        'karyawan_id'         => $this->karyawan->id,
+        'jam_keluar'          => '10:00',
+        'jam_kembali_rencana' => '12:30',
+        'jam_kembali_aktual'  => '12:45',
     ]);
 
     $response = $this->getJson('/api/izin');
 
     $response->assertStatus(200);
     expect($response->json('data.records.0.jam_keluar'))->toBe('10:00');
-    expect($response->json('data.records.0.jam_kembali'))->toBe('12:30');
+    expect($response->json('data.records.0.jam_kembali_rencana'))->toBe('12:30');
+    expect($response->json('data.records.0.jam_kembali_aktual'))->toBe('12:45');
 });
 
-test('riwayat: jam_kembali null tetap null (bukan string "00:00")', function () {
+test('riwayat: jam_kembali_aktual null tetap null (bukan string "00:00")', function () {
     Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => null,
+        'karyawan_id'        => $this->karyawan->id,
+        'jam_kembali_aktual' => null,
     ]);
 
     $response = $this->getJson('/api/izin');
 
-    expect($response->json('data.records.0.jam_kembali'))->toBeNull();
+    expect($response->json('data.records.0.jam_kembali_aktual'))->toBeNull();
 });
 
-test('bisa membatalkan izin yang jam_kembali belum terisi', function () {
-    // Dasar pembatalan sekarang jam_kembali, BUKAN status — izin dari API
-    // selalu lahir approved, jadi guard lama (isPending()) tidak akan pernah
-    // bisa dipenuhi lagi kalau tidak diganti.
+test('bisa membatalkan izin yang belum tercatat kembali', function () {
+    // Dasar pembatalan sekarang jam_kembali_AKTUAL. Kalau guard ini
+    // tertinggal di kolom rencana, tidak ada izin yang bisa dibatalkan
+    // lagi — rencana selalu terisi sejak 24 Nov 2026.
     $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'status'      => 'approved',
-        'jam_kembali' => null,
+        'karyawan_id'        => $this->karyawan->id,
+        'status'             => 'approved',
+        'jam_kembali_aktual' => null,
     ]);
 
-    $response = $this->deleteJson("/api/izin/{$izin->id}");
+    $this->deleteJson("/api/izin/{$izin->id}")
+        ->assertStatus(200)->assertJson(['success' => true]);
 
-    $response->assertStatus(200)->assertJson(['success' => true]);
     expect(Izin::find($izin->id))->toBeNull();
 });
 
-test('tidak bisa membatalkan izin yang jam_kembali sudah terisi', function () {
+test('izin dengan rencana terisi tapi belum kembali TETAP bisa dibatalkan', function () {
+    // Penjaga langsung untuk kekeliruan di atas.
     $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'status'      => 'approved',
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => '12:00',
+        'karyawan_id'         => $this->karyawan->id,
+        'jam_kembali_rencana' => '12:00',
+        'jam_kembali_aktual'  => null,
     ]);
 
-    $response = $this->deleteJson("/api/izin/{$izin->id}");
+    $this->deleteJson("/api/izin/{$izin->id}")->assertStatus(200);
+});
 
-    $response->assertStatus(422);
+test('tidak bisa membatalkan izin yang sudah tercatat kembali', function () {
+    $izin = Izin::factory()->create([
+        'karyawan_id'        => $this->karyawan->id,
+        'status'             => 'approved',
+        'jam_kembali_aktual' => '12:00',
+    ]);
+
+    $this->deleteJson("/api/izin/{$izin->id}")->assertStatus(422);
     expect(Izin::find($izin->id))->not->toBeNull();
 });
 
 test('404 kalau membatalkan izin milik karyawan lain', function () {
     $karyawanLain = Karyawan::factory()->create();
-    $izin = Izin::factory()->create(['karyawan_id' => $karyawanLain->id, 'jam_kembali' => null]);
+    $izin = Izin::factory()->create([
+        'karyawan_id'        => $karyawanLain->id,
+        'jam_kembali_aktual' => null,
+    ]);
 
-    $response = $this->deleteJson("/api/izin/{$izin->id}");
-
-    $response->assertStatus(404);
+    $this->deleteJson("/api/izin/{$izin->id}")->assertStatus(404);
 });
 
-// --- Endpoint baru: PATCH /api/izin/{id}/jam-kembali ---
+// --- PATCH /api/izin/{id}/jam-kembali — tanpa body, waktu dari server ---
 
-test('bisa mengisi jam_kembali yang masih kosong', function () {
+test('menandai sudah kembali memakai jam server, bukan jam dari client', function () {
     $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => null,
+        'karyawan_id'        => $this->karyawan->id,
+        'jam_keluar'         => '07:00',
+        'jam_kembali_aktual' => null,
     ]);
 
+    // Dikirim dengan body yang mencoba mengarang jam. Harus diabaikan.
     $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
-        'jam_kembali' => '11:30',
+        'jam_kembali_aktual' => '23:59',
     ]);
 
+    // beforeEach membekukan waktu di 08:00.
     $response->assertStatus(200)
-        ->assertJson(['success' => true, 'data' => ['jam_kembali' => '11:30']]);
+        ->assertJson(['data' => ['jam_kembali_aktual' => '08:00']]);
 
-    expect($izin->fresh()->jam_kembali)->toBe('11:30:00');
+    expect($izin->fresh()->jam_kembali_aktual)->toBe('08:00:00');
 });
 
-test('menolak isi jam_kembali kalau sudah pernah terisi', function () {
+test('menolak menandai kembali kalau sudah pernah tercatat', function () {
     $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => '11:00',
+        'karyawan_id'        => $this->karyawan->id,
+        'jam_kembali_aktual' => '11:00',
     ]);
 
-    $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
-        'jam_kembali' => '13:00',
-    ]);
-
-    $response->assertStatus(422);
-    expect($izin->fresh()->jam_kembali)->toBe('11:00:00'); // tidak berubah
+    $this->patchJson("/api/izin/{$izin->id}/jam-kembali")->assertStatus(422);
+    expect($izin->fresh()->jam_kembali_aktual)->toBe('11:00:00');
 });
 
-test('menolak jam_kembali baru yang lebih awal dari jam_keluar', function () {
-    $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '14:00',
-        'jam_kembali' => null,
-    ]);
-
-    $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
-        'jam_kembali' => '13:00',
-    ]);
-
-    $response->assertStatus(422);
-});
-
-test('404 kalau mengisi jam_kembali izin milik karyawan lain', function () {
+test('404 kalau menandai kembali izin milik karyawan lain', function () {
     $karyawanLain = Karyawan::factory()->create();
-    $izin = Izin::factory()->create(['karyawan_id' => $karyawanLain->id, 'jam_kembali' => null]);
-
-    $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
-        'jam_kembali' => '12:00',
-    ]);
-
-    $response->assertStatus(404);
-});
-
-test('isiJamKembali: menolak jam_kembali yang sama persis dengan jam_keluar (boundary H:i vs H:i:s)', function () {
     $izin = Izin::factory()->create([
-        'karyawan_id' => $this->karyawan->id,
-        'jam_keluar'  => '10:00',
-        'jam_kembali' => null,
+        'karyawan_id'        => $karyawanLain->id,
+        'jam_kembali_aktual' => null,
     ]);
 
-    $response = $this->patchJson("/api/izin/{$izin->id}/jam-kembali", [
-        'jam_kembali' => '10:00',
-    ]);
-
-    $response->assertStatus(422);
-    expect($izin->fresh()->jam_kembali)->toBeNull();
+    $this->patchJson("/api/izin/{$izin->id}/jam-kembali")->assertStatus(404);
 });

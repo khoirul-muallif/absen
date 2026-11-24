@@ -33,21 +33,17 @@ class IzinForm
                                 ->required()
                                 ->seconds(false)
                                 ->live(),
-                            TimePicker::make('jam_kembali')
+                            TimePicker::make('jam_kembali_rencana')
+                                ->label('Rencana kembali jam')
                                 ->seconds(false)
-                                ->live()
-                                ->rule(function (Get $get) {
-                                    return function (string $attribute, $value, \Closure $fail) use ($get) {
-                                        $jamKeluar = $get('jam_keluar');
-                                        if (! $jamKeluar || ! $value) {
-                                            return;
-                                        }
+                                ->required()
+                                ->after('jam_keluar')
+                                ->helperText('Perkiraan yang diisi karyawan sebelum pergi.'),
 
-                                        if (\Carbon\Carbon::parse($value)->lte(\Carbon\Carbon::parse($jamKeluar))) {
-                                            $fail('Jam kembali harus setelah jam keluar.');
-                                        }
-                                    };
-                                }),
+                            TimePicker::make('jam_kembali_aktual')
+                                ->label('Benar-benar kembali jam')
+                                ->seconds(false)
+                                ->helperText('Diisi otomatis saat karyawan menekan "Saya sudah kembali" di aplikasi. Isi manual hanya untuk koreksi.'),
                         ]),
                     ]),
 
