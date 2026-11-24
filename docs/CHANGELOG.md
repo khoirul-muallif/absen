@@ -5,6 +5,94 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 88: pisah jam kembali Izin jadi rencana dan aktual
+
+Satu commit, `dc5bc9b`. Migration: rename + kolom baru.
+
+### Kolom lama ambigu, dan itu akar keluhannya
+
+`jam_kembali` menerima dua hal yang berbeda sifatnya. `ajukan()`
+menerimanya saat submit (= rencana), dan `PATCH /izin/{id}/jam-kembali`
+mengisinya setelah karyawan kembali (= aktual). Tidak ada cara
+membedakan keduanya dari data.
+
+Dipisah jadi `jam_kembali_rencana` dan `jam_kembali_aktual`. Yang lama
+di-rename ke `rencana` karena mulai sekarang kolom itu wajib diisi saat
+submit — itu arti barunya. Lima baris dummy di-truncate sebelum migrate
+supaya tidak ada yang salah label.
+
+### Alurnya berubah, bukan cuma kolomnya
+
+Item todo FE 6 Nov mencatat alur jam kembali "terasa janggal" dan
+berakhir dengan dugaan bahwa jawabannya mungkin bukan memperbaiki
+tampilan. Referensi UI yang dikirim 24 Nov membenarkan itu: di sana
+rencana kembali diisi **di depan**, sebaris dengan jam keluar, dan
+kembalinya ditandai lewat tombol.
+
+Jadi rencana diisi saat masih tenang sebelum pergi, bukan sambil
+buru-buru kembali kerja. Itu menghapus keluhan utamanya — salah pilih
+jam tidak lagi berarti harus menghubungi admin, karena yang diisi
+memang perkiraan dan wajar meleset.
+
+### Aktual dari server, dan endpoint tidak lagi menerima body
+
+`PATCH` sekarang tanpa body sama sekali; waktunya `now()`. Kalau jamnya
+dikirim client, jam kembali bisa dikarang dan seluruh gunanya sebagai
+catatan hilang.
+
+Konsekuensinya diterima sadar: karyawan yang lupa menekan sampai
+keesokan harinya tercatat kembali besok. Terlihat salah, tapi jujur —
+lebih baik daripada angka rapi yang dikarang.
+
+Validasi "harus setelah jam_keluar" dicabut dari endpoint ini. Waktunya
+dari server, jadi satu-satunya cara lebih awal adalah jam server yang
+salah, dan menolaknya berarti karyawan tidak bisa mencatat apa pun.
+
+### Rencana WAJIB
+
+Sebelumnya `nullable`. Seluruh gunanya sebagai pembanding hilang kalau
+sering kosong. Karyawan yang benar-benar tidak tahu kapan kembali
+diarahkan menghubungi admin, yang bisa mengisi lewat Filament tanpa
+batasan ini.
+
+### Guard `batalkan()` yang nyaris tertinggal
+
+`batalkan()` menolak kalau jam kembali sudah terisi. Kalau guard itu
+tertinggal di kolom rencana, **tidak akan ada izin yang bisa dibatalkan
+lagi** — rencana sekarang selalu terisi. Kerusakan yang tidak muncul
+sebagai error: endpoint tetap jalan, cuma selalu menolak. Dipindah ke
+`jam_kembali_aktual` dan dikunci test tersendiri.
+
+### Filament rusak tanpa satu pun test merah
+
+`IzinForm`, `IzinInfolist`, dan `IzinsTable` masih menulis dan membaca
+kolom yang sudah tidak ada. `IzinResourceTest` tetap **hijau seluruhnya**:
+validasi form jalan di level form, bukan DB, dan nilainya hilang
+diam-diam saat simpan karena kolomnya tidak lagi di `$fillable`.
+
+Ditambah satu test yang benar-benar membaca DB setelah `create` —
+`assertHasNoFormErrors()` saja tidak membuktikan apa pun tersimpan.
+Pelajaran yang sama dengan `assertStatus(422)` polos di fase 26.
+
+### Selisihnya belum dipakai
+
+Konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS; untuk
+sekarang murni catatan. Dicatat di `todo.md` sebagai utang sadar, dengan
+usul membatalkan pemisahan ini kalau beberapa bulan tidak ada yang
+memakai selisihnya.
+
+### Test
+
+**726 passed (2095 assertions)**. Jumlah test tetap — beberapa diganti,
+bukan ditambah: dua test lama dibuang karena menguji validasi yang sudah
+tidak ada (`jam_kembali` lebih awal dari `jam_keluar`, dan boundary
+`H:i` vs `H:i:s` di endpoint PATCH).
+
+Yang paling berharga: test yang mengirim body berisi jam karangan ke
+`PATCH` dan memastikan diabaikan. Tanpa itu, kalau suatu saat
+`$request->jam_kembali_aktual` dipakai lagi, semuanya tetap hijau.
+
+`SCHEMA.md` dan `runbook.md` ikut diperbarui.
 ## fase 87: logo instansi
 
 Satu commit, `bd514e0`.
