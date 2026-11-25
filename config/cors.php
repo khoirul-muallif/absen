@@ -13,7 +13,12 @@ return [
         // 'https://absen.rsubanyumanik2.com',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        // Flutter web memakai port acak tiap `flutter run`, jadi port
+        // tetap tidak cukup. HANYA untuk pengembangan lokal.
+        '#^http://localhost:\d+$#',
+        '#^http://127\.0\.0\.1:\d+$#',
+    ],
 
     'allowed_headers' => ['*'],
 
