@@ -1023,3 +1023,37 @@ it('menitTerlambat mengembalikan 0 untuk baris tanpa shift', function () {
 
     expect($absensi->menitTerlambat())->toBe(0);
 });
+
+it('menandai sesi kemarin yang belum ditutup', function () {
+    $karyawan = Karyawan::factory()->create();
+    Sanctum::actingAs($karyawan);
+
+    Absensi::factory()->create([
+        'karyawan_id'  => $karyawan->id,
+        'tanggal'      => today()->subDay(),
+        'waktu_masuk'  => today()->subDay()->setTime(22, 0),
+        'waktu_pulang' => null,
+    ]);
+
+    $this->getJson('/api/absensi/status')
+        ->assertOk()
+        ->assertJsonPath('data.sudah_masuk', true)
+        ->assertJsonPath('data.sudah_pulang', false)
+        ->assertJsonPath('data.sesi_kemarin', true);
+});
+
+it('sesi_kemarin false untuk baris hari ini', function () {
+    $karyawan = Karyawan::factory()->create();
+    Sanctum::actingAs($karyawan);
+
+    Absensi::factory()->create([
+        'karyawan_id'  => $karyawan->id,
+        'tanggal'      => today(),
+        'waktu_masuk'  => now()->setTime(7, 30),
+        'waktu_pulang' => null,
+    ]);
+
+    $this->getJson('/api/absensi/status')
+        ->assertOk()
+        ->assertJsonPath('data.sesi_kemarin', false);
+});

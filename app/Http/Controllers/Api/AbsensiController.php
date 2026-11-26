@@ -38,7 +38,17 @@ class AbsensiController extends Controller
             'data'    => [
                 'sudah_masuk'  => $absensi && $absensi->waktu_masuk !== null,
                 'sudah_pulang' => $absensi && $absensi->waktu_pulang !== null,
+                // true kalau barisnya BUKAN hari ini — artinya sesi
+                // terbuka dari kemarin yang belum ditutup.
+                'sesi_kemarin' => $absensi
+                    && ! $absensi->tanggal->isSameDay(today()),
                 'absensi'      => $absensi ? [
+                    // Tanggal ikut dikirim karena baris ini BISA dari
+                    // kemarin: blok di atas memprioritaskan sesi terbuka
+                    // dalam rentang kemarin–hari ini, untuk shift malam.
+                    // Tanpa tanggal, aplikasi tidak bisa memberi tahu
+                    // bahwa tombol Absen Pulang menutup sesi kemarin.
+                    'tanggal'      => $absensi->tanggal->format('d M Y'),
                     'status'       => $absensi->status,
                     'waktu_masuk'  => $absensi->waktu_masuk?->format('H:i'),
                     'waktu_pulang' => $absensi->waktu_pulang?->format('H:i'),
@@ -349,7 +359,7 @@ class AbsensiController extends Controller
             ],
         ]);
     }
-    
+
     /**
      * Label pengganti nama shift untuk baris yang memang tidak punya shift.
      * Menyebutkan alasannya lebih berguna bagi karyawan daripada "-" kosong.
