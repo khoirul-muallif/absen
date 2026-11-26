@@ -55,11 +55,11 @@ Test itu juga memastikan passwordnya benar-benar kembali ke default
 
 `SCHEMA.md` ikut diperbarui.
 
-### Belum berguna sampai FE membacanya
+### Ditutup dari ujung ke ujung
 
-Flag dikirim di `login()` dan `me()`, tapi belum ada yang memakainya.
-Pekerjaan berikutnya ada di repo frontend: `UserModel` membaca flag,
-lalu mengarahkan ke layar ubah password setelah login.
+Pasangan FE-nya menyusul hari yang sama (`9738e6a` di repo frontend).
+Diverifikasi di device dua arah: ditutup tanpa mengganti → peringatan
+muncul lagi saat aplikasi dibuka; password diganti → peringatan hilang.
 
 ## fase 88: pisah jam kembali Izin jadi rencana dan aktual
 
