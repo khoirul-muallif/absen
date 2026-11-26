@@ -5,6 +5,50 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 90: status() kirim tanggal dan tandai sesi kemarin
+
+Satu commit, `f0f2d3e`.
+
+`status()` memprioritaskan sesi terbuka (masuk terisi, pulang null)
+dalam rentang kemarin–hari ini, supaya shift malam yang masuk kemarin
+diarahkan ke absen pulang. Itu benar untuk rotasi malam, dan sudah
+dikunci test sejak fase 57.
+
+Yang tidak pernah ada: responsnya tidak menyebut barisnya dari tanggal
+berapa. Jadi aplikasi tidak punya cara membedakan "Anda belum absen
+pulang hari ini" dari "sesi kemarin belum ditutup".
+
+### Akibatnya pada karyawan umum
+
+Karyawan umum yang lupa absen pulang kemarin membuka layar Absen hari
+ini dan melihatnya mengarahkan ke "Absen Pulang". Kalau ditekan, yang
+tertutup adalah sesi KEMARIN — lalu dia belum absen masuk hari ini,
+tanpa pernah diberi tahu bahwa tombol itu untuk hari lain.
+
+Terlihat 26 Nov saat menguji kartu penutup di AbsenMenuScreen: layarnya
+menampilkan "Sudah absen masuk pukul 08:26" padahal baris hari ini
+sudah lengkap masuk+pulang. Sempat dikira bug, ternyata aturan yang
+memang berlaku — cuma tidak pernah terlihat dari sisi aplikasi.
+
+### Dua field, sengaja redundan
+
+- `absensi.tanggal` — untuk ditampilkan ("Sesi 25 Nov belum ditutup")
+- `sesi_kemarin` (boolean) — untuk dicabangkan FE
+
+`sesi_kemarin` bisa dihitung dari `tanggal`, tapi keduanya terpakai
+untuk hal yang berbeda, dan menghitung ulang tanggal di FE berarti
+menyalin aturan "hari ini" ke sisi klien.
+
+### Test
+
+**731 passed (2111 assertions)**, naik 2: sesi kemarin yang belum
+ditutup, dan baris hari ini yang bukan sesi kemarin.
+
+### Belum dipakai FE
+
+Dicatat di `todo-fr.md`: tombol Absen Pulang perlu memberi keterangan
+tanggal saat `sesi_kemarin` true.
+
 ## fase 89: kolom harus_ganti_password
 
 Satu commit, `f671dd5`. Migration: kolom baru di tabel `karyawan`.
