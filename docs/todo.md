@@ -13,7 +13,8 @@ Informasi (fase 75), badge pengajuan menunggu (fase 77), login username
 (fase 79), terjemahan validasi (fase 80), email nullable (fase 81),
 import karyawan Excel (fase 82), bulk action assignment (fase 83),
 riwayat() tanpa shift (fase 84), kunci kontrak notifikasi (fase 85),
-ganti password sendiri (fase 86), logo instansi (fase 87) — semuanya
+ganti password sendiri (fase 86), logo instansi (fase 87), pisah jam
+kembali Izin (fase 88), harus_ganti_password (fase 89) — semuanya
 SELESAI, detail di CHANGELOG.
 
 **Dua blocker rilis FE yang dicatat di sini sudah ditutup 20 Nov 2026**
@@ -235,13 +236,6 @@ pun yang dipilih.
       tertua 5 hari). Butuh filter umur, bukan sekadar status — itu
       sebabnya sengaja tidak dimasukkan ke badge. Dicatat 9 Nov 2026.
 
-- [ ] **Paksa ganti password setelah reset admin** — sekarang simpulnya
-      sudah putus: endpoint `POST /api/auth/ubah-password` ada (fase 86)
-      dan layar FE ada (`e2ff9b3`). Tinggal kolom `harus_ganti_password`
-      + guard di `AuthController`. JANGAN digarap sebelum layar FE-nya
-      terbukti jalan di device — tanpa itu, memaksa ganti justru
-      mengunci karyawan di luar aplikasi. Butuh migration, jadi
-      `SCHEMA.md` ikut di-update.
 
 - [ ] **`min:8` belum diadu dengan password default admin** — endpoint
       ubah password mewajibkan minimal 8 karakter, tapi password default

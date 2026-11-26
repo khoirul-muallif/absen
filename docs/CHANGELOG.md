@@ -5,6 +5,62 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 89: kolom harus_ganti_password
+
+Satu commit, `f671dd5`. Migration: kolom baru di tabel `karyawan`.
+
+Menutup simpul tiga hal yang saling menunggu sejak fase 78. Dua yang
+lain sudah ada: endpoint `POST /api/auth/ubah-password` (fase 86) dan
+layar FE-nya (`e2ff9b3` di repo frontend, terbukti jalan di device
+24 Nov). Yang ketiga ini sengaja ditahan sampai keduanya terbukti —
+tanpa itu, memaksa ganti password justru mengunci karyawan di luar
+aplikasi.
+
+Reset password admin di `KaryawansTable` menyalakan flag;
+`AuthController::ubahPassword()` mematikannya. `login()` dan `me()`
+mengirimkannya ke aplikasi.
+
+### Mengarahkan, bukan memaksa
+
+TIDAK ada middleware yang memblokir endpoint lain saat flag true.
+Dipertimbangkan tiga pilihan (tanpa blokir / blokir semua kecuali
+auth / blokir endpoint yang menulis saja), dipilih yang pertama.
+
+Alasannya: password default dari admin bukan rahasia yang bocor ke
+publik, melainkan diberikan langsung ke karyawan yang bersangkutan,
+jadi risikonya rendah. Memblokir absen justru bisa mengunci orang dari
+kewajiban hariannya kalau ada bug di alur ganti password — taruhan yang
+tidak sepadan untuk aplikasi yang satu-satunya fungsi wajibnya adalah
+absen harian.
+
+### Nama tabelnya `karyawan`, bukan `karyawans`
+
+Migration pertama ditulis dengan `Schema::table('karyawans', ...)` dan
+akan gagal. Model menimpanya dengan `protected $table = 'karyawan'`,
+ikut pola instansi/shift/absensi. Ketahuan sebelum dijalankan.
+
+### Test
+
+**729 passed (2105 assertions)**, naik 3.
+
+Yang paling berharga: test yang memanggil aksi Filament `resetPassword`
+lewat `callTableAction()` dan memeriksa DB setelahnya. **Separuh fitur
+ini ada di panel admin**, dan aksi Filament tidak pernah diuji
+sebelumnya — persis jenis hal yang lolos sebagai hijau palsu di
+`IzinResourceTest` dua hari lalu, di mana form menulis ke kolom yang
+sudah tidak ada dan semua test tetap hijau.
+
+Test itu juga memastikan passwordnya benar-benar kembali ke default
+(`Hash::check('password', ...)`), bukan cuma flagnya yang berubah.
+
+`SCHEMA.md` ikut diperbarui.
+
+### Belum berguna sampai FE membacanya
+
+Flag dikirim di `login()` dan `me()`, tapi belum ada yang memakainya.
+Pekerjaan berikutnya ada di repo frontend: `UserModel` membaca flag,
+lalu mengarahkan ke layar ubah password setelah login.
+
 ## fase 88: pisah jam kembali Izin jadi rencana dan aktual
 
 Satu commit, `dc5bc9b`. Migration: rename + kolom baru.
