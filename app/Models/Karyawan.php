@@ -41,6 +41,7 @@ class Karyawan extends Authenticatable
         'unit_kerja',
         'jabatan',
         'tanggal_bergabung',
+        'harus_ganti_password',
         'is_active',
         'tipe_jadwal',
     ];
@@ -55,6 +56,7 @@ class Karyawan extends Authenticatable
         'tanggal_bergabung' => 'date',
         'is_active'         => 'boolean',
         'password'          => 'hashed',
+        'harus_ganti_password' => 'boolean',
     ];
 
     // ── Routing notifikasi ───────────────────────────────────────────────

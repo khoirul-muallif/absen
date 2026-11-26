@@ -400,3 +400,18 @@ it('form menerima karyawan tanpa email', function () {
 
     expect(Karyawan::where('nip', 'NIP-99006')->first()->email)->toBeNull();
 });
+
+it('reset password admin menyalakan harus_ganti_password', function () {
+    $karyawan = Karyawan::factory()->create([
+        'harus_ganti_password' => false,
+    ]);
+
+    livewire(ListKaryawans::class)
+        ->callTableAction('resetPassword', $karyawan);
+
+    expect($karyawan->fresh())
+        ->harus_ganti_password->toBeTrue()
+        // Password benar-benar kembali ke default, bukan cuma flagnya
+        // yang berubah.
+        ->and(Hash::check('password', $karyawan->fresh()->password))->toBeTrue();
+});

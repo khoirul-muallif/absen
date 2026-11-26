@@ -274,3 +274,41 @@ it('mengirim logo null kalau instansi belum punya logo', function () {
         ->assertOk()
         ->assertJsonPath('data.instansi.logo', null);
 });
+
+it('mematikan harus_ganti_password setelah karyawan menggantinya', function () {
+    $karyawan = Karyawan::factory()->create([
+        'password' => Hash::make('rahasia123'),
+        'harus_ganti_password' => true,
+    ]);
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => 'rahasia123',
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'rahasiaBaru456',
+        ])->assertOk();
+
+    expect($karyawan->fresh()->harus_ganti_password)->toBeFalse();
+});
+
+it('login dan me mengirim harus_ganti_password', function () {
+    $karyawan = Karyawan::factory()->create([
+        'username'  => 'budi',
+        'password'  => Hash::make('rahasia123'),
+        'is_active' => true,
+        'harus_ganti_password' => true,
+    ]);
+
+    $this->postJson('/api/auth/login', [
+        'username' => 'budi',
+        'password' => 'rahasia123',
+    ])->assertOk()->assertJsonPath('data.karyawan.harus_ganti_password', true);
+
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/auth/me')
+        ->assertOk()
+        ->assertJsonPath('data.harus_ganti_password', true);
+});

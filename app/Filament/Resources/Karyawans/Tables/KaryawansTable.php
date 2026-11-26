@@ -199,7 +199,13 @@ class KaryawansTable
                             // Kolom password punya cast 'hashed', jadi string mentah di sini
                             // otomatis di-hash. JANGAN Hash::make() manual — ter-hash dua kali
                             // dan karyawan tidak akan bisa login.
-                            $record->update(['password' => 'password']);
+                            $record->update([
+                                'password' => 'password',
+                                // Ditandai supaya aplikasi mengarahkan karyawan
+                                // ke layar ubah password saat login berikutnya.
+                                // Dimatikan sendiri oleh AuthController::ubahPassword().
+                                'harus_ganti_password' => true,
+                            ]);
 
                             Notification::make()
                                 ->title('Password berhasil direset')

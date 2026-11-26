@@ -47,6 +47,7 @@ class AuthController extends Controller
                     'unit_kerja'     => $karyawan->unit_kerja,
                     'status_pegawai' => $karyawan->status_pegawai,
                     'role'           => $karyawan->role,
+                    'harus_ganti_password' => $karyawan->harus_ganti_password,
                     'tipe_jadwal'    => $karyawan->tipe_jadwal,
                     'foto_profil'    => $karyawan->foto_profil
                         ? asset('storage/' . $karyawan->foto_profil)
@@ -110,6 +111,7 @@ class AuthController extends Controller
         // 'hashed' — hash manual di sini menghasilkan hash ganda dan
         // mengunci karyawan di luar aplikasi (CHANGELOG fase 78).
         $karyawan->password = $request->password;
+        $karyawan->harus_ganti_password = false;
         $karyawan->save();
 
         return response()->json([
@@ -148,6 +150,7 @@ class AuthController extends Controller
                 'unit_kerja'       => $karyawan->unit_kerja,
                 'status_pegawai'   => $karyawan->status_pegawai,
                 'tipe_jadwal'      => $karyawan->tipe_jadwal,
+                'harus_ganti_password' => $karyawan->harus_ganti_password,
                 'tanggal_bergabung'=> $karyawan->tanggal_bergabung?->format('d M Y'),
                 'foto_profil'      => $karyawan->foto_profil
                     ? asset('storage/' . $karyawan->foto_profil)
