@@ -15,10 +15,11 @@ use App\Models\Dinas;
 use App\Models\HariLibur;
 use App\Models\Shift;
 use Carbon\Carbon;
+use App\Models\Concerns\MembersihkanBerkas;
 
 class Karyawan extends Authenticatable
 {
-    use HasApiTokens, Notifiable, HasFactory;
+    use HasApiTokens, Notifiable, HasFactory, MembersihkanBerkas;
 
     protected $table = 'karyawan';
 
@@ -50,6 +51,11 @@ class Karyawan extends Authenticatable
         'password',
         'remember_token',
         'foto_wajah',
+    ];
+
+    protected array $kolomBerkas = [
+        'foto_profil' => 'public',
+        'foto_wajah'  => 'public',
     ];
 
     protected $casts = [
@@ -297,7 +303,7 @@ class Karyawan extends Authenticatable
         return $this->isRotasi()
             && ! $this->jadwals()->whereDate('tanggal', $tanggal)->exists();
     }
-    
+
     /**
      * Karyawan aktif yang tidak punya dasar penjadwalan apa pun pada tanggal
      * ini — tidak punya KaryawanShift yang berlaku, DAN tidak punya baris

@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\MembersihkanBerkas;
 
 class Instansi extends Model
 {
-    use HasFactory;
+    use HasFactory, MembersihkanBerkas;
 
     protected $table = 'instansi';
 
@@ -23,6 +24,8 @@ class Instansi extends Model
         'logo',
         'is_active',
     ];
+
+    protected array $kolomBerkas = ['logo' => 'public'];
 
     protected $casts = [
         'latitude'     => 'decimal:7',

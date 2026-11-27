@@ -104,6 +104,28 @@ pun yang dipilih.
 
 ## Fitur & infrastruktur
 
+- [ ] **Rapikan `AuthControllerTest`** — tiga hal, satu file, semuanya
+      sisa dari perpindahan ke login username (fase 79). Yang ketiga
+      paling berharga; dua pertama kosmetik.
+
+      1. Nama test `'bisa login dengan email dan password yang benar'`
+         — isinya login pakai `username`.
+      2. `'menolak login karyawan yang tidak aktif'` menyetel
+         `'email' => 'nonaktif@rsb.com'` yang tidak dipakai sama sekali.
+         Menyesatkan pembaca berikutnya, seolah email masih bagian dari
+         login.
+      3. Tiga test ubah password memakai
+         `assertJsonValidationErrors('password')` saja untuk TIGA sebab
+         penolakan berbeda: konfirmasi tidak cocok, kurang dari 8
+         karakter, dan sama dengan password lama. Ketiganya bisa hijau
+         karena sebab yang keliru tanpa ada yang tahu — kelas masalah
+         yang sudah diperingatkan QUICK_CONTEXT dan sudah pernah
+         kejadian di fase 26. Assert sampai ke pesannya.
+
+      Kerjakan bareng item `min:8` vs password default admin: dua-duanya
+      soal aturan password yang belum pernah diadu dengan kenyataan.
+      Dicatat 27 Nov 2026.
+
 - [ ] **Ekstrak generator jadwal dari command ke kelas biasa** —
       GenerateJadwal memanggil `Artisan::call()` lalu menampilkan
       `Artisan::output()` ke admin, jadi output CLI dan teks admin
@@ -123,7 +145,7 @@ pun yang dipilih.
       ditampilkan sebagai daftar nama yang bisa ditindaklanjuti.
 
       Ukurannya satu sesi sendiri, bukan tempelan. Dicatat 27 Nov 2026.
-      
+
 - [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
       dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
       konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.

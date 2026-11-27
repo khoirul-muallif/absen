@@ -207,6 +207,13 @@ class KaryawanForm
                             ->label('Foto Profil')
                             ->image()
                             ->imageEditor()
+                            ->disk('public')
+                            // Eksplisit, bukan default: default_filesystem_disk
+                            // Filament adalah 'local' (storage/app/private),
+                            // sementara API merakit URL-nya dengan
+                            // asset('storage/'.$path) yang cuma berlaku untuk
+                            // disk public. Tanpa ini fotonya tersimpan tapi
+                            // tidak pernah tampil di aplikasi.
                             ->directory('foto-profil')
                             ->maxSize(2048)
                             ->helperText('Maks. 2MB, format JPG/PNG'),
@@ -214,6 +221,7 @@ class KaryawanForm
                         FileUpload::make('foto_wajah')
                             ->label('Foto Wajah (Referensi)')
                             ->image()
+                            ->disk('public')
                             ->directory('foto-wajah')
                             ->maxSize(2048)
                             ->helperText('Dipakai untuk verifikasi face recognition saat absen'),
