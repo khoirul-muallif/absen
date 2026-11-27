@@ -100,6 +100,13 @@ php artisan absensi:audit-menit-terlambat
 php artisan absensi:audit-menit-terlambat --instansi=1
 php artisan absensi:audit-menit-terlambat --fix # BACKUP DB DULU
 
+Tandai baris Jadwal `libur` yang jatuh di tanggal libur nasional
+(sekali pakai setelah kolom `libur_nasional` ditambahkan, 27 Nov 2026).
+Sumbernya `hari_liburs`, bukan string keterangan. Idempoten — hanya
+menyentuh baris yang masih `false`, jadi aman dijalankan ulang.
+
+php artisan jadwal:backfill-libur-nasional --dry-run
+php artisan jadwal:backfill-libur-nasional
 
 ### JANGAN jalankan `afterApprove()` massal
 

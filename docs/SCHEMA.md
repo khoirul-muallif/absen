@@ -7,7 +7,7 @@
 > struktur kolom/tipe/constraint — tapi PROJECT_CONTEXT.md tetap sumber utama
 > untuk *alasan* desain (kenapa kolom itu ada, kenapa nullable, dst).
 
-**Update terakhir:** 9 November 2026 (dari dump 09/11/2026 09:22)
+**Update terakhir:** 27 November 2026 (dump 09/11/2026 09:22 + migration `libur_nasional` 27 Nov, ditulis manual)
 
 > Cara update file ini: export ulang dump dari Navicat/`mysqldump`, minta
 > Claude bandingkan sama versi lama, lalu tulis ulang bagian yang berubah.
@@ -58,7 +58,8 @@
 
 ## Jadwal & tukar jadwal
 
-**jadwals** — karyawan_id, shift_id (nullable), tanggal, jenis (varchar bebas: reguler/piket/libur/cuti/dinas — bukan native ENUM), sumber (generate/manual, default generate), keterangan. Unique(karyawan_id, tanggal)
+**jadwals** — karyawan_id, shift_id (nullable), tanggal, jenis (varchar bebas: reguler/piket/libur/cuti/dinas — bukan native ENUM), **libur_nasional (boolean, default false)**, sumber (generate/manual, default generate), keterangan. Unique(karyawan_id, tanggal)
+- `libur_nasional` menandai BARIS LIBUR yang jatuh karena libur nasional, bukan menandai tanggalnya. Karyawan rotasi yang tetap bekerja saat libur nasional (`pola_rotasis.berlaku_saat_libur_nasional = true`) punya baris `piket` dengan kolom ini `false`. Ditambahkan 27 Nov 2026.
 
 **tukar_jadwals** — jadwal_id, karyawan_pengaju_id (nullable), tanggal_asal, shift_asal_id (nullable), jadwal_tujuan_id (nullable), karyawan_tujuan_id (nullable), direspon_oleh_rekan_id (nullable → karyawan), direspon_rekan_at, catatan_penolakan_rekan, tanggal_tujuan (nullable), shift_tujuan_id (nullable), tanggal_baru (nullable, mode pindah), alasan, **status enum: menunggu_rekan/menunggu_admin/ditolak_rekan/approved/rejected** (default menunggu_admin), approved_by, approved_at, catatan_approval
 
