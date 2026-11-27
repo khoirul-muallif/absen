@@ -22,6 +22,14 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  */
 class KaryawanTemplateExport implements WithMultipleSheets, Export
 {
+    /**
+     * Nama sheet data. Dirujuk title() milik sheet-nya DAN KaryawanImport —
+     * mengganti nama di sini otomatis ikut di keduanya. Sebelumnya nama ini
+     * cuma ada di title(), dan importer mengandalkan "sheet pertama adalah
+     * sheet data" yang tidak dijamin apa pun.
+     */
+    public const SHEET_DATA = 'Data Karyawan';
+
     public function __construct(protected array $unitKerjaTersedia = [])
     {
     }

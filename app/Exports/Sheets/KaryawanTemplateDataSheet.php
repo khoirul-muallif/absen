@@ -15,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use App\Exports\KaryawanTemplateExport;
 
 class KaryawanTemplateDataSheet implements FromArray, WithTitle, WithHeadings, WithStyles, WithColumnWidths, WithEvents
 {
@@ -23,7 +24,7 @@ class KaryawanTemplateDataSheet implements FromArray, WithTitle, WithHeadings, W
 
     public function title(): string
     {
-        return 'Data Karyawan';
+        return KaryawanTemplateExport::SHEET_DATA;
     }
 
     public function array(): array

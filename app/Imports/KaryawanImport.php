@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use App\Exports\KaryawanTemplateExport;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+
 
 /**
  * Import karyawan massal (fase 82).
@@ -28,7 +31,8 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
  * kalau dry-run bilang 150 baris siap, commit harus menerima 150 baris
  * yang sama persis.
  */
-class KaryawanImport implements ToCollection, WithHeadingRow
+
+class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
 {
     public const PASSWORD_DEFAULT = Karyawan::PASSWORD_DEFAULT;
 
@@ -130,23 +134,24 @@ class KaryawanImport implements ToCollection, WithHeadingRow
         return Carbon::create($tahun, $bulan, $hari)->startOfDay();
     }
 
-    /** @see collection() */
-    protected bool $sudahDiproses = false;
+    /**
+     * Memetakan NAMA sheet ke handler-nya, jadi maatwebsite cuma memanggil
+     * collection() untuk sheet data. Sheet "Petunjuk" tidak pernah disentuh.
+     *
+     * Sebelumnya tidak ada pemetaan: collection() dipanggil untuk SETIAP
+     * sheet, dan yang menahan pemanggilan kedua cuma penanda $sudahDiproses
+     * — yang berarti "sheet pertama adalah sheet data". Admin yang mengirim
+     * file dengan urutan sheet terbalik akan membuat importer memproses
+     * "Petunjuk" dan menolak semua barisnya dengan pesan yang tidak masuk
+     * akal.
+     */
+    public function sheets(): array
+    {
+        return [KaryawanTemplateExport::SHEET_DATA => $this];
+    }
 
     public function collection(Collection $rows): void
     {
-        // maatwebsite memanggil collection() SEKALI PER SHEET, dan template
-        // punya sheet "Petunjuk". Tanpa penjaga ini, simpan() jalan dua kali
-        // dan 5 baris yang sama di-insert ulang — duplicate NIP, dengan
-        // batch pertama SUDAH ter-commit karena transaksinya terpisah.
-        //
-        // Sheet pertama adalah sheet data; itu asumsi yang dipegang di sini.
-        if ($this->sudahDiproses) {
-            return;
-        }
-
-        $this->sudahDiproses = true;
-
         $this->unitDikenal = $this->unitYangSudahAda();
 
         foreach ($rows as $index => $row) {

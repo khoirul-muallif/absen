@@ -20,6 +20,7 @@ use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Exceptions\SheetNotFoundException;
 
 class ListKaryawans extends ListRecords
 {
@@ -94,8 +95,22 @@ class ListKaryawans extends ListRecords
                 $this->berkasImport = $data['berkas'];
                 $this->instansiImport = (int) $data['instansi_id'];
 
-                $import = new KaryawanImport($this->instansiImport, dryRun: true);
-                Excel::import($import, Storage::disk('local')->path($this->berkasImport));
+                try {
+                    $import = new KaryawanImport($this->instansiImport, dryRun: true);
+                    Excel::import($import, Storage::disk('local')->path($this->berkasImport));
+                } catch (SheetNotFoundException) {
+                    $this->buangBerkasImport();
+
+                    Notification::make()
+                        ->title('Sheet "' . KaryawanTemplateExport::SHEET_DATA . '" tidak ditemukan')
+                        ->body('Berkas ini tidak punya sheet bernama "' . KaryawanTemplateExport::SHEET_DATA
+                            . '". Pakai berkas dari tombol "Unduh Template Import", dan jangan mengganti nama sheet-nya.')
+                        ->danger()
+                        ->persistent()
+                        ->send();
+
+                    return;
+                }
 
                 // Di actionImport(), ganti blok setelah Excel::import
                 $this->pratinjauImport = [
@@ -153,8 +168,23 @@ class ListKaryawans extends ListRecords
                     return;
                 }
 
-                $import = new KaryawanImport($this->instansiImport, dryRun: false);
-                Excel::import($import, Storage::disk('local')->path($this->berkasImport));
+                try {
+                    $import = new KaryawanImport($this->instansiImport, dryRun: false);
+                    Excel::import($import, Storage::disk('local')->path($this->berkasImport));
+                } catch (SheetNotFoundException) {
+                    $this->buangBerkasImport();
+                    $this->pratinjauImport = [];
+
+                    Notification::make()
+                        ->title('Berkas sudah tidak bisa dibaca')
+                        ->body('Sheet "' . KaryawanTemplateExport::SHEET_DATA
+                            . '" tidak ditemukan saat menyimpan. Ulangi dari tombol Import dari Excel.')
+                        ->danger()
+                        ->persistent()
+                        ->send();
+
+                    return;
+                }
 
                 $hasil = $import->hasil;
 
@@ -239,7 +269,7 @@ class ListKaryawans extends ListRecords
         if ($hasil->ditolak !== []) {
             $catatan .= ' ' . count($hasil->ditolak) . ' baris dilewati dan perlu diinput manual.';
         }
-        
+
         // Angkanya dihitung SETELAH import, jadi sudah termasuk yang baru
         // masuk. Tanpa ini, langkah assign dan generate bisa terlupa diam-diam
         // dan baru ketahuan saat karyawan mengeluh tidak bisa absen.

@@ -11,6 +11,7 @@ use App\Imports\KaryawanImport;
 use App\Models\Instansi;
 use App\Models\Karyawan;
 use Illuminate\Support\Collection;
+use App\Exports\KaryawanTemplateExport;
 
 beforeEach(function () {
     $this->instansi = Instansi::factory()->create();
@@ -211,17 +212,19 @@ it('menolak tanggal bergabung di masa depan', function () {
 
 // ── Penjaga dua-sheet ────────────────────────────────────────────────────
 
-it('tidak memproses pemanggilan collection() yang kedua', function () {
-    // maatwebsite memanggil collection() SEKALI PER SHEET, dan template punya
-    // sheet "Petunjuk". Tanpa penjaga, simpan() jalan dua kali dan baris yang
-    // sama di-insert ulang — duplicate NIP.
+it('hanya memetakan sheet data, bukan sheet lain', function () {
+    // Pengganti test lama yang menguji penjaga $sudahDiproses. Penjaga
+    // itu berarti "sheet pertama adalah sheet data" — asumsi yang gagal
+    // kalau admin mengirim file dengan urutan sheet terbalik.
+    //
+    // Sekarang maatwebsite yang memilih sheet lewat nama, jadi
+    // collection() tidak akan pernah dipanggil untuk "Petunjuk" dan
+    // tidak perlu penjaga sama sekali.
     $import = new KaryawanImport($this->instansi->id, dryRun: false);
 
-    $import->collection(collect([barisImport()]));
-    $import->collection(collect([barisImport(['nip' => 'NIP-999'])]));
-
-    expect(Karyawan::count())->toBe(1)
-        ->and(Karyawan::where('nip', 'NIP-999')->exists())->toBeFalse();
+    expect($import->sheets())
+        ->toHaveKey(KaryawanTemplateExport::SHEET_DATA)
+        ->toHaveCount(1);
 });
 
 // ── Baris kosong & nilai default ─────────────────────────────────────────
