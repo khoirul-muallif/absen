@@ -297,6 +297,38 @@ class Karyawan extends Authenticatable
         return $this->isRotasi()
             && ! $this->jadwals()->whereDate('tanggal', $tanggal)->exists();
     }
+    
+    /**
+     * Karyawan aktif yang tidak punya dasar penjadwalan apa pun pada tanggal
+     * ini — tidak punya KaryawanShift yang berlaku, DAN tidak punya baris
+     * Jadwal. Mereka inilah yang akan ditolak AbsensiController::masuk()
+     * dengan "Tidak ada shift aktif untuk hari ini".
+     *
+     * Kondisi tanggalnya SALINAN langkah 5 controller. Kalau yang di sana
+     * berubah, yang di sini harus ikut — kalau tidak, filter ini berbohong.
+     *
+     * Rotasi yang hari ini libur TIDAK ikut: dia punya baris jenis='libur',
+     * dan controller memberinya pesan sendiri, bukan pesan ambigu ini.
+     *
+     * Baris Jadwal yang ada tapi shift_id-nya null (anomali) juga tidak
+     * ikut, walau controller menolaknya dengan pesan yang sama. Itu kasus
+     * cuti/dinas yang sinkronisasinya pincang, sudah punya detektor sendiri
+     * di RekapHarian ('jadwal_hilang') — bukan "belum disiapkan admin".
+     */
+    public function scopeTidakBisaAbsenPada($query, ?Carbon $tanggal = null)
+    {
+        $tanggal ??= today();
+
+        return $query
+            ->where('is_active', true)
+            ->whereDoesntHave('karyawanShift', fn ($q) => $q
+                ->whereDate('tanggal_berlaku', '<=', $tanggal)
+                ->where(fn ($sub) => $sub
+                    ->whereNull('tanggal_berakhir')
+                    ->orWhereDate('tanggal_berakhir', '>=', $tanggal)))
+            ->whereDoesntHave('jadwals', fn ($q) => $q
+                ->whereDate('tanggal', $tanggal));
+    }
 
     /**
      * Username default dari nama: gelar dibuang, huruf kecil, hanya huruf

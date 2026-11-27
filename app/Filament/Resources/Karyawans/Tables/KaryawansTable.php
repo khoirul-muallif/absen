@@ -33,6 +33,7 @@ use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Filament\Tables\Filters\Filter;
 
 class KaryawansTable
 {
@@ -181,6 +182,17 @@ class KaryawansTable
                     ->label('Status Aktif')
                     ->trueLabel('Aktif')
                     ->falseLabel('Tidak Aktif'),
+
+                // Karyawan rotasi yang polanya sudah di-assign tapi jadwalnya
+                // belum digenerate ditolak absen dengan pesan IDENTIK dengan
+                // yang belum di-assign sama sekali. Tanpa filter ini, admin
+                // tidak punya cara melihat bedanya — maupun melihat bahwa ada
+                // yang tertinggal.
+                Filter::make('tidak_bisa_absen')
+                    ->label('Belum bisa absen hari ini')
+                    ->toggle()
+                    ->query(fn ($query) => $query->tidakBisaAbsenPada())
+                    ->indicator('Belum bisa absen hari ini'),
             ])
             ->recordActions([
                 ActionGroup::make([

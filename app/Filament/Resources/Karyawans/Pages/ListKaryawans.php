@@ -239,8 +239,23 @@ class ListKaryawans extends ListRecords
         if ($hasil->ditolak !== []) {
             $catatan .= ' ' . count($hasil->ditolak) . ' baris dilewati dan perlu diinput manual.';
         }
+        
+        // Angkanya dihitung SETELAH import, jadi sudah termasuk yang baru
+        // masuk. Tanpa ini, langkah assign dan generate bisa terlupa diam-diam
+        // dan baru ketahuan saat karyawan mengeluh tidak bisa absen.
+        $belumBisaAbsen = Karyawan::query()
+            ->where('instansi_id', $this->instansiImport)
+            ->tidakBisaAbsenPada()
+            ->count();
 
-        return $catatan . ' Jangan lupa assign shift atau pola rotasi — karyawan tanpa assignment tidak bisa absen.';
+        if ($belumBisaAbsen > 0) {
+            $catatan .= " Saat ini {$belumBisaAbsen} karyawan belum bisa absen hari ini"
+                . ' — saring dengan filter "Belum bisa absen hari ini" di tabel.'
+                . ' Assign shift atau pola rotasi lewat tombol aksi massal;'
+                . ' untuk karyawan rotasi, jadwalnya masih perlu dibuat setelah itu.';
+        }
+
+        return $catatan;
     }
 
     protected function buangBerkasImport(): void
