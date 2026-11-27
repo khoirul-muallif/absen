@@ -142,6 +142,11 @@ class AbsensiController extends Controller
             ->latest('tanggal_berlaku')
             ->first();
 
+        // $karyawanShift->shift tidak dijaga null, beda dari cabang Jadwal
+        // di bawah — itu disengaja. karyawan_shift.shift_id NOT NULL dan
+        // FK-nya cascadeOnDelete, jadi tidak ada baris yatim yang mungkin.
+        // Di jadwals, shift_id justru nullable (baris libur/cuti/dinas
+        // memang lahir tanpa shift), makanya di sana perlu guard.
         if ($karyawanShift) {
             $shift    = $karyawanShift->shift;
             $shiftId  = $karyawanShift->shift_id;

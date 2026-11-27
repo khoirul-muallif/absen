@@ -54,8 +54,14 @@ Laravel + Filament v4.11.7, MySQL 8.0 (Laragon, port 3308), Sanctum, Pest v4.7.5
   Admin RS tidak punya akses terminal, jadi itu menyodorkan solusi yang
   mustahil dia lakukan. Tulis pakai bahasa hasil ("jadwal yang sudah dibuat
   tidak ikut berubah, ubah lewat menu Jadwal atau minta admin sistem
-  membuat ulang"), dan simpan nama command-nya di `runbook.md`. Sudah
-  terlanjur ada di 4 tempat, lihat todo.md.
+  membuat ulang"), dan simpan nama command-nya di `runbook.md`. Diperiksa
+  ulang 27 Nov 2026: tersisa SATU tempat (`beritahuBerhasil()` di
+  KaryawansTable), bukan 4 — sisanya komentar kode, yang memang boleh.
+  Catatan: `jadwal:generate-bulanan` dan `jadwal:generate-rotasi` TIDAK
+  perlu admin sistem sama sekali — halaman Generate Jadwal (grup
+  Presensi) menjalankan keduanya lewat Artisan::call(). Teks admin yang
+  menyangkut keduanya harus mengarah ke menu itu, bukan ke terminal
+  maupun ke "minta admin sistem".
 - `todo.md` dijaga lean (item selesai DIHAPUS, bukan di-checklist doang); `CHANGELOG.md` yang jadi arsip historis lengkap per-fase.
 
 ## Kategori Test yang Sering Kelewat

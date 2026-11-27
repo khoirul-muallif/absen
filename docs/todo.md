@@ -30,19 +30,14 @@ menambah modul baru.
 karyawan (fase 82) → bulk action assignment (fase 83) →
 `jadwal:generate-rotasi` khusus rotasi. Lihat item di bawah.
 
-- [ ] **Cabang KaryawanShift di `masuk()` tidak menjaga shift null** —
-      `$karyawanShift->shift` diambil tanpa pengecekan, lalu
-      `$shift->mode_toleransi` dibaca langsung: kalau relasinya putus
-      hasilnya 500, bukan 422. Cabang Jadwal di bawahnya justru punya
-      guard untuk kasus yang sama. Perlu cek FK `karyawan_shift.shift_id`
-      dulu (belum ada di SCHEMA.md) — kalau RESTRICT, ini mustahil dan
-      cukup ditutup dengan komentar. Dicatat 27 Nov 2026.
-
-- [ ] **`beritahuBerhasil()` menyebut `jadwal:generate-rotasi` ke admin**
-      — melanggar larangan eksplisit di QUICK_CONTEXT (admin RS tidak
-      punya terminal). Kemungkinan salah satu dari "4 tempat" yang sudah
-      tercatat. Teks baru di `catatanSetelahImport()` sudah memakai
-      bahasa hasil; samakan. Dicatat 27 Nov 2026.
+- [ ] **`GenerateJadwal::notifikasiHasil()` menampilkan `Artisan::output()`
+      mentah ke admin** — komentarnya menyatakan aman karena kedua command
+      menulis dalam bahasa hasil. Itu benar sekarang, tapi bergantung pada
+      isi command, bukan dijamin apa pun. Satu `$this->error()` yang
+      menyarankan `--overwrite-generate` akan membocorkan nama flag ke
+      admin lewat jalur yang tidak terdeteksi grep. Pilihan: saring
+      output-nya, atau kunci dengan test yang memeriksa output kedua
+      command tidak mengandung "artisan"/"--". Dicatat 27 Nov 2026.
 
 Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`, aturan masa kerja cuti) butuh masukan

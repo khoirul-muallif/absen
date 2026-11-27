@@ -490,9 +490,14 @@ class KaryawansTable
             : '';
 
         if ($ingatkanGenerate) {
-            // Langkah 3 dari tiga prasyarat deploy: tanpa generate, karyawan
+            // Langkah 3 dari tiga prasyarat deploy: tanpa jadwal, karyawan
             // rotasi tetap tidak bisa absen walaupun polanya sudah di-assign.
-            $catatan .= ' Jalankan jadwal:generate-rotasi supaya jadwalnya terbentuk — tanpa itu mereka belum bisa absen.';
+            // Nama command-nya SENGAJA tidak disebut — admin RS tidak punya
+            // akses terminal, dan tidak perlu: halaman Generate Jadwal
+            // menjalankannya lewat Artisan::call(). Command-nya di runbook.md.
+            $catatan .= ' Jadwal mereka belum terbentuk, jadi mereka belum bisa absen.'
+                . ' Buat lewat menu Generate Jadwal (grup Presensi), tombol "Buat Jadwal Rotasi",'
+                . ' lalu periksa hasilnya dengan filter "Belum bisa absen hari ini" di tabel ini.';
         }
 
         Notification::make()

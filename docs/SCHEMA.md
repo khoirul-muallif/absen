@@ -75,6 +75,11 @@ cache, cache_locks, failed_jobs, job_batches, jobs, migrations, notifications (n
 ---
 
 ## Ringkasan Foreign Key & Delete Behavior yang perlu diperhatikan
+- `karyawan_shift.shift_id` → `ON DELETE CASCADE`, dan kolomnya NOT NULL.
+  Satu-satunya cara relasi ini putus adalah barisnya ikut terhapus, jadi
+  `$karyawanShift->shift` tidak pernah null. Bandingkan `jadwals.shift_id`
+  yang nullable — itu sebabnya hanya cabang Jadwal di AbsensiController
+  yang butuh guard. Diperiksa 27 Nov 2026.
 - Semua FK ke `karyawan_id` → `ON DELETE CASCADE` (hapus karyawan = hapus semua histori terkait)
 - `approved_by` dan `informasi.created_by` → `users.id` → `ON DELETE SET NULL` (admin dihapus, histori tetap ada tanpa approver/pembuat)
 - `tukar_jadwals` FK ke `karyawan` (pengaju/tujuan/direspon) → `ON DELETE SET NULL`, bukan CASCADE — beda perlakuan dari tabel lain, karena histori tukar jadwal tetap perlu dipertahankan walau salah satu karyawan dihapus
