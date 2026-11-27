@@ -1057,3 +1057,125 @@ it('sesi_kemarin false untuk baris hari ini', function () {
         ->assertOk()
         ->assertJsonPath('data.sesi_kemarin', false);
 });
+
+
+// ── Scope tidakBisaAbsenPada() vs kenyataan controller (fase 91) ──────────
+//
+// Scope itu SALINAN kondisi langkah 5 masuk(). Test di
+// KaryawanTidakBisaAbsenTest cuma membuktikan scope setuju dengan dirinya
+// sendiri — kalau langkah 5 berubah dan scope tidak, semuanya tetap hijau
+// sementara filter di panel admin mulai berbohong.
+//
+// Yang di bawah ini menjalankan keduanya dalam SATU test: scope menandai,
+// lalu endpoint sungguhan dipanggil untuk orang yang sama. Keduanya harus
+// sepakat atau test merah.
+
+describe('fase 91: scope filter sepakat dengan AbsensiController::masuk()', function () {
+    beforeEach(function () {
+        Storage::fake('public');
+        $this->travelTo(Carbon::parse('2026-06-15 07:15:00'));
+
+        $this->instansi = buatInstansiDenganTitik();
+        $this->shift = Shift::factory()->create([
+            'instansi_id' => $this->instansi->id,
+            'jam_masuk'   => '07:30:00',
+        ]);
+        $this->qr = QrInstansi::factory()->create(['instansi_id' => $this->instansi->id]);
+    });
+
+    function requestMasuk(Instansi $instansi, QrInstansi $qr): array
+    {
+        return [
+            'latitude'   => $instansi->latitude,
+            'longitude'  => $instansi->longitude,
+            'kode_qr'    => $qr->kode_qr,
+            'foto_masuk' => UploadedFile::fake()->image('masuk.jpg'),
+        ];
+    }
+
+    it('rotasi yang polanya sudah di-assign tapi jadwalnya belum digenerate: ditandai DAN ditolak', function () {
+        // Berhenti di langkah 2 dari tiga prasyarat deploy. Inilah alasan
+        // seluruh filter ini ada.
+        $karyawan = Karyawan::factory()->rotasi()->create([
+            'instansi_id' => $this->instansi->id,
+        ]);
+
+        expect(Karyawan::tidakBisaAbsenPada()->pluck('id'))->toContain($karyawan->id);
+
+        loginSebagai($karyawan);
+
+        $this->postJson('/api/absensi/masuk', requestMasuk($this->instansi, $this->qr))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Tidak ada shift aktif untuk hari ini. Hubungi admin.');
+    });
+
+    it('umum yang KaryawanShift-nya habis di pergantian bulan: ditandai DAN ditolak', function () {
+        // Known Gap #4: assignment seeder dibatasi per bulan. Begitu
+        // tanggal_berakhir lewat dan generator bulanan juga belum jalan,
+        // orang ini tidak bisa absen — kasus yang tidak punya test sendiri
+        // sebelum ini.
+        $karyawan = Karyawan::factory()->umum()->create([
+            'instansi_id' => $this->instansi->id,
+        ]);
+
+        KaryawanShift::factory()->create([
+            'karyawan_id'      => $karyawan->id,
+            'shift_id'         => $this->shift->id,
+            'tanggal_berlaku'  => '2026-05-01',
+            'tanggal_berakhir' => '2026-05-31',
+        ]);
+
+        expect(Karyawan::tidakBisaAbsenPada()->pluck('id'))->toContain($karyawan->id);
+
+        loginSebagai($karyawan);
+
+        $this->postJson('/api/absensi/masuk', requestMasuk($this->instansi, $this->qr))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Tidak ada shift aktif untuk hari ini. Hubungi admin.');
+    });
+
+    it('rotasi yang hari ini libur: TIDAK ditandai, dan pesannya memang berbeda', function () {
+        // Mengunci pengecualian yang disengaja. Kalau suatu saat controller
+        // menghapus cabang libur dan melemparkannya ke pesan ambigu, test
+        // ini merah — dan filternya memang harus ikut berubah.
+        $karyawan = Karyawan::factory()->rotasi()->create([
+            'instansi_id' => $this->instansi->id,
+        ]);
+
+        Jadwal::factory()->libur()->create([
+            'karyawan_id' => $karyawan->id,
+            'tanggal'     => today(),
+        ]);
+
+        expect(Karyawan::tidakBisaAbsenPada()->pluck('id'))->not->toContain($karyawan->id);
+
+        loginSebagai($karyawan);
+
+        $this->postJson('/api/absensi/masuk', requestMasuk($this->instansi, $this->qr))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Hari ini jadwal Anda libur, tidak perlu absen masuk.');
+    });
+
+    it('umum dengan KaryawanShift berlaku: TIDAK ditandai, dan absennya berhasil', function () {
+        // Arah sebaliknya. Tanpa ini, scope yang menandai SEMUA orang juga
+        // akan meloloskan ketiga test di atas.
+        $karyawan = Karyawan::factory()->umum()->create([
+            'instansi_id' => $this->instansi->id,
+        ]);
+
+        KaryawanShift::factory()->create([
+            'karyawan_id'      => $karyawan->id,
+            'shift_id'         => $this->shift->id,
+            'tanggal_berlaku'  => '2026-06-01',
+            'tanggal_berakhir' => null,
+        ]);
+
+        expect(Karyawan::tidakBisaAbsenPada()->pluck('id'))->not->toContain($karyawan->id);
+
+        loginSebagai($karyawan);
+
+        $this->postJson('/api/absensi/masuk', requestMasuk($this->instansi, $this->qr))
+            ->assertOk()
+            ->assertJsonPath('success', true);
+    });
+});

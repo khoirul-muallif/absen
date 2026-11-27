@@ -5,6 +5,93 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 91: filter "belum bisa absen hari ini"
+
+Commit `64c6bd1` + commit ini (test integrasi).
+
+### Kegagalan yang tidak kelihatan dari panel
+
+Prasyarat deploy pertama ada TIGA langkah: import (fase 82) → bulk
+action assignment (fase 83) → generate jadwal rotasi. Karyawan rotasi
+yang berhenti di langkah 2 punya baris `karyawan_pola_rotasis`, tapi
+`AbsensiController::masuk()` langkah 5 tidak pernah membaca tabel itu —
+dia membaca `KaryawanShift`, lalu fallback ke baris `Jadwal`.
+
+Jadi dia ditolak dengan pesan IDENTIK dengan yang belum di-assign sama
+sekali: "Tidak ada shift aktif untuk hari ini". Admin tidak punya cara
+membedakan keduanya, maupun cara tahu bahwa ada yang tertinggal.
+Kegagalannya muncul sebagai keluhan karyawan, bukan sebagai sesuatu
+yang terlihat di panel.
+
+### Kenapa bukan filter "tanpa assignment"
+
+Filter berbasis assignment akan meloloskan persis kelompok yang paling
+ingin dilihat — rotasi yang polanya sudah ada tapi jadwalnya belum
+digenerate. `karyawan_pola_rotasis` sengaja tidak dilihat sama sekali:
+yang menentukan bisa absen atau tidak cuma `KaryawanShift` dan
+`Jadwal`.
+
+### Pesan ambigu itu punya dua jalur, filter cuma mencakup satu
+
+Langkah 5 melempar pesan yang sama di dua tempat: (A) tidak ada
+`KaryawanShift` aktif dan tidak ada baris `Jadwal`, dan (C) ada baris
+`Jadwal` bukan libur tapi `shift_id` null.
+
+Filter sengaja cuma mencakup A. C terjadi pada baris cuti/dinas yang
+sinkronisasinya pincang — memasukkannya berarti daftar "siapa yang
+belum saya siapkan" ikut menampilkan orang yang sedang cuti, dan untuk
+mengeluarkan mereka dengan benar langkah 1 controller harus ikut
+direplikasi. C sudah punya detektor sendiri di `RekapHarian`
+(`jadwal_hilang`, fase 13).
+
+Definisinya karena itu digeser: bukan "siapa yang akan kena error A",
+melainkan "siapa yang belum punya dasar penjadwalan apa pun hari ini".
+
+### Rotasi yang kebetulan libur tidak ikut
+
+Diperiksa ke source sebelum menulis query, bukan diasumsikan: langkah 5
+memberi baris libur pesannya sendiri ("Hari ini jadwal Anda libur"),
+dan orang itu PUNYA baris `jadwals`. Jadi kondisi dua-`whereDoesntHave`
+sudah mengeluarkannya tanpa pengecualian tambahan. Kalau tidak, filter
+jadi berisik justru di kasus paling normal.
+
+### Nilainya melampaui deploy pertama
+
+Known Gap #4: assignment `KaryawanShift` di seeder dibatasi per bulan.
+Begitu `tanggal_berakhir` lewat tanpa diperpanjang, karyawan umum jatuh
+ke cabang `Jadwal` — dan kalau generator bulanan juga belum jalan, dia
+tidak bisa absen. Filter ini menangkapnya, jadi dia juga penjaga
+pergantian bulan, bukan alat sekali pakai.
+
+### Scope, bukan query di filter
+
+Dua pemanggil (filter tabel + hitungan di notifikasi setelah import)
+harus memakai definisi yang sama persis. Scope juga bisa diuji Pest
+langsung tanpa `livewire()` — relevan mengingat dua item todo lain
+justru mengeluhkan modal Filament yang belum pernah diuji.
+
+Catatan: kondisi tanggal yang sama kini ada di EMPAT tempat (langkah 5
+controller, `shiftYangDiharapkanPada()`, `shiftAktif()`, dan scope ini).
+Tiga yang pertama sudah terlanjur ada sejak lama; menyatukannya menyentuh
+jalur absen produksi, jadi ditunda.
+
+### `is_active` ditambahkan, tidak ada di catatan todo
+
+Karyawan nonaktif memang tidak bisa absen dan memang tidak perlu
+diperbaiki. Tanpa ini daftarnya berisik permanen.
+
+### Test
+
+8 test scope + 4 test integrasi. Yang 8 cuma membuktikan scope setuju
+dengan dirinya sendiri; yang 4 memanggil scope DAN endpoint sungguhan
+dalam satu test, untuk orang yang sama.
+
+Yang paling mudah diremehkan: *"umum dengan KaryawanShift berlaku —
+tidak ditandai, dan absennya berhasil"*. Tanpa arah sebaliknya, scope
+yang menandai semua orang akan membuat tiga test lainnya hijau.
+
+731 → 743 (2111 → 2132).
+
 ## fase 90: status() kirim tanggal dan tandai sesi kemarin
 
 Satu commit, `f0f2d3e`.

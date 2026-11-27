@@ -30,6 +30,20 @@ menambah modul baru.
 karyawan (fase 82) → bulk action assignment (fase 83) →
 `jadwal:generate-rotasi` khusus rotasi. Lihat item di bawah.
 
+- [ ] **Cabang KaryawanShift di `masuk()` tidak menjaga shift null** —
+      `$karyawanShift->shift` diambil tanpa pengecekan, lalu
+      `$shift->mode_toleransi` dibaca langsung: kalau relasinya putus
+      hasilnya 500, bukan 422. Cabang Jadwal di bawahnya justru punya
+      guard untuk kasus yang sama. Perlu cek FK `karyawan_shift.shift_id`
+      dulu (belum ada di SCHEMA.md) — kalau RESTRICT, ini mustahil dan
+      cukup ditutup dengan komentar. Dicatat 27 Nov 2026.
+
+- [ ] **`beritahuBerhasil()` menyebut `jadwal:generate-rotasi` ke admin**
+      — melanggar larangan eksplisit di QUICK_CONTEXT (admin RS tidak
+      punya terminal). Kemungkinan salah satu dari "4 tempat" yang sudah
+      tercatat. Teks baru di `catatanSetelahImport()` sudah memakai
+      bahasa hasil; samakan. Dicatat 27 Nov 2026.
+
 Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`, aturan masa kerja cuti) butuh masukan
 dari pihak RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa
@@ -135,34 +149,6 @@ pun yang dipilih.
       mencabut 'mail' dari `via()`. Dibiarkan sengaja supaya keputusan itu
       murah dibalik. Hapus kalau sudah yakin tidak akan dikembalikan.
 
-- [ ] **Filter "tidak bisa absen hari ini" di daftar karyawan** — sisa dari
-      item bulk action yang ditutup fase 83. Bulk action-nya sendiri sudah
-      ada, termasuk stagger anchor dan semua penolakannya; yang belum:
-      cara admin MELIHAT siapa yang masih tertinggal.
-
-      Prasyarat deploy pertama ada TIGA langkah, bukan dua.
-      `AbsensiController::masuk()` langkah 5 membaca `KaryawanShift` dulu,
-      lalu fallback ke baris `Jadwal` hari ini — BUKAN ke
-      `KaryawanPolaRotasi`. Jadi untuk rotasi, punya baris
-      `karyawan_pola_rotasis` belum cukup:
-
-      1. Import karyawan (fase 82, SELESAI)
-      2. Bulk action assignment (fase 83, SELESAI)
-      3. `jadwal:generate-rotasi` — khusus rotasi, setelah langkah 2
-
-      Karyawan rotasi yang berhenti di langkah 2 tetap tidak bisa absen,
-      dengan pesan error IDENTIK dengan yang belum di-assign sama sekali
-      ("Tidak ada shift aktif untuk hari ini") — admin tidak punya cara
-      membedakan keduanya.
-
-      Karena itu filternya bukan "tanpa assignment" (itu meloloskan rotasi
-      yang polanya ada tapi jadwalnya belum digenerate), melainkan **"tidak
-      bisa absen hari ini"**: tidak punya `KaryawanShift` aktif DAN tidak
-      punya baris `Jadwal` hari ini. Salin persis kondisi di langkah 5
-      controller supaya filter tidak bisa menyimpang dari kenyataan.
-
-      Tampilkan juga hitungannya setelah import selesai, supaya langkah 2
-      dan 3 tidak bisa terlupa diam-diam.
       
 - [ ] **Bagian import yang masih tidak diuji** — fase 82 punya 26 test untuk
       aturan validasi (`KaryawanImportTest`), tapi semuanya memanggil
