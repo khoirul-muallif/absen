@@ -152,7 +152,7 @@ class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
 
     public function collection(Collection $rows): void
     {
-        $this->unitDikenal = $this->unitYangSudahAda();
+        $this->unitDikenal = $this->petaUnitKerja();
 
         foreach ($rows as $index => $row) {
             // +2: baris 1 adalah header, dan index mulai dari 0. Angka ini
@@ -412,7 +412,7 @@ class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
      * Kalau cuma ada di karyawan, yang terbanyak menang; seri diputus
      * alfabetis supaya hasilnya tidak bergantung urutan query.
      */
-    protected function unitYangSudahAda(): array
+    protected function petaUnitKerja(): array
     {
         $peta = [];
 
