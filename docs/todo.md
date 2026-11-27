@@ -30,15 +30,6 @@ menambah modul baru.
 karyawan (fase 82) → bulk action assignment (fase 83) →
 `jadwal:generate-rotasi` khusus rotasi. Lihat item di bawah.
 
-- [ ] **`GenerateJadwal::notifikasiHasil()` menampilkan `Artisan::output()`
-      mentah ke admin** — komentarnya menyatakan aman karena kedua command
-      menulis dalam bahasa hasil. Itu benar sekarang, tapi bergantung pada
-      isi command, bukan dijamin apa pun. Satu `$this->error()` yang
-      menyarankan `--overwrite-generate` akan membocorkan nama flag ke
-      admin lewat jalur yang tidak terdeteksi grep. Pilihan: saring
-      output-nya, atau kunci dengan test yang memeriksa output kedua
-      command tidak mengandung "artisan"/"--". Dicatat 27 Nov 2026.
-
 Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
 TukarJadwal, `is_cuti_bersama`, aturan masa kerja cuti) butuh masukan
 dari pihak RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa
@@ -112,6 +103,27 @@ pun yang dipilih.
       sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
 
 ## Fitur & infrastruktur
+
+- [ ] **Ekstrak generator jadwal dari command ke kelas biasa** —
+      GenerateJadwal memanggil `Artisan::call()` lalu menampilkan
+      `Artisan::output()` ke admin, jadi output CLI dan teks admin
+      terpaksa jadi satu benda. Akibatnya sudah dua kali terlihat:
+      nama command bocor ke admin (ditutup 27 Nov) dan tabel ASCII
+      hancur di notifikasi (ditutup 27 Nov). Yang tersisa: baris baru
+      hilang, jadi semua kalimat menyambung jadi satu paragraf, dan
+      prefix [DRY-RUN] ikut terbawa walau panel tidak pernah
+      mengirimnya.
+
+      Pola yang sudah terbukti di proyek ini: `PerencanaAssignment`
+      (fase 83) — satu kelas dipakai dua pemanggil supaya keduanya
+      tidak bisa berbeda pendapat. Command menulis table() untuk
+      terminal, panel menyusun kalimatnya sendiri dari angka.
+
+      Bonus: anomali "tipe ROTASI tapi punya KaryawanShift" bisa
+      ditampilkan sebagai daftar nama yang bisa ditindaklanjuti.
+
+      Ukurannya satu sesi sendiri, bukan tempelan. Dicatat 27 Nov 2026.
+      
 - [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
       dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
       konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.
