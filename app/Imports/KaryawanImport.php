@@ -30,7 +30,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
  */
 class KaryawanImport implements ToCollection, WithHeadingRow
 {
-    public const PASSWORD_DEFAULT = 'password';
+    public const PASSWORD_DEFAULT = Karyawan::PASSWORD_DEFAULT;
 
     protected const KOLOM = [
         'nip', 'nama', 'username', 'email', 'nomor_telepon',

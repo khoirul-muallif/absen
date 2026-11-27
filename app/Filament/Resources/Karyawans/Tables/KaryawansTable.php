@@ -212,7 +212,7 @@ class KaryawansTable
                             // otomatis di-hash. JANGAN Hash::make() manual — ter-hash dua kali
                             // dan karyawan tidak akan bisa login.
                             $record->update([
-                                'password' => 'password',
+                                'password' => Karyawan::PASSWORD_DEFAULT,
                                 // Ditandai supaya aplikasi mengarahkan karyawan
                                 // ke layar ubah password saat login berikutnya.
                                 // Dimatikan sendiri oleh AuthController::ubahPassword().

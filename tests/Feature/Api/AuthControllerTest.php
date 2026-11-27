@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 
 // ── Login ──────────────────────────────────────────────────────────────
 
-it('bisa login dengan email dan password yang benar', function () {
+it('bisa login dengan username dan password yang benar', function () {
     $instansi = Instansi::factory()->create();
     $karyawan = Karyawan::factory()->create([
         'instansi_id' => $instansi->id,
@@ -48,7 +48,6 @@ it('menolak login dengan password salah', function () {
 
 it('menolak login karyawan yang tidak aktif', function () {
     Karyawan::factory()->create([
-        'email' => 'nonaktif@rsb.com',
         'username' => 'nonaktif',
         'password' => Hash::make('rahasia123'),
         'is_active' => false,
@@ -208,7 +207,7 @@ it('menolak kalau konfirmasi password tidak cocok', function () {
             'password_confirmation' => 'beda-sendiri',
         ])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('password');
+        ->assertJsonValidationErrors(['password' => 'Konfirmasi password tidak cocok.']);
 });
 
 it('menolak password baru kurang dari 8 karakter', function () {
@@ -224,7 +223,7 @@ it('menolak password baru kurang dari 8 karakter', function () {
             'password_confirmation' => 'pendek',
         ])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('password');
+        ->assertJsonValidationErrors(['password' => 'Password baru minimal 8 karakter.']);
 });
 
 it('menolak password baru yang sama dengan password lama', function () {
@@ -240,7 +239,7 @@ it('menolak password baru yang sama dengan password lama', function () {
             'password_confirmation' => 'rahasia123',
         ])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('password');
+        ->assertJsonValidationErrors(['password' => 'Password baru harus berbeda dari password lama.']);
 });
 
 it('menolak ubah password tanpa token', function () {
@@ -311,4 +310,36 @@ it('login dan me mengirim harus_ganti_password', function () {
         ->getJson('/api/auth/me')
         ->assertOk()
         ->assertJsonPath('data.harus_ganti_password', true);
+});
+
+it('password default admin tidak lebih lemah dari yang boleh dipilih karyawan', function () {
+    // Dua hal yang tidak saling tahu: panjang minimum di
+    // ubahPassword() dan nilai password default. Kalau defaultnya
+    // diperpendek, karyawan yang baru di-reset punya password yang
+    // lebih lemah daripada yang boleh dia pilih sendiri — dan tidak
+    // ada yang menolak apa pun, jadi tidak ada yang tahu.
+    expect(strlen(Karyawan::PASSWORD_DEFAULT))->toBeGreaterThanOrEqual(8);
+});
+
+it('password default benar-benar bisa dipakai login dan diganti', function () {
+    // Membuktikan nilainya lolos aturan sungguhan, bukan cuma panjangnya.
+    $karyawan = Karyawan::factory()->create([
+        'username'  => 'budi',
+        'password'  => Karyawan::PASSWORD_DEFAULT,
+        'is_active' => true,
+    ]);
+
+    $this->postJson('/api/auth/login', [
+        'username' => 'budi',
+        'password' => Karyawan::PASSWORD_DEFAULT,
+    ])->assertOk();
+
+    $token = $karyawan->createToken('absensi-app')->plainTextToken;
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/auth/ubah-password', [
+            'password_lama'         => Karyawan::PASSWORD_DEFAULT,
+            'password'              => 'rahasiaBaru456',
+            'password_confirmation' => 'rahasiaBaru456',
+        ])->assertOk();
 });

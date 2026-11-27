@@ -26,6 +26,14 @@ class Karyawan extends Authenticatable
     const TIPE_UMUM = 'umum';
 
     const TIPE_ROTASI = 'rotasi';
+    
+    /**
+     * Password awal untuk karyawan baru (import) dan untuk reset oleh admin.
+     * Panjangnya TEPAT di batas min:8 milik AuthController::ubahPassword() —
+     * memperpendeknya membuat karyawan dapat password yang lebih lemah
+     * daripada yang boleh dia pilih sendiri. Dikunci test.
+     */
+    const PASSWORD_DEFAULT = 'password';
 
     protected $fillable = [
         'instansi_id',

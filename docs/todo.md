@@ -4,36 +4,29 @@
 > file ini tetep pendek dan gampang di-scan. Detail alasan/histori tetap di
 > CHANGELOG.md, bukan di sini.
 
-## Prioritas
+**Terakhir dibersihkan:** 27 November 2026 (setelah fase 92)
 
-**Backend solid.** Review UX 17 Filament Resource (fase 25–36), Laporan
-Presensi (fase 56), simulasi rotasi 24/7 (fase 65), TukarJadwal × rotasi
-beda tanggal (fase 71–73), notifikasi TukarJadwal (fase 74), modul
-Informasi (fase 75), badge pengajuan menunggu (fase 77), login username
-(fase 79), terjemahan validasi (fase 80), email nullable (fase 81),
-import karyawan Excel (fase 82), bulk action assignment (fase 83),
-riwayat() tanpa shift (fase 84), kunci kontrak notifikasi (fase 85),
-ganti password sendiri (fase 86), logo instansi (fase 87), pisah jam
-kembali Izin (fase 88), harus_ganti_password (fase 89) — semuanya
-SELESAI, detail di CHANGELOG.
+## Posisi sekarang
 
-**Dua blocker rilis FE yang dicatat di sini sudah ditutup 20 Nov 2026**
-(LoginScreen `username`, NotifikasiScreen `tipe: 'tukar_jadwal'`).
-Tidak ada lagi yang memblokir deploy dari sisi FE.
+Backend solid, FE praktis beres. Tidak ada yang memblokir deploy.
 
-**Yang tersisa di FE** adalah penyempurnaan, dan per 23 Nov 2026 ada
-enam hal yang sudah ditulis tapi BELUM pernah dijalankan di perangkat —
-lihat `status-23-11-26.md` di repo frontend. Verifikasi itu dulu sebelum
-menambah modul baru.
+**Prasyarat deploy pertama ada TIGA langkah, bukan dua.**
+`AbsensiController::masuk()` langkah 5 membaca `KaryawanShift` lalu
+fallback ke baris `Jadwal` hari ini — BUKAN ke `KaryawanPolaRotasi`.
+Jadi untuk rotasi, punya baris `karyawan_pola_rotasis` belum cukup:
 
-**Prasyarat deploy pertama** masih tiga langkah, bukan dua: import
-karyawan (fase 82) → bulk action assignment (fase 83) →
-`jadwal:generate-rotasi` khusus rotasi. Lihat item di bawah.
+1. Import karyawan (fase 82)
+2. Bulk action assignment (fase 83)
+3. Buat jadwal rotasi lewat menu Generate Jadwal — khusus rotasi,
+   setelah langkah 2
 
-Catatan: keputusan bisnis yang masih menggantung (alur Izin, override
-TukarJadwal, `is_cuti_bersama`, aturan masa kerja cuti) butuh masukan
-dari pihak RS, bukan kerja teknis — bisa ditanyakan paralel dengan apa
-pun yang dipilih.
+Karyawan yang tertinggal di langkah 2 atau 3 bisa dilihat lewat filter
+"Belum bisa absen hari ini" di tabel karyawan (fase 91), dan jumlahnya
+ikut muncul di notifikasi setelah import.
+
+Sisa pekerjaan terbagi tiga: butuh masukan pihak RS, pekerjaan teknis
+kecil, dan dua yang ukurannya satu sesi sendiri (ekstrak generator,
+test modal Filament).
 
 ## Kebutuhan masukan dari pihak RS
 
@@ -63,133 +56,6 @@ pun yang dipilih.
       template justru karena ini. Mengeluarkannya berarti 150 karyawan masuk
       tanpa tanggal, dan saat aturan ini dibuat tidak ada data untuk
       menjalankannya. Dicatat 10 Nov 2026.
-
-- [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
-      membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU).
-      Belum tentu realistis (Rawat Inap biasanya butuh lebih banyak staf
-      daripada ICU) — baru relevan kalau data dummy ini mulai dipakai
-      buat demo/keputusan ke pihak RS, bukan sekadar testing internal.
-      Catatan: sejak redesign rotasi-individu (fase 65), setiap karyawan
-      rotasi dalam satu unit memakai SATU pola yang sama (bukan lagi
-      dibagi ke 3 tim shift terpisah) — pembagian 40/40/40 sekarang murni
-      per unit, tidak ada lagi sub-pembagian tim.
-
-## Simulasi & data
-
-- [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
-      production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
-      tidak pernah tersimpan sejak fase 9, jadi SEMUA baris lama salah di
-      kolom itu. Tidak relevan sekarang (belum ada production), tapi jangan
-      sampai terlewat saat deploy pertama.
-
-- [ ] Verifikasi tipe_jadwal di data production asli (nanti kalau udah deploy)
-
-## UX yang tersisa
-
-- [ ] **Penjaga dua-sheet mengasumsikan sheet pertama adalah sheet data**
-      — kalau admin mengirim file hasil edit yang urutan sheet-nya
-      terbalik, importer memproses "Petunjuk" dan menolak semuanya dengan
-      pesan yang tidak masuk akal. Lebih benar: cari sheet berdasarkan
-      nama, atau berdasarkan kecocokan header. Dicatat 10 Nov 2026.
-
-- [ ] **Unit kerja beda kapitalisasi masuk apa adanya** — "igd" dan "IGD"
-      jadi dua unit berbeda. Peringatan sudah muncul di pratinjau, jadi
-      admin tahu; tapi untuk karyawan ROTASI ini berarti dia tidak bisa
-      di-assign pola apa pun (fase 33 mencocokkan unit_kerja persis).
-
-      Keputusan terbuka: haruskah importer mencocokkan case-insensitive
-      dan memakai ejaan yang sudah ada? Itu mengubah data yang diketik
-      admin tanpa diminta — bukan keputusan sepele, dan kelas masalahnya
-      sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
-
-## Fitur & infrastruktur
-
-- [ ] **Rapikan `AuthControllerTest`** — tiga hal, satu file, semuanya
-      sisa dari perpindahan ke login username (fase 79). Yang ketiga
-      paling berharga; dua pertama kosmetik.
-
-      1. Nama test `'bisa login dengan email dan password yang benar'`
-         — isinya login pakai `username`.
-      2. `'menolak login karyawan yang tidak aktif'` menyetel
-         `'email' => 'nonaktif@rsb.com'` yang tidak dipakai sama sekali.
-         Menyesatkan pembaca berikutnya, seolah email masih bagian dari
-         login.
-      3. Tiga test ubah password memakai
-         `assertJsonValidationErrors('password')` saja untuk TIGA sebab
-         penolakan berbeda: konfirmasi tidak cocok, kurang dari 8
-         karakter, dan sama dengan password lama. Ketiganya bisa hijau
-         karena sebab yang keliru tanpa ada yang tahu — kelas masalah
-         yang sudah diperingatkan QUICK_CONTEXT dan sudah pernah
-         kejadian di fase 26. Assert sampai ke pesannya.
-
-      Kerjakan bareng item `min:8` vs password default admin: dua-duanya
-      soal aturan password yang belum pernah diadu dengan kenyataan.
-      Dicatat 27 Nov 2026.
-
-- [ ] **Ekstrak generator jadwal dari command ke kelas biasa** —
-      GenerateJadwal memanggil `Artisan::call()` lalu menampilkan
-      `Artisan::output()` ke admin, jadi output CLI dan teks admin
-      terpaksa jadi satu benda. Akibatnya sudah dua kali terlihat:
-      nama command bocor ke admin (ditutup 27 Nov) dan tabel ASCII
-      hancur di notifikasi (ditutup 27 Nov). Yang tersisa: baris baru
-      hilang, jadi semua kalimat menyambung jadi satu paragraf, dan
-      prefix [DRY-RUN] ikut terbawa walau panel tidak pernah
-      mengirimnya.
-
-      Pola yang sudah terbukti di proyek ini: `PerencanaAssignment`
-      (fase 83) — satu kelas dipakai dua pemanggil supaya keduanya
-      tidak bisa berbeda pendapat. Command menulis table() untuk
-      terminal, panel menyusun kalimatnya sendiri dari angka.
-
-      Bonus: anomali "tipe ROTASI tapi punya KaryawanShift" bisa
-      ditampilkan sebagai daftar nama yang bisa ditindaklanjuti.
-
-      Ukurannya satu sesi sendiri, bukan tempelan. Dicatat 27 Nov 2026.
-
-- [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
-      dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
-      konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.
-      Untuk sekarang murni catatan.
-
-      Kalau sampai beberapa bulan tidak ada yang memakai selisihnya,
-      pertimbangkan menggabungkan balik jadi satu kolom. Kalau dipakai,
-      tempat termurah memunculkannya: kolom "Molor" di Laporan Presensi,
-      atau badge di daftar Izin panel admin.
-
-      Pertanyaan untuk pihak RS: apakah karyawan yang sering molor dari
-      perkiraannya sendiri perlu ditandai? Kalau ya, berapa menit
-      toleransinya, dan siapa yang melihatnya?
-
-- [ ] **`logo` instansi tidak dibersihkan saat diganti** — FileUpload
-      menyimpan file baru tapi yang lama tetap menumpuk di
-      `storage/app/public/logo-instansi`. Masalah yang sama kemungkinan
-      ada di `foto_profil` karyawan. Kecil selama cuma satu instansi, tapi
-      catat sebelum lupa. Dicatat 23 Nov 2026.
-
-- [ ] **Bulk action assignment belum punya test modal** — fase 83 punya 16
-      test untuk `PerencanaAssignment` (seluruh logika keputusan), tapi dua
-      bulk action Filament-nya sendiri belum pernah diuji: apakah modal
-      terbuka, apakah pratinjau ikut berubah saat pilihan diganti, apakah
-      `getSelectedTableRecords()` mengembalikan yang dicentang, dan apakah
-      transaksi benar-benar menulis. Butuh `livewire()` +
-      `callTableBulkAction()`. Dicatat 10 Nov 2026.
-
-- [ ] **`AbsenTerlambat::toMail()` sudah jadi kode mati** sejak fase 81
-      mencabut 'mail' dari `via()`. Dibiarkan sengaja supaya keputusan itu
-      murah dibalik. Hapus kalau sudah yakin tidak akan dikembalikan.
-
-      
-- [ ] **Bagian import yang masih tidak diuji** — fase 82 punya 26 test untuk
-      aturan validasi (`KaryawanImportTest`), tapi semuanya memanggil
-      `collection()` langsung dengan Collection buatan. Yang belum pernah
-      diuji sama sekali:
-      - modal Filament dua langkah (unggah → pratinjau → commit)
-      - baca-ulang berkas saat commit, termasuk kasus berkas sudah hilang
-      - pembersihan berkas yatim (`bersihkanBerkasLama`)
-      - pembacaan file .xlsx sungguhan, termasuk sheet "Petunjuk"
-
-      Butuh fixture .xlsx + `livewire()`. Dicatat 10 Nov 2026.
-
 
 - [ ] **Perjelas definisi libur mingguan vs libur nasional** — sudah
       beberapa kali jadi bug diam-diam, terutama di TukarJadwal.
@@ -242,7 +108,103 @@ pun yang dipilih.
       dengan temuan tertunda "tombol Ajukan Tukar/Pindah muncul juga
       untuk cuti/dinas/libur" (status-06-11-26.md). Garap bertiga
       sekaligus, jangan satu-satu. Dicatat 9 Nov 2026.
-   
+
+- [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
+      dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
+      konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.
+      Untuk sekarang murni catatan.
+
+      Kalau sampai beberapa bulan tidak ada yang memakai selisihnya,
+      pertimbangkan menggabungkan balik jadi satu kolom. Kalau dipakai,
+      tempat termurah memunculkannya: kolom "Molor" di Laporan Presensi,
+      atau badge di daftar Izin panel admin.
+
+      Pertanyaan untuk pihak RS: apakah karyawan yang sering molor dari
+      perkiraannya sendiri perlu ditandai? Kalau ya, berapa menit
+      toleransinya, dan siapa yang melihatnya?
+
+- [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
+      membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU).
+      Belum tentu realistis (Rawat Inap biasanya butuh lebih banyak staf
+      daripada ICU) — baru relevan kalau data dummy ini mulai dipakai
+      buat demo/keputusan ke pihak RS, bukan sekadar testing internal.
+      Catatan: sejak redesign rotasi-individu (fase 65), setiap karyawan
+      rotasi dalam satu unit memakai SATU pola yang sama (bukan lagi
+      dibagi ke 3 tim shift terpisah) — pembagian 40/40/40 sekarang murni
+      per unit, tidak ada lagi sub-pembagian tim.
+
+## Saat deploy pertama
+
+- [ ] **Jalankan `absensi:audit-menit-terlambat --fix` kalau nanti ada data
+      production dari sebelum fase 27** — kolom `melebihi_toleransi_bulanan`
+      tidak pernah tersimpan sejak fase 9, jadi SEMUA baris lama salah di
+      kolom itu. Tidak relevan sekarang (belum ada production), tapi jangan
+      sampai terlewat saat deploy pertama.
+
+- [ ] Verifikasi `tipe_jadwal` di data production asli.
+
+## Import Excel
+
+- [ ] **Penjaga dua-sheet mengasumsikan sheet pertama adalah sheet data**
+      — kalau admin mengirim file hasil edit yang urutan sheet-nya
+      terbalik, importer memproses "Petunjuk" dan menolak semuanya dengan
+      pesan yang tidak masuk akal. Lebih benar: cari sheet berdasarkan
+      nama, atau berdasarkan kecocokan header. Dicatat 10 Nov 2026.
+
+- [ ] **Unit kerja beda kapitalisasi masuk apa adanya** — "igd" dan "IGD"
+      jadi dua unit berbeda. Peringatan sudah muncul di pratinjau, jadi
+      admin tahu; tapi untuk karyawan ROTASI ini berarti dia tidak bisa
+      di-assign pola apa pun (fase 33 mencocokkan unit_kerja persis).
+
+      Keputusan terbuka: haruskah importer mencocokkan case-insensitive
+      dan memakai ejaan yang sudah ada? Itu mengubah data yang diketik
+      admin tanpa diminta — bukan keputusan sepele, dan kelas masalahnya
+      sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
+
+## Yang ukurannya satu sesi sendiri
+
+- [ ] **Ekstrak generator jadwal dari command ke kelas biasa** —
+      GenerateJadwal memanggil `Artisan::call()` lalu menampilkan
+      `Artisan::output()` ke admin, jadi output CLI dan teks admin
+      terpaksa jadi satu benda. Akibatnya sudah dua kali terlihat:
+      nama command bocor ke admin (ditutup 27 Nov) dan tabel ASCII
+      hancur di notifikasi (ditutup 27 Nov). Yang tersisa: baris baru
+      hilang, jadi semua kalimat menyambung jadi satu paragraf, dan
+      prefix [DRY-RUN] ikut terbawa walau panel tidak pernah
+      mengirimnya.
+
+      Pola yang sudah terbukti di proyek ini: `PerencanaAssignment`
+      (fase 83) — satu kelas dipakai dua pemanggil supaya keduanya
+      tidak bisa berbeda pendapat. Command menulis table() untuk
+      terminal, panel menyusun kalimatnya sendiri dari angka.
+
+      Bonus: anomali "tipe ROTASI tapi punya KaryawanShift" bisa
+      ditampilkan sebagai daftar nama yang bisa ditindaklanjuti.
+      Dicatat 27 Nov 2026.
+
+- [ ] **Dua modal Filament yang belum pernah diuji** — digabung karena
+      setup-nya sejenis (`livewire()`), jadi lebih murah sekali garap.
+
+      **Bulk action assignment** (fase 83): 16 test sudah mengunci
+      `PerencanaAssignment` (seluruh logika keputusan), tapi bulk
+      action-nya sendiri belum — apakah modal terbuka, apakah pratinjau
+      ikut berubah saat pilihan diganti, apakah
+      `getSelectedTableRecords()` mengembalikan yang dicentang, dan
+      apakah transaksi benar-benar menulis. Butuh
+      `callTableBulkAction()`.
+
+      **Import** (fase 82): 26 test sudah mengunci aturan validasi, tapi
+      semuanya memanggil `collection()` langsung dengan Collection
+      buatan. Yang belum pernah diuji: modal dua langkah (unggah →
+      pratinjau → commit), baca-ulang berkas saat commit termasuk kasus
+      berkas sudah hilang, pembersihan berkas yatim
+      (`bersihkanBerkasLama`), dan pembacaan .xlsx sungguhan termasuk
+      sheet "Petunjuk". Butuh fixture .xlsx.
+
+      Dicatat 10 Nov 2026, digabung 27 Nov 2026.
+
+## Lain-lain
+
 - [ ] **Pengajuan TukarJadwal yang macet di `menunggu_rekan` tidak
       terhitung di mana pun** — badge menu (fase 77) hanya menghitung
       `menunggu_admin`. Admin tidak punya cara tahu ada pengajuan
@@ -250,18 +212,6 @@ pun yang dipilih.
       menghitung manual (terlihat 5 pengajuan macet di data dummy,
       tertua 5 hari). Butuh filter umur, bukan sekadar status — itu
       sebabnya sengaja tidak dimasukkan ke badge. Dicatat 9 Nov 2026.
-
-
-- [ ] **`min:8` belum diadu dengan password default admin** — endpoint
-      ubah password mewajibkan minimal 8 karakter, tapi password default
-      yang dipakai reset admin (fase 78) belum dicek panjangnya. Kalau
-      di bawah 8, karyawan yang baru di-reset punya password lebih lemah
-      daripada yang boleh dia pilih sendiri. Tidak merusak apa pun,
-      cuma janggal. Dicatat 23 Nov 2026.
-
-- [ ] **Nama test usang di `AuthControllerTest`** — "bisa login dengan
-      email dan password yang benar", isinya login pakai `username`.
-      Sisa dari sebelum pindah ke username (fase 79). Dicatat 23 Nov 2026.
 
 - [ ] Tambah accessor `Lembur::getDurasiMenitAttribute()` (computed, bukan
       kolom DB) kalau nanti ada kebutuhan laporan/payroll lembur — aware
