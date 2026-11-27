@@ -5,6 +5,65 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 94: kolom Telat Kembali di Rekap Bulanan
+
+Commit `968ef20`.
+
+### Dua kolom yang dibuat sebelum konsekuensinya diputuskan
+
+`jam_kembali_rencana` dan `jam_kembali_aktual` dipisah 24 Nov walau
+belum ada yang tahu apa artinya kalau aktual lewat dari rencana. Todo
+mencatat: kalau beberapa bulan tidak terpakai, pertimbangkan
+menggabungkan balik jadi satu kolom.
+
+Diputuskan 27 Nov: admin bisa melihat, tanpa toleransi, dalam bentuk
+hitungan berapa kali per karyawan. Jadi pemisahannya terbukti benar dan
+usul penggabungan gugur.
+
+### Rekap Bulanan, bukan Rekap Pelanggaran
+
+Bentuk "berapa kali per karyawan, diurutkan dari yang terbanyak"
+sebenarnya persis Rekap Pelanggaran. Tapi halaman itu cuma memuat
+karyawan yang punya alpha atau terlambat — orang yang sering telat
+kembali tapi absensinya bersih tidak akan muncul sama sekali.
+
+Memperbaikinya berarti mengubah struktur `agregasi()`, yang dipakai
+bersama oleh halaman, Excel, dan PDF: enam keluaran dari satu query
+yang sudah terbukti. Rekap Bulanan sudah memuat semua karyawan, jadi
+masalahnya tidak ada.
+
+### Lebih murah dari perkiraan
+
+Dugaan awal: butuh join ke `izins`, mahal. Ternyata `agregasi()` sudah
+menyentuh tabel itu — `$rekapIzin` menghitung izin approved per
+karyawan dengan pola yang sama persis. Molor cuma query kedua dengan
+bentuk identik, tanpa join dan tanpa perubahan struktur.
+
+### Dua detail yang menentukan artinya
+
+`whereColumn(..., '>', ...)`, bukan `'>='`: kembali tepat di jam
+rencana bukan pelanggaran. Perbedaan satu karakter yang mengubah arti
+"tanpa toleransi", dan itu test yang paling berharga di sini.
+
+`whereNotNull('jam_kembali_aktual')` eksplisit walau MySQL sudah
+mengeluarkan baris null dari perbandingan. Hasilnya sama, tapi tanpa
+baris itu kebenarannya bergantung pada perilaku null SQL, bukan pada
+sesuatu yang disengaja.
+
+### Penamaan
+
+Kunci array tetap `'molor'` mengikuti catatan todo — bahasa internal.
+Label yang dilihat admin "Telat Kembali" di ketiga keluaran, karena itu
+istilah yang dipakai pihak RS sendiri saat menjawab.
+
+### Ikut diperbaiki
+
+`colspan` baris kosong di view Filament tertulis 11 padahal kolomnya
+12. Salah sejak sebelum ini, baru terlihat saat menambah kolom ketiga
+belas.
+
+762 → 766 (2167 → 2171).
+
 ## fase 93: dua asumsi di import yang baru terlihat dari sisi admin
 
 Commit `6b34c4e`, `ad4527a`, `b7be0e3`, `dda3791`.

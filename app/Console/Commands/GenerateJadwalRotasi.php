@@ -81,10 +81,12 @@ class GenerateJadwalRotasi extends Command
                 $langkah = $pola->langkahKe($posisi);
 
                 $isLiburNasional = $liburNasional->has($tanggal->format('Y-m-d'));
+                $karenaLiburNasional = false;
 
                 if ($isLiburNasional && ! $pola->berlaku_saat_libur_nasional) {
                     $jenis = 'libur';
                     $shiftId = null;
+                    $karenaLiburNasional = true;
                 } elseif ($langkah['libur']) {
                     $jenis = 'libur';
                     $shiftId = null;
@@ -95,7 +97,12 @@ class GenerateJadwalRotasi extends Command
 
                 Jadwal::updateOrCreate(
                     ['karyawan_id' => $karyawan->id, 'tanggal' => $tanggal->format('Y-m-d')],
-                    ['shift_id' => $shiftId, 'jenis' => $jenis, 'sumber' => 'generate']
+                    [
+                        'shift_id'       => $shiftId,
+                        'jenis'          => $jenis,
+                        'libur_nasional' => $karenaLiburNasional,
+                        'sumber'         => 'generate',
+                    ]
                 );
 
                 $dibuat++;

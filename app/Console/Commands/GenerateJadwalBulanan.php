@@ -93,11 +93,12 @@ class GenerateJadwalBulanan extends Command
                 if (! $assignment->shift->adalahHariKerja($tanggal)) {
                     if (! $dryRun) {
                         Jadwal::create([
-                            'karyawan_id' => $karyawan->id,
-                            'shift_id'    => null,
-                            'tanggal'     => $tanggal->toDateString(),
-                            'jenis'       => Jadwal::JENIS_LIBUR,
-                            'keterangan'  => 'Libur mingguan - otomatis dari generator jadwal bulanan',
+                            'karyawan_id'    => $karyawan->id,
+                            'shift_id'       => null,
+                            'tanggal'        => $tanggal->toDateString(),
+                            'jenis'          => Jadwal::JENIS_LIBUR,
+                            'libur_nasional' => false,
+                            'keterangan'     => 'Libur mingguan - otomatis dari generator jadwal bulanan',
                         ]);
                     }
                     $stat['dibuat_libur_mingguan']++;
@@ -132,11 +133,12 @@ class GenerateJadwalBulanan extends Command
                 if ($adalahHariLibur) {
                     if (! $dryRun) {
                         Jadwal::create([
-                            'karyawan_id' => $karyawan->id,
-                            'shift_id'    => null,
-                            'tanggal'     => $tanggal->toDateString(),
-                            'jenis'       => Jadwal::JENIS_LIBUR,
-                            'keterangan'  => 'Hari libur nasional/cuti bersama - otomatis dari generator jadwal bulanan',
+                            'karyawan_id'    => $karyawan->id,
+                            'shift_id'       => null,
+                            'tanggal'        => $tanggal->toDateString(),
+                            'jenis'          => Jadwal::JENIS_LIBUR,
+                            'libur_nasional' => true,
+                            'keterangan'     => 'Hari libur nasional - otomatis dari generator jadwal bulanan',
                         ]);
                     }
                     $stat['dibuat_libur_nasional']++;

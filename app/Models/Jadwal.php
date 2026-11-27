@@ -12,11 +12,12 @@ class Jadwal extends Model
     use HasFactory;
 
     protected $fillable = [
-        'karyawan_id', 'shift_id', 'tanggal', 'jenis', 'keterangan','sumber',
+        'karyawan_id', 'shift_id', 'tanggal', 'jenis', 'libur_nasional','keterangan','sumber',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'libur_nasional' => 'boolean',
     ];
 
     const JENIS_REGULER = 'reguler';
