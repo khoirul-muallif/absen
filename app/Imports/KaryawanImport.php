@@ -257,14 +257,24 @@ class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
 
         $pesan = array_merge($pesan, $this->periksaKeunikan($data));
 
-        if ($pesan === [] && $data['unit_kerja'] !== null && ! in_array($data['unit_kerja'], $this->unitDikenal, true)) {
-            // Tidak memblokir — unit baru itu sah. Tapi satu typo di import
-            // tersalin ke puluhan baris sekaligus, dan karyawan rotasi yang
-            // unitnya salah ketik tidak bisa di-assign pola apa pun (fase 33).
-            $this->hasil->tambahPeringatan(
-                $nomorBaris,
-                "Unit kerja \"{$data['unit_kerja']}\" belum pernah dipakai. Pastikan bukan salah ketik.",
-            );
+        if ($pesan === [] && $data['unit_kerja'] !== null) {
+            $kanonik = $this->unitDikenal[mb_strtolower($data['unit_kerja'])] ?? null;
+
+            if ($kanonik === null) {
+                $this->hasil->tambahPeringatan(
+                    $nomorBaris,
+                    "Unit kerja \"{$data['unit_kerja']}\" belum pernah dipakai. Pastikan bukan salah ketik.",
+                );
+            } elseif ($kanonik !== $data['unit_kerja']) {
+                // Data yang diketik admin DIUBAH, jadi harus terlihat di
+                // pratinjau — bukan diam-diam. Tanpa penyeragaman ini,
+                // "igd" jadi unit terpisah dari "IGD" dan karyawan rotasi
+                // di dalamnya tidak bisa di-assign pola apa pun (fase 33).
+                $this->hasil->tambahPeringatan(
+                    $nomorBaris,
+                    "Unit kerja \"{$data['unit_kerja']}\" diseragamkan jadi \"{$kanonik}\" mengikuti ejaan yang sudah dipakai.",
+                );
+            }
         }
 
         return $pesan;
@@ -322,7 +332,9 @@ class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
             'status_pegawai'    => $data['status_pegawai'],
             'role'              => 'karyawan',
             'tipe_jadwal'       => $data['tipe_jadwal'],
-            'unit_kerja'        => $data['unit_kerja'],
+            'unit_kerja'        => $data['unit_kerja'] !== null
+                ? ($this->unitDikenal[mb_strtolower($data['unit_kerja'])] ?? $data['unit_kerja'])
+                : null,
             'jabatan'           => $data['jabatan'],
             'tanggal_bergabung' => $data['tanggal_bergabung']
                 ? $this->bacaTanggal($data['tanggal_bergabung'])?->toDateString()
@@ -388,15 +400,39 @@ class KaryawanImport implements ToCollection, WithHeadingRow, WithMultipleSheets
         $this->hasil->tersimpan = true;
     }
 
-    /** Sumber yang sama dengan datalist di KaryawanForm. */
+    /**
+     * Peta unit kerja: kunci lowercase, nilai ejaan kanonik.
+     *
+     * Ejaan dari PolaRotasi MENANG kalau ada dua versi. Fase 33
+     * mencocokkan unit_kerja karyawan dengan unit pola secara persis,
+     * jadi ejaan pola adalah satu-satunya yang membuat karyawan rotasi
+     * bisa di-assign. Memilih ejaan karyawan bisa menghasilkan unit
+     * yang tidak cocok dengan pola mana pun.
+     *
+     * Kalau cuma ada di karyawan, yang terbanyak menang; seri diputus
+     * alfabetis supaya hasilnya tidak bergantung urutan query.
+     */
     protected function unitYangSudahAda(): array
     {
-        return collect()
-            ->merge(Karyawan::query()->whereNotNull('unit_kerja')->distinct()->pluck('unit_kerja'))
-            ->merge(PolaRotasi::query()->whereNotNull('unit_kerja')->distinct()->pluck('unit_kerja'))
-            ->map(fn ($u) => (string) $u)
-            ->unique()
-            ->values()
-            ->all();
+        $peta = [];
+
+        $dariKaryawan = Karyawan::query()
+            ->whereNotNull('unit_kerja')
+            ->pluck('unit_kerja')
+            ->countBy()
+            ->sortKeys()
+            ->sortByDesc(fn ($jumlah) => $jumlah);
+
+        foreach ($dariKaryawan as $ejaan => $jumlah) {
+            $kunci = mb_strtolower((string) $ejaan);
+            $peta[$kunci] ??= (string) $ejaan;
+        }
+
+        // Ditaruh belakangan supaya menimpa ejaan dari karyawan.
+        foreach (PolaRotasi::query()->whereNotNull('unit_kerja')->distinct()->pluck('unit_kerja') as $ejaan) {
+            $peta[mb_strtolower((string) $ejaan)] = (string) $ejaan;
+        }
+
+        return $peta;
     }
 }

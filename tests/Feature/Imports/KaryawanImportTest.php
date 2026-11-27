@@ -12,6 +12,7 @@ use App\Models\Instansi;
 use App\Models\Karyawan;
 use Illuminate\Support\Collection;
 use App\Exports\KaryawanTemplateExport;
+use App\Models\PolaRotasi;
 
 beforeEach(function () {
     $this->instansi = Instansi::factory()->create();
@@ -266,4 +267,67 @@ it('nomor baris di laporan cocok dengan nomor baris Excel', function () {
 
     expect($import->hasil->siap[0]['baris'])->toBe(2)
         ->and($import->hasil->ditolak[0]['baris'])->toBe(3);
+});
+
+// ── Penyeragaman ejaan unit kerja (27 Nov) ───────────────────────────────
+//
+// Sebelumnya "igd" dan "IGD" jadi dua unit berbeda, dan karyawan rotasi
+// yang unitnya "igd" tidak bisa di-assign pola "IGD" sama sekali (fase 33
+// mencocokkan persis). Importer sekarang memakai ejaan yang sudah ada.
+
+it('menyeragamkan ejaan unit kerja mengikuti yang sudah ada', function () {
+    PolaRotasi::factory()->create(['unit_kerja' => 'IGD']);
+
+    $import = jalankanImport($this->instansi->id, [
+        barisImport(['tipe_jadwal' => 'rotasi', 'unit_kerja' => 'igd']),
+    ], dryRun: false);
+
+    expect(Karyawan::where('nip', 'NIP-001')->first()->unit_kerja)->toBe('IGD');
+});
+
+it('memberi tahu admin bahwa ejaannya diubah', function () {
+    // Data yang diketik admin DIUBAH, jadi tidak boleh diam-diam.
+    PolaRotasi::factory()->create(['unit_kerja' => 'IGD']);
+
+    $import = jalankanImport($this->instansi->id, [
+        barisImport(['tipe_jadwal' => 'rotasi', 'unit_kerja' => 'igd']),
+    ]);
+
+    expect($import->hasil->siap)->toHaveCount(1)
+        ->and($import->hasil->peringatan)->toHaveCount(1)
+        ->and($import->hasil->peringatan[0]['pesan'])->toContain('diseragamkan');
+});
+
+it('tidak memperingatkan kalau ejaannya memang sudah sama', function () {
+    PolaRotasi::factory()->create(['unit_kerja' => 'IGD']);
+
+    $import = jalankanImport($this->instansi->id, [
+        barisImport(['tipe_jadwal' => 'rotasi', 'unit_kerja' => 'IGD']),
+    ]);
+
+    expect($import->hasil->peringatan)->toBeEmpty();
+});
+
+it('ejaan dari PolaRotasi menang atas ejaan karyawan', function () {
+    // Fase 33 mencocokkan unit_kerja karyawan dengan unit POLA secara
+    // persis, jadi ejaan pola satu-satunya yang membuat karyawan rotasi
+    // bisa di-assign. Memilih ejaan karyawan justru menghasilkan unit
+    // yang tidak cocok dengan pola mana pun.
+    Karyawan::factory()->count(3)->create(['unit_kerja' => 'Igd']);
+    PolaRotasi::factory()->create(['unit_kerja' => 'IGD']);
+
+    $import = jalankanImport($this->instansi->id, [
+        barisImport(['nip' => 'NIP-900', 'tipe_jadwal' => 'rotasi', 'unit_kerja' => 'igd']),
+    ], dryRun: false);
+
+    expect(Karyawan::where('nip', 'NIP-900')->first()->unit_kerja)->toBe('IGD');
+});
+
+it('unit yang benar-benar baru tetap masuk apa adanya', function () {
+    $import = jalankanImport($this->instansi->id, [
+        barisImport(['tipe_jadwal' => 'rotasi', 'unit_kerja' => 'Unit Baru']),
+    ], dryRun: false);
+
+    expect(Karyawan::where('nip', 'NIP-001')->first()->unit_kerja)->toBe('Unit Baru')
+        ->and($import->hasil->peringatan[0]['pesan'])->toContain('belum pernah dipakai');
 });

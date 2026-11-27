@@ -145,21 +145,6 @@ test modal Filament).
 
 ## Import Excel
 
-- [ ] **Penjaga dua-sheet mengasumsikan sheet pertama adalah sheet data**
-      — kalau admin mengirim file hasil edit yang urutan sheet-nya
-      terbalik, importer memproses "Petunjuk" dan menolak semuanya dengan
-      pesan yang tidak masuk akal. Lebih benar: cari sheet berdasarkan
-      nama, atau berdasarkan kecocokan header. Dicatat 10 Nov 2026.
-
-- [ ] **Unit kerja beda kapitalisasi masuk apa adanya** — "igd" dan "IGD"
-      jadi dua unit berbeda. Peringatan sudah muncul di pratinjau, jadi
-      admin tahu; tapi untuk karyawan ROTASI ini berarti dia tidak bisa
-      di-assign pola apa pun (fase 33 mencocokkan unit_kerja persis).
-
-      Keputusan terbuka: haruskah importer mencocokkan case-insensitive
-      dan memakai ejaan yang sudah ada? Itu mengubah data yang diketik
-      admin tanpa diminta — bukan keputusan sepele, dan kelas masalahnya
-      sama dengan "jangan menebak tipe_jadwal". Dicatat 10 Nov 2026.
 
 ## Yang ukurannya satu sesi sendiri
 
@@ -193,13 +178,12 @@ test modal Filament).
       apakah transaksi benar-benar menulis. Butuh
       `callTableBulkAction()`.
 
-      **Import** (fase 82): 26 test sudah mengunci aturan validasi, tapi
-      semuanya memanggil `collection()` langsung dengan Collection
-      buatan. Yang belum pernah diuji: modal dua langkah (unggah →
-      pratinjau → commit), baca-ulang berkas saat commit termasuk kasus
-      berkas sudah hilang, pembersihan berkas yatim
-      (`bersihkanBerkasLama`), dan pembacaan .xlsx sungguhan termasuk
-      sheet "Petunjuk". Butuh fixture .xlsx.
+      **Import** (fase 82): aturan validasi sudah dikunci 26 test, dan
+      pembacaan .xlsx sungguhan 5 test (27 Nov). Yang belum: modal dua
+      langkah (unggah → pratinjau → commit), baca-ulang berkas saat
+      commit termasuk kasus berkas sudah hilang, dan pembersihan berkas
+      yatim (`bersihkanBerkasLama`). Fixture .xlsx tinggal dipakai ulang
+      dari `KaryawanImportBerkasTest` (`buatBerkasXlsx()`).
 
       Dicatat 10 Nov 2026, digabung 27 Nov 2026.
 
