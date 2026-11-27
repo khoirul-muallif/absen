@@ -5,6 +5,72 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 92: pembersihan berkas & disk foto karyawan
+
+Commit `3637a53`.
+
+### Berkas yatim
+
+FileUpload Filament menyimpan berkas baru dan meninggalkan yang lama di
+disk tanpa ada baris DB yang menunjuknya. Tidak terlihat dari mana pun,
+dan tidak ikut terhapus saat karyawan atau instansinya dihapus —
+padahal seluruh FK ke `karyawan_id` cascade, jadi barisnya hilang
+sementara berkasnya tinggal.
+
+Todo cuma menyebut `logo` dan menduga `foto_profil`. Ternyata tiga:
+`foto_wajah` juga, dan itu yang paling layak dibereskan — berkas
+biometrik yang sengaja disembunyikan dari API lewat `$hidden`.
+
+### Trait, bukan observer
+
+Proyek ini belum punya satu observer pun, jadi memakainya berarti
+memperkenalkan pola baru. Event di model sudah jadi polanya sejak
+`shift_asal_id` di TukarJadwal (fase 71–73), jadi trait
+`MembersihkanBerkas` mengikuti yang sudah ada.
+
+Dipasang di model, bukan sebagai hook Filament, supaya jalur tinker dan
+seeder ikut tertutup — dan supaya bisa diuji tanpa `livewire()`.
+
+### `updated`, bukan `updating`
+
+Berkas lama dibuang setelah penyimpanan sukses. Kalau dihapus lebih
+dulu dan simpannya gagal, barisnya kembali ke nilai lama sementara
+berkasnya sudah hilang — kolom yang menunjuk file tidak ada.
+
+### Disk foto karyawan: bug laten yang ditemukan di tengah jalan
+
+Kedua FileUpload di `KaryawanForm` tidak menyetel `->disk()`, jadi
+memakai `default_filesystem_disk` Filament yang bernilai `local`
+(storage/app/private). Sementara API merakit URL-nya dengan
+`asset('storage/'.$path)`, yang cuma berlaku untuk disk public.
+
+Jadi foto profil akan tersimpan tapi tidak pernah tampil di aplikasi.
+Belum pernah merugikan siapa pun: `storage/app/private/foto-profil`
+maupun yang di `public` dua-duanya belum terbentuk, artinya belum ada
+satu pun yang pernah diunggah. Tidak ada berkas yang perlu dipindah.
+
+Ketahuan karena `$kolomBerkas => 'public'` harus dipastikan cocok
+dengan disk yang benar-benar dipakai. Kalau tidak diperiksa, trait-nya
+tidak akan menghapus apa pun dan test-nya tetap hijau.
+
+Komentar di `InstansiForm` yang berbunyi "samakan dengan foto_profil
+karyawan: disk public" menggambarkan sesuatu yang tidak pernah benar.
+
+### Yang sengaja tidak ikut
+
+`Absensi.foto_masuk`/`foto_pulang`: itu bukti kehadiran, bukan berkas
+yang diganti. Menghapusnya saat baris absensi dihapus adalah keputusan
+retensi data, bukan kebersihan disk.
+
+### Test
+
+7 test. Dua yang paling berharga: *"hanya kolom yang berubah"* — tanpa
+`wasChanged()` per kolom, mengganti foto profil akan ikut melenyapkan
+foto wajah yang masih dipakai — dan *"tidak menghapus apa pun kalau
+kolom berkasnya tidak berubah"*.
+
+743 → 750 (2132 → 2142).
+
 ## fase 91: filter "belum bisa absen hari ini"
 
 Commit `64c6bd1` + commit ini (test integrasi).

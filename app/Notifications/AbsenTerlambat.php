@@ -4,7 +4,6 @@ namespace App\Notifications;
 
 use App\Models\Absensi;
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class AbsenTerlambat extends Notification
@@ -25,18 +24,6 @@ class AbsenTerlambat extends Notification
         //    alamat. Satu channel untuk semua orang lebih baik daripada dua
         //    channel untuk sebagian — notifikasinya sudah muncul di aplikasi.
         return ['database'];
-    }
-
-    public function toMail(object $notifiable): MailMessage
-    {
-        return (new MailMessage)
-            ->subject('Notifikasi Keterlambatan Absensi')
-            ->greeting("Halo, {$notifiable->nama}!")
-            ->line("Anda tercatat terlambat **{$this->menitTerlambat} menit** pada hari ini.")
-            ->line("Waktu masuk: **{$this->absensi->waktu_masuk->format('H:i')}**")
-            ->line("Shift: **{$this->absensi->shift->nama_shift}** (jam masuk: {$this->absensi->shift->jam_masuk})")
-            ->line('Harap lebih tepat waktu ke depannya.')
-            ->salutation('RSU Banyumanik 2');
     }
 
     public function toDatabase(object $notifiable): array
