@@ -61,7 +61,11 @@ class GenerateJadwalBulanan extends Command
             // lewat tinker/seeder manual, jangan ikut digenerate — bisa bentrok
             // sama Jadwal manual yang dibuat admin untuk karyawan rotasi ini.
             if ($karyawan->isRotasi()) {
-                $this->warn("  → Lewati: {$karyawan->nama} tipe ROTASI tapi punya KaryawanShift #{$assignment->id}. Jalankan `php artisan karyawan:cek-tipe-jadwal` untuk detail.");
+                // Nama command sengaja tidak disebut: pesan ini ikut
+                // Artisan::output() dan ditampilkan ke admin di halaman
+                // Generate Jadwal, yang tidak punya terminal. Nama
+                // command-nya di runbook.md.
+                $this->warn("  → Lewati: {$karyawan->nama} bertipe ROTASI tapi masih punya penugasan shift periode. Lepas penugasannya di menu Shift Karyawan Umum, atau ubah tipe jadwalnya.");
                 continue;
             }
             $instansiId = $karyawan->instansi_id;
@@ -154,18 +158,17 @@ class GenerateJadwalBulanan extends Command
         }
 
         $this->newLine();
-        $this->info($dryRun ? 'Preview selesai (belum ada data yang disimpan).' : 'Selesai.');
-        $this->table(
-    ['Periode', 'Reguler Dibuat', 'Libur Nasional Dibuat', 'Libur Mingguan Dibuat', 'Skip (Sudah Ada)', 'Skip (Cuti/Dinas)'],
-    [[
-        $awalBulan->format('M Y'),
-        $stat['dibuat_reguler'],
-        $stat['dibuat_libur_nasional'],
-        $stat['dibuat_libur_mingguan'],
-        $stat['skip_sudah_ada'],
-        $stat['skip_cuti_dinas'],
-    ]]
-);
+        $this->info($dryRun ? 'Preview selesai, belum ada data yang disimpan.' : 'Selesai.');
+
+        // Bukan $this->table(): halaman Generate Jadwal menampilkan
+        // Artisan::output() apa adanya, dan bingkai ASCII tabel larut jadi
+        // dinding karakter di notifikasi Filament. Satu baris per angka
+        // terbaca di terminal maupun di panel.
+        $this->info("Jadwal reguler dibuat: {$stat['dibuat_reguler']}");
+        $this->info("Libur mingguan dibuat: {$stat['dibuat_libur_mingguan']}");
+        $this->info("Libur nasional dibuat: {$stat['dibuat_libur_nasional']}");
+        $this->info("Dilewati (sudah ada jadwal): {$stat['skip_sudah_ada']}");
+        $this->info("Dilewati (cuti/dinas approved): {$stat['skip_cuti_dinas']}");
 
         return self::SUCCESS;
     }
