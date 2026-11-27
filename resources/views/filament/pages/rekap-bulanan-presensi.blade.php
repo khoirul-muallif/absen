@@ -31,6 +31,7 @@
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Terlambat</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Alpha</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Izin</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Molor Kembali</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cuti</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Dinas</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Toleransi Bulanan</th>
@@ -39,7 +40,7 @@
                 <tbody class="divide-y divide-gray-200 dark:divide-white/10">
                     @if ($rows->isEmpty())
                         <tr>
-                            <td colspan="11" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                            <td colspan="13" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                 Tidak ada data untuk filter ini.
                             </td>
                         </tr>
@@ -63,6 +64,11 @@
                                     </x-filament::badge>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-center text-gray-700 dark:text-gray-300">{{ $baris['izin'] }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-center">
+                                    <x-filament::badge :color="$baris['molor'] > 0 ? 'warning' : 'gray'">
+                                        {{ $baris['molor'] }}
+                                    </x-filament::badge>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-center text-gray-700 dark:text-gray-300">{{ $baris['cuti'] }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-center text-gray-700 dark:text-gray-300">{{ $baris['dinas'] }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-center">

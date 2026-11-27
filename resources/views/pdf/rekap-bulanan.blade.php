@@ -38,6 +38,7 @@
                 <th class="center">Terlambat</th>
                 <th class="center">Alpha</th>
                 <th class="center">Izin</th>
+                <th class="center">Telat Kembali</th>
                 <th class="center">Cuti</th>
                 <th class="center">Dinas</th>
                 <th class="center">Lewat Toleransi</th>
@@ -45,7 +46,7 @@
         </thead>
             <tbody>
             @if ($rows->isEmpty())
-                <tr><td colspan="12" class="center">Tidak ada data untuk filter ini.</td></tr>
+                <tr><td colspan="13" class="center">Tidak ada data untuk filter ini.</td></tr>
             @else
                 @foreach ($rows as $i => $baris)
                     <tr>
@@ -58,6 +59,7 @@
                         <td class="center">{{ $baris['terlambat'] }}</td>
                         <td class="center">{{ $baris['alpha'] }}</td>
                         <td class="center">{{ $baris['izin'] }}</td>
+                        <td class="center {{ $baris['molor'] > 0 ? 'merah-teks' : '' }}">{{ $baris['molor'] }}</td>
                         <td class="center">{{ $baris['cuti'] }}</td>
                         <td class="center">{{ $baris['dinas'] }}</td>
                         <td class="center {{ $baris['melebihi_toleransi'] ? 'merah-teks' : '' }}">

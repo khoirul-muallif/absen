@@ -68,6 +68,22 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
             ->groupBy('karyawan_id')
             ->pluck('total', 'karyawan_id');
 
+        // Molor kembali: jam_kembali_aktual melewati jam_kembali_rencana,
+        // tanpa toleransi (keputusan 27 Nov). Bentuknya sama dengan
+        // $rekapIzin di atas, bukan join — baris yang jam_kembali_aktual-nya
+        // masih null berarti karyawan belum menandai kembali, jadi bukan
+        // molor dan memang tidak ikut terhitung.
+        $rekapMolor = Izin::query()
+            ->whereIn('karyawan_id', $karyawanIds)
+            ->whereYear('tanggal', $tahun)
+            ->whereMonth('tanggal', $bulan)
+            ->where('status', 'approved')
+            ->whereNotNull('jam_kembali_aktual')
+            ->whereColumn('jam_kembali_aktual', '>', 'jam_kembali_rencana')
+            ->selectRaw('karyawan_id, count(*) as total')
+            ->groupBy('karyawan_id')
+            ->pluck('total', 'karyawan_id');
+
         // Flag kumulatif -- begitu true di satu baris, sisa bulan itu tetap
         // true (akumulasi cuma naik). Cukup cek exists(), tidak perlu ambil
         // baris terakhir.
@@ -80,7 +96,7 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
             ->pluck('karyawan_id')
             ->flip();
 
-        return $karyawan->map(function (Karyawan $k) use ($rekapAbsensi, $rekapIzin, $melebihiToleransi) {
+        return $karyawan->map(function (Karyawan $k) use ($rekapAbsensi, $rekapIzin, $rekapMolor, $melebihiToleransi) {
             $statusKaryawan = $rekapAbsensi->get($k->id, collect())->pluck('total', 'status');
 
             $tepatWaktu = (int) $statusKaryawan->get('tepat_waktu', 0);
@@ -92,6 +108,7 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
                 'terlambat' => $terlambat,
                 'alpha' => (int) $statusKaryawan->get('alpha', 0),
                 'izin' => (int) $rekapIzin->get($k->id, 0),
+                'molor' => (int) $rekapMolor->get($k->id, 0),
                 'cuti' => (int) $statusKaryawan->get('cuti', 0),
                 'dinas' => (int) $statusKaryawan->get('dinas', 0),
                 'melebihi_toleransi' => $melebihiToleransi->has($k->id),
@@ -108,7 +125,7 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
     {
         return [
             'No', 'NIP', 'Nama Pegawai', 'Unit Kerja', 'Instansi',
-            'Total Hadir', 'Terlambat', 'Alpha', 'Izin', 'Cuti', 'Dinas',
+            'Total Hadir', 'Terlambat', 'Alpha', 'Izin', 'Telat Kembali', 'Cuti', 'Dinas',
             'Melebihi Toleransi Bulanan',
         ];
     }
@@ -117,8 +134,8 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
     {
         return [
             'A' => 5, 'B' => 12, 'C' => 28, 'D' => 20, 'E' => 20,
-            'F' => 12, 'G' => 12, 'H' => 10, 'I' => 10, 'J' => 10, 'K' => 10,
-            'L' => 24,
+            'F' => 12, 'G' => 12, 'H' => 10, 'I' => 10, 'J' => 14,
+            'K' => 10, 'L' => 10, 'M' => 24
         ];
     }
 
@@ -142,8 +159,9 @@ class LaporanBulananExport implements FromCollection, WithHeadings, WithMapping,
             $row['karyawan']->instansi->nama ?? '-',
             $row['total_hadir'],
             $row['terlambat'],
-            $row['alpha'],      // jangan: $row['alpha'] ?: ''
+            $row['alpha'],
             $row['izin'],
+            $row['molor'],
             $row['cuti'],
             $row['dinas'],
             $row['melebihi_toleransi'] ? 'Ya' : 'Tidak',

@@ -5,6 +5,88 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 93: dua asumsi di import yang baru terlihat dari sisi admin
+
+Commit `6b34c4e`, `ad4527a`, `b7be0e3`, `dda3791`.
+
+### Sheet dipilih dari urutannya, bukan namanya
+
+Importer memproses sheet pertama, dan yang menahan pemanggilan kedua
+cuma penanda `$sudahDiproses` — yang artinya "sheet pertama adalah
+sheet data". Admin yang mengirim file hasil edit dengan urutan sheet
+terbalik membuat importer memproses "Petunjuk" lalu menolak semua
+barisnya dengan pesan yang tidak masuk akal, sementara sheet datanya
+tidak pernah tersentuh.
+
+Sekarang `WithMultipleSheets` memetakan nama sheet ke handler, jadi
+`collection()` tidak pernah dipanggil untuk sheet lain dan penjaganya
+tidak dibutuhkan lagi.
+
+Nama sheet dipindah ke `KaryawanTemplateExport::SHEET_DATA`, dirujuk
+`title()` milik sheet-nya dan `sheets()` milik importer. Tanpa itu,
+importer yang mencari nama sheet jadi sumber kebenaran kedua — pola
+yang sama dengan password default di commit sebelumnya.
+
+**Pencocokan berdasarkan header sengaja tidak ditambahkan.** Tombol
+unduh template ada tepat di sebelah tombol import, jadi jalan keluarnya
+satu klik. Menambah jalur tebakan kedua sekarang berarti menebak
+kebiasaan admin yang belum pernah terlihat.
+
+### Fixture .xlsx: yang dulu bikin bagian ini tidak pernah diuji
+
+Perbaikan di atas awalnya cuma punya test yang memeriksa pemetaannya
+benar — bukan bahwa file sungguhan dengan sheet terbalik terbaca.
+Perbaikan berdasarkan pembacaan kode saja, dan sesi ini sudah dua kali
+menunjukkan itu tidak cukup.
+
+Lima test membaca .xlsx lewat `Excel::import()`. Yang paling berharga
+bukan soal sheet: *"nomor baris dari .xlsx cocok dengan yang dilihat
+admin di Excel"*. Di `KaryawanImportTest` index Collection ditentukan
+test itu sendiri, jadi angkanya tidak bisa meleset; lewat file
+sungguhan yang menentukan maatwebsite.
+
+Fixture dibuat di test memakai PhpSpreadsheet, bukan file biner yang
+di-commit — supaya tidak ada fixture usang yang diam-diam menguji
+format template lama. `buatBerkasXlsx()` ini yang membuat item todo
+"bagian import yang tidak diuji" jauh lebih murah dikerjakan nanti.
+
+### Ejaan unit kerja: pertama kalinya importer mengubah data admin
+
+"igd" dan "IGD" masuk sebagai dua unit berbeda. Untuk karyawan ROTASI
+itu fatal: fase 33 mencocokkan `unit_kerja` dengan unit pola secara
+persis, jadi karyawan ber-unit "igd" tidak bisa di-assign pola "IGD"
+sama sekali — dan satu typo di import tersalin ke puluhan baris.
+
+Keputusannya ditahan sejak 10 Nov justru karena ini mengubah data yang
+diketik admin tanpa diminta, kelas yang sama dengan larangan "jangan
+menebak `tipe_jadwal`". Diputuskan 27 Nov: dicocokkan, tapi
+perubahannya **terlihat** — peringatan tersendiri di pratinjau,
+terpisah dari peringatan "unit belum pernah dipakai" yang sudah ada.
+
+**Ejaan dari PolaRotasi menang** kalau ada dua versi di DB. Bukan
+aturan sembarang: ejaan pola satu-satunya yang membuat karyawan rotasi
+bisa di-assign, jadi memilih ejaan karyawan justru bisa menghasilkan
+unit yang tidak cocok dengan pola mana pun — persis masalah yang mau
+diselesaikan. Kalau cuma ada di karyawan, yang terbanyak menang, seri
+diputus alfabetis supaya hasilnya tidak bergantung urutan query.
+
+Itu juga test yang paling berharga di sini, karena satu-satunya bagian
+yang hasilnya bisa diam-diam salah tanpa terlihat.
+
+### Dua method bernama sama, bentuk berbeda
+
+`unitYangSudahAda()` ada di `ListKaryawans` (daftar datar untuk
+datalist template) dan di `KaryawanImport`. Dulu identik; sekarang yang
+kedua mengembalikan peta `lowercase => ejaan kanonik`, jadi namanya
+yang sama justru menyesatkan. Diganti `petaUnitKerja()`.
+
+Penggantian ini tertinggal dari commit utamanya dan baru masuk di
+`dda3791` — pesan commit `b7be0e3` sudah menyebutnya padahal kodenya
+belum ikut. Ketiga kalinya hari ini sesuatu tertinggal di langkah
+terakhir.
+
+752 → 762 (2146 → 2167).
+
 ## fase 92: pembersihan berkas & disk foto karyawan
 
 Commit `3637a53`.
