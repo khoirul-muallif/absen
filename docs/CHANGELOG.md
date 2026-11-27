@@ -5,6 +5,95 @@
 > Catatan teknis: seluruh history commit (fase 1 s/d fase 10) pernah dirapikan lewat `git rebase -i --root` pada 16 Juli 2026 dan di-push paksa (`git push --force-with-lease`). Kalau clone repo ini di device lain dan histori terasa aneh, sync ulang dengan `git fetch` + `git reset --hard origin/main`.
 
 ---
+## fase 95: kolom libur_nasional untuk membedakan dua jenis libur
+
+Commit `d01b862`, dokumen di `5f45769`.
+
+### Satu kata untuk dua hal
+
+Baris `jadwals` dengan `jenis='libur'` bisa berarti libur mingguan
+(pola rotasi, atau hari bukan-kerja shift) atau libur nasional. Kode
+tidak punya cara membedakannya: satu-satunya petunjuk adalah string
+`keterangan`, yang cuma ada di baris hasil generator, plus tabel
+`hari_liburs` yang tidak pernah dicek siapa pun selain generator itu
+sendiri.
+
+### Kolom boolean, bukan memecah `jenis`
+
+Memecah jadi `libur_mingguan`/`libur_nasional` terlihat lebih bersih,
+tapi berbahaya: puluhan tempat membandingkan `jenis === JENIS_LIBUR`,
+dan semuanya akan diam-diam jadi `false` untuk kedua nilai baru. Baris
+libur berhenti dikenali sebagai libur di `AbsensiController`, di
+`shiftYangDiharapkanPada()`, di rekap. Gagal diam-diam — kelas yang
+sama dengan masalah yang sedang diperbaiki.
+
+Dengan kolom boolean, semua pengecekan lama tetap benar, dan nilainya
+sudah diketahui generator saat baris dibuat, jadi tidak ada join ke
+`hari_liburs` di mana pun.
+
+### Yang ditandai adalah BARIS, bukan TANGGAL
+
+Karyawan rotasi dengan `PolaRotasi.berlaku_saat_libur_nasional = true`
+tetap bekerja di hari libur nasional — barisnya `piket`, bukan `libur`,
+jadi kolomnya `false`. Kolom ini menjawab "baris libur ini jatuh karena
+libur nasional?", bukan "tanggal ini libur nasional?".
+
+Perbedaan halus yang gampang terbalik saat kode ini disentuh lagi, jadi
+dikunci test tersendiri.
+
+### Satu poin catatan lama ternyata sudah tidak berlaku
+
+Todo (9 Nov) menyatakan akhir pekan karyawan umum tidak punya baris
+`jadwals` sama sekali, sehingga asimetris dengan rotasi. Dibaca ke
+source 27 Nov: `GenerateJadwalBulanan` SUDAH membuat baris `libur`
+eksplisit untuk hari bukan-kerja, dengan komentar yang menyebut "opsi A
+dari todo.md". Keputusan itu sudah diambil dan dikerjakan, cuma
+catatannya tidak ikut diperbarui.
+
+Asimetri umum-vs-rotasi karena itu sudah hilang sebelum fase ini, dan
+pekerjaannya jadi lebih kecil dari yang diperkirakan.
+
+### Backfill lewat command, bukan migration
+
+Logika di dalam migration jadi misteri setahun kemudian. Sumbernya
+`hari_liburs`, bukan string `keterangan`: otoritatif, dan ikut
+menangkap baris libur yang dibuat admin manual. Idempoten — hanya
+menyentuh baris yang masih `false`.
+
+Konsekuensi yang disengaja: baris libur MINGGUAN yang kebetulan jatuh
+di tanggal libur nasional ikut ditandai. Itu benar, hari itu memang
+libur nasional juga.
+
+### TukarJadwal sengaja tidak disentuh
+
+Di `approveAndSwap()` cabang tukar dua-orang, baris libur yang
+"diserap" benar-benar `delete()`. Kalau itu libur nasional, catatannya
+lenyap dari `jadwals` sama sekali — kolom ini tidak menolong karena
+barisnya sudah tidak ada.
+
+Dan dua cabang memperlakukannya berbeda: pindah-sendiri MENUKAR baris
+libur (simetris, reversibel), tukar dua-orang MENGHAPUS. Belum pernah
+diputuskan apakah itu disengaja.
+
+Perlu keputusan serap-vs-timpa, bukan tempelan. Sesi sendiri.
+
+### Ikut diperbaiki
+
+Keterangan generator bulanan berbunyi "libur nasional/cuti bersama",
+padahal scope `meliburkan()` justru mengecualikan cuti bersama — baris
+itu tidak akan pernah lahir untuk cuti bersama. Teks usang dari sebelum
+keputusan itu.
+
+### Test
+
+6 test backfill + 4 test generator. Yang paling berharga: *"karyawan
+rotasi yang tetap bekerja saat libur nasional TIDAK ditandai"* (mengunci
+perbedaan baris-vs-tanggal) dan *"tidak menandai baris karyawan dari
+instansi lain"* (filter instansi mudah terlupa, akibatnya baru terlihat
+kalau ada lebih dari satu instansi).
+
+766 → 776 (2171 → 2192).
+
 ## fase 94: kolom Telat Kembali di Rekap Bulanan
 
 Commit `968ef20`.
