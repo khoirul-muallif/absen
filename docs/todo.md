@@ -24,8 +24,9 @@ Karyawan yang tertinggal di langkah 2 atau 3 bisa dilihat lewat filter
 "Belum bisa absen hari ini" di tabel karyawan (fase 91), dan jumlahnya
 ikut muncul di notifikasi setelah import.
 
-Sisa pekerjaan terbagi tiga: butuh masukan pihak RS, pekerjaan teknis
-kecil, dan dua yang ukurannya satu sesi sendiri (ekstrak generator,
+Sisa pekerjaan: tiga hal menunggu masukan pihak RS, dua berukuran satu
+sesi sendiri (ekstrak generator, test modal Filament), dan dua catatan
+kecil di Lain-lain. Tidak ada lagi yang bisa digarap sambil lalu, dan dua yang ukurannya satu sesi sendiri (ekstrak generator,
 test modal Filament).
 
 ## Kebutuhan masukan dari pihak RS
@@ -109,19 +110,6 @@ test modal Filament).
       untuk cuti/dinas/libur" (status-06-11-26.md). Garap bertiga
       sekaligus, jangan satu-satu. Dicatat 9 Nov 2026.
 
-- [ ] **Selisih `jam_kembali_rencana` vs `jam_kembali_aktual` belum
-      dipakai di mana pun** — dua kolom sengaja dibuat 24 Nov 2026 walau
-      konsekuensi "aktual lewat dari rencana" BELUM diputuskan pihak RS.
-      Untuk sekarang murni catatan.
-
-      Kalau sampai beberapa bulan tidak ada yang memakai selisihnya,
-      pertimbangkan menggabungkan balik jadi satu kolom. Kalau dipakai,
-      tempat termurah memunculkannya: kolom "Molor" di Laporan Presensi,
-      atau badge di daftar Izin panel admin.
-
-      Pertanyaan untuk pihak RS: apakah karyawan yang sering molor dari
-      perkiraannya sendiri perlu ditandai? Kalau ya, berapa menit
-      toleransinya, dan siapa yang melihatnya?
 
 - [ ] **Proporsi staf per unit/tim rotasi** — `SimulasiMassalSeeder`
       membagi rata 120 karyawan rotasi ke 3 unit (Rawat Inap/IGD/ICU).
